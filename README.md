@@ -31,7 +31,7 @@ Run the web app:
 npm run start
 ```
 
-For authenticated flows such as `/signin`, local Keycloak must be running on `https://localhost:8443`, the backend API must be available on `https://localhost:7085`, and the frontend should be served locally at `https://localhost:7277`.
+For authenticated flows such as `/signin`, local Keycloak must be running on `https://localhost:8443`, the backend API must be available on `https://localhost:7085`, the frontend should be served locally at `https://localhost:7277`, and local registration/verification emails are captured in Mailpit at `https://localhost:8025`.
 From the repo root, the simplest setup is:
 
 ```bash

@@ -1,3 +1,4 @@
+using Board.ThirdPartyLibrary.Frontend.Web.Authentication;
 using Board.ThirdPartyLibrary.Frontend.Web.Components;
 using Board.ThirdPartyLibrary.Frontend.Web.Configuration;
 using Board.ThirdPartyLibrary.Frontend.Web.Services;
@@ -28,6 +29,8 @@ builder.Services
 var backendApiOptions = builder.Configuration.GetSection(BackendApiOptions.SectionName).Get<BackendApiOptions>() ?? new BackendApiOptions();
 var keycloakOptions = builder.Configuration.GetSection(KeycloakOptions.SectionName).Get<KeycloakOptions>() ?? new KeycloakOptions();
 
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
@@ -67,6 +70,35 @@ builder.Services.AddAuthentication(options =>
         {
             options.Scope.Add(scope);
         }
+
+        options.Events = new OpenIdConnectEvents
+        {
+            OnRedirectToIdentityProviderForSignOut = async context =>
+            {
+                context.ProtocolMessage.ClientId = context.Options.ClientId;
+
+                var idTokenHint = context.Properties?.GetTokenValue("id_token");
+                if (string.IsNullOrWhiteSpace(idTokenHint))
+                {
+                    idTokenHint = await context.HttpContext.GetTokenAsync("id_token");
+                }
+
+                if (!string.IsNullOrWhiteSpace(idTokenHint))
+                {
+                    context.ProtocolMessage.IdTokenHint = idTokenHint;
+                }
+            },
+            OnSignedOutCallbackRedirect = async context =>
+            {
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+        };
+    });
+builder.Services
+    .AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+    .Configure<ITicketStore>((options, ticketStore) =>
+    {
+        options.SessionStore = ticketStore;
     });
 builder.Services.AddHttpClient<IBoardLibraryApiClient, BoardLibraryApiClient>(client =>
 {
@@ -156,23 +188,23 @@ app.MapGet("/auth/signout", async (
     ILogger<Program> logger) =>
 {
     var sanitizedReturnUrl = SanitizeReturnUrl(returnUrl);
-
-    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    var signOutProperties = new AuthenticationProperties
+    {
+        RedirectUri = sanitizedReturnUrl
+    };
 
     try
     {
         await httpContext.SignOutAsync(
             OpenIdConnectDefaults.AuthenticationScheme,
-            new AuthenticationProperties
-            {
-                RedirectUri = sanitizedReturnUrl
-            });
+            signOutProperties);
 
         return Results.Empty;
     }
     catch (Exception ex)
     {
         logger.LogWarning(ex, "Frontend sign-out could not complete remote Keycloak logout. Falling back to local sign-out only.");
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return Results.Redirect(sanitizedReturnUrl);
     }
 });
