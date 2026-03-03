@@ -1,0 +1,17 @@
+@page "/develop/titles/{TitleId:guid}/releases"
+@layout DeveloperLayout
+
+<PageTitle>Title Releases</PageTitle>
+
+<section class="app-panel p-6">
+    <div class="app-chip w-fit">Releases</div>
+    <h1 class="mt-4 app-page-title">Release History</h1>
+    <div class="mt-6 space-y-3 text-sm text-slate-300">
+        <div class="rounded-[1.25rem] bg-black/15 p-4">1.0.0 • published • metadata revision 2</div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4">0.9.0 • withdrawn • metadata revision 1</div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public Guid TitleId { get; set; }
+}

@@ -1,0 +1,22 @@
+@page "/develop/titles/{TitleId:guid}/acquisition"
+@layout DeveloperLayout
+
+<PageTitle>Title Acquisition</PageTitle>
+
+<section class="app-panel p-6">
+    <div class="app-chip w-fit">Acquisition</div>
+    <h1 class="mt-4 app-page-title">Title Acquisition Bindings</h1>
+    <div class="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">
+            Primary binding: itch.io<br />
+            URL: https://stellar-forge.itch.io/star-blasters
+        </div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">
+            Public preview: "View on itch.io"
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public Guid TitleId { get; set; }
+}

@@ -1,0 +1,26 @@
+@page "/develop/titles/{TitleId:guid}"
+@layout DeveloperLayout
+
+<PageTitle>Title Workspace</PageTitle>
+
+<section class="space-y-6">
+    <div class="app-chip w-fit">Title workspace</div>
+    <section class="app-panel p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+                <h1 class="app-page-title">Star Blasters</h1>
+                <p class="mt-4 text-base leading-8 text-slate-300">Current status, metadata revision, release summary, and acquisition state all surface here.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <a class="app-chip" href="/develop/titles/@TitleId/metadata">Metadata</a>
+                <a class="app-chip" href="/develop/titles/@TitleId/media">Media</a>
+                <a class="app-chip" href="/develop/titles/@TitleId/releases">Releases</a>
+                <a class="app-chip" href="/develop/titles/@TitleId/acquisition">Acquisition</a>
+            </div>
+        </div>
+    </section>
+</section>
+
+@code {
+    [Parameter] public Guid TitleId { get; set; }
+}

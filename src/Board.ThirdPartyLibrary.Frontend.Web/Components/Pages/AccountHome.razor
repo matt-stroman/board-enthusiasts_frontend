@@ -1,0 +1,69 @@
+@page "/account"
+@attribute [Authorize]
+@inject IBoardLibraryApiClient ApiClient
+@layout DeveloperLayout
+
+<PageTitle>Account</PageTitle>
+
+<section class="space-y-6">
+    <div class="app-chip w-fit">Current user</div>
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <section class="app-panel p-6">
+            <h1 class="app-page-title">Account unavailable</h1>
+            <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
+        </section>
+    }
+    else if (CurrentUser is null)
+    {
+        <section class="app-panel p-6">
+            <div class="h-8 w-44 animate-pulse rounded-full bg-white/10"></div>
+            <div class="mt-4 h-36 animate-pulse rounded-[1.75rem] bg-white/10"></div>
+        </section>
+    }
+    else
+    {
+        <section class="app-panel p-6">
+            <h1 class="app-page-title">Account</h1>
+            <dl class="mt-6 grid gap-4 text-sm text-slate-300 sm:grid-cols-2">
+                <div class="rounded-[1.25rem] bg-black/15 p-4"><dt class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Display name</dt><dd class="mt-2 text-base text-white">@CurrentUser.DisplayName</dd></div>
+                <div class="rounded-[1.25rem] bg-black/15 p-4"><dt class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email</dt><dd class="mt-2 text-base text-white">@CurrentUser.Email</dd></div>
+                <div class="rounded-[1.25rem] bg-black/15 p-4"><dt class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Roles</dt><dd class="mt-2 text-base text-white">@string.Join(", ", CurrentUser.Roles)</dd></div>
+                <div class="rounded-[1.25rem] bg-black/15 p-4"><dt class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Board profile</dt><dd class="mt-2 text-base text-white">@(BoardProfile is null ? "Not linked" : "Linked")</dd></div>
+            </dl>
+            <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/account/board-profile">Manage Board profile</a>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/auth/signout?returnUrl=%2Flibrary">Sign out</a>
+            </div>
+        </section>
+    }
+</section>
+
+@code {
+    private CurrentUserResponse? CurrentUser { get; set; }
+
+    private BoardProfile? BoardProfile { get; set; }
+
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ErrorMessage = null;
+
+        try
+        {
+            CurrentUser = await ApiClient.GetCurrentUserAsync();
+            BoardProfile = await ApiClient.GetBoardProfileAsync();
+
+            if (CurrentUser is null)
+            {
+                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+    }
+}

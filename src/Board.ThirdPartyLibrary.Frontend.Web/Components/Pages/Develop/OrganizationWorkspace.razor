@@ -1,0 +1,23 @@
+@page "/develop/organizations/{OrganizationId:guid}"
+@layout DeveloperLayout
+
+<PageTitle>Organization Workspace</PageTitle>
+
+<section class="space-y-6">
+    <div class="app-chip w-fit">Organization workspace</div>
+    <section class="app-panel p-6">
+        <h1 class="app-page-title">Stellar Forge</h1>
+        <p class="mt-4 text-base leading-8 text-slate-300">
+            This route is the organization home page for settings, memberships, titles, and integration connections.
+        </p>
+        <div class="mt-6 grid gap-4 sm:grid-cols-3">
+            <a class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300" href="/develop/organizations/@OrganizationId/settings"><div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Settings</div><div class="mt-3 text-white">Update profile and deletion controls</div></a>
+            <a class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300" href="/develop/organizations/@OrganizationId/memberships"><div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Memberships</div><div class="mt-3 text-white">Manage owners, admins, and developers</div></a>
+            <a class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300" href="/develop/organizations/@OrganizationId/titles"><div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Titles</div><div class="mt-3 text-white">Enter the title workspace list</div></a>
+        </div>
+    </section>
+</section>
+
+@code {
+    [Parameter] public Guid OrganizationId { get; set; }
+}

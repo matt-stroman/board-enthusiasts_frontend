@@ -1,0 +1,6 @@
+node_modules/
+src/**/bin/
+src/**/obj/
+tests/**/bin/
+tests/**/obj/
+src/Board.ThirdPartyLibrary.Frontend.Web/wwwroot/app.css

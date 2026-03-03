@@ -1,0 +1,65 @@
+@page "/signin"
+
+<PageTitle>Sign In</PageTitle>
+
+<section class="mx-auto max-w-2xl app-panel p-8 text-center">
+    <div class="app-chip mx-auto w-fit">Auth handoff</div>
+
+    @if (string.Equals(Error, "identity-provider-unavailable", StringComparison.Ordinal))
+    {
+        <h1 class="mt-4 app-page-title">Sign in is unavailable right now</h1>
+        <p class="mt-4 text-base leading-8 text-slate-300">
+            The web app could not reach the local Keycloak identity provider at <code>https://localhost:8443</code>.
+            Start the local auth dependency first, then try again.
+        </p>
+        <div class="mt-6 rounded-[1.25rem] border border-amber-300/20 bg-amber-300/10 p-4 text-left text-sm leading-7 text-amber-50/90">
+            Recommended local command:
+            <code class="mt-2 block">python .\scripts\dev.py up --dependencies-only</code>
+            If you also need the API running, use:
+            <code class="mt-2 block">python .\scripts\dev.py up</code>
+        </div>
+        <div class="mt-6 flex justify-center gap-3">
+            <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@RetryHref">Try again</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/library">Back to library</a>
+        </div>
+    }
+    else if (string.Equals(Error, "identity-provider-auth-failed", StringComparison.Ordinal))
+    {
+        <h1 class="mt-4 app-page-title">Sign in could not start</h1>
+        <p class="mt-4 text-base leading-8 text-slate-300">
+            The app reached Keycloak, but the identity provider rejected the current sign-in request configuration.
+        </p>
+        <div class="mt-6 rounded-[1.25rem] border border-amber-300/20 bg-amber-300/10 p-4 text-left text-sm leading-7 text-amber-50/90">
+            This is usually a local client configuration mismatch, such as an invalid redirect URI or client ID.
+            If you recently pulled auth config changes, restart local dependencies so Keycloak re-imports the updated realm:
+            <code class="mt-2 block">python .\scripts\dev.py web-stop --down-dependencies</code>
+            <code class="mt-2 block">python .\scripts\dev.py web --watch-css</code>
+        </div>
+        <div class="mt-6 flex justify-center gap-3">
+            <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@SignInHref">Try again</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/library">Back to library</a>
+        </div>
+    }
+    else
+    {
+        <h1 class="mt-4 app-page-title">Redirecting to sign in</h1>
+        <p class="mt-4 text-base leading-8 text-slate-300">
+            Continue to the secure Keycloak sign-in flow and the app will return you here when authentication completes.
+        </p>
+        <div class="mt-6 flex justify-center gap-3">
+            <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@SignInHref">Continue to sign in</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/library">Back to library</a>
+        </div>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    private string SignInHref => $"/auth/signin?returnUrl={Uri.EscapeDataString(string.IsNullOrWhiteSpace(ReturnUrl) ? "/develop" : ReturnUrl)}";
+    private string RetryHref => $"/signin?returnUrl={Uri.EscapeDataString(string.IsNullOrWhiteSpace(ReturnUrl) ? "/develop" : ReturnUrl)}";
+}

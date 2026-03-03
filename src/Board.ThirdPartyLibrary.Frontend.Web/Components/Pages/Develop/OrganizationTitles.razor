@@ -1,0 +1,25 @@
+@page "/develop/organizations/{OrganizationId:guid}/titles"
+@layout DeveloperLayout
+
+<PageTitle>Organization Titles</PageTitle>
+
+<section class="space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="app-chip w-fit">Titles</div>
+            <h1 class="mt-4 app-page-title">Organization Titles</h1>
+        </div>
+        <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop/organizations/@OrganizationId/titles/new">Create title</a>
+    </div>
+    <div class="grid gap-4">
+        <a class="app-panel p-5 transition hover:-translate-y-0.5 hover:border-cyan-300/35" href="/develop/titles/33333333-3333-3333-3333-333333333333">
+            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Testing • Listed</div>
+            <div class="mt-2 text-xl font-semibold text-white">Star Blasters</div>
+            <div class="mt-2 text-sm text-slate-300">Current release 1.0.0 • Acquisition configured</div>
+        </a>
+    </div>
+</section>
+
+@code {
+    [Parameter] public Guid OrganizationId { get; set; }
+}

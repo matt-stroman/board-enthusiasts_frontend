@@ -1,0 +1,14 @@
+@page "/develop/organizations/{OrganizationId:guid}/settings"
+@layout DeveloperLayout
+
+<PageTitle>Organization Settings</PageTitle>
+
+<section class="app-panel max-w-4xl p-6">
+    <div class="app-chip w-fit">Organization settings</div>
+    <h1 class="mt-4 app-page-title">Settings</h1>
+    <p class="mt-4 text-base leading-8 text-slate-300">This page will hold update and delete workflows for the active organization.</p>
+</section>
+
+@code {
+    [Parameter] public Guid OrganizationId { get; set; }
+}

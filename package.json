@@ -1,0 +1,23 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "A frontend interface for Board Third Party Library users to browse the catalog and for developers to manage their organizations and titles.",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "css:build": "tailwindcss -i ./src/Board.ThirdPartyLibrary.Frontend.Web/Styles/app.css -o ./src/Board.ThirdPartyLibrary.Frontend.Web/wwwroot/app.css --minify",
+    "css:watch": "tailwindcss -i ./src/Board.ThirdPartyLibrary.Frontend.Web/Styles/app.css -o ./src/Board.ThirdPartyLibrary.Frontend.Web/wwwroot/app.css --watch",
+    "test": "dotnet test ./Board.ThirdPartyLibrary.Frontend.slnx",
+    "build": "npm run css:build && dotnet build ./Board.ThirdPartyLibrary.Frontend.slnx",
+    "start": "dotnet run --project ./src/Board.ThirdPartyLibrary.Frontend.Web/Board.ThirdPartyLibrary.Frontend.Web.csproj"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.2.1",
+    "tailwindcss": "^4.2.1"
+  }
+}

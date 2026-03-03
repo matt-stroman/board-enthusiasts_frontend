@@ -1,0 +1,126 @@
+@page "/library/{OrganizationSlug}/{TitleSlug}"
+@inject IBoardLibraryApiClient ApiClient
+
+<PageTitle>Title Details</PageTitle>
+
+<section class="space-y-8">
+    <div class="text-sm uppercase tracking-[0.22em] text-cyan-100/70">Library / @OrganizationSlug / @TitleSlug</div>
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <section class="app-panel p-6">
+            <h1 class="app-page-title">Title unavailable</h1>
+            <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
+        </section>
+    }
+    else if (Title is null)
+    {
+        <section class="app-panel p-6">
+            <h1 class="app-page-title">Title not found</h1>
+            <p class="mt-4 text-base leading-8 text-slate-300">
+                The requested title is not currently visible in the public catalog.
+            </p>
+        </section>
+    }
+    else
+    {
+        <section class="app-panel overflow-hidden p-6">
+            <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                <div class="space-y-5">
+                    <div class="flex flex-wrap gap-2">
+                        <span class="app-chip">@Title.GenreDisplay</span>
+                        <span class="app-chip">@Title.PlayerCountDisplay</span>
+                        <span class="app-chip">@Title.AgeDisplay</span>
+                    </div>
+                    <div>
+                        <h1 class="app-page-title">@Title.DisplayName</h1>
+                        <p class="mt-4 max-w-2xl text-base leading-8 text-slate-300">
+                            @Title.Description
+                        </p>
+                    </div>
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        @if (!string.IsNullOrWhiteSpace(Title.Acquisition?.Url ?? Title.AcquisitionUrl))
+                        {
+                            <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@(Title.Acquisition?.Url ?? Title.AcquisitionUrl)" target="_blank" rel="noreferrer">
+                                @(Title.Acquisition?.Label ?? "View acquisition")
+                            </a>
+                        }
+                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/organizations/{Title.OrganizationSlug}")">Open organization</a>
+                    </div>
+                </div>
+                <div class="min-h-[320px] rounded-[1.75rem] bg-cover bg-center @HeroFallbackGradient" style="@HeroBackgroundStyle"></div>
+            </div>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div class="app-panel p-6">
+                <div class="app-chip w-fit">About</div>
+                <p class="mt-4 text-base leading-8 text-slate-300">
+                    @Title.ShortDescription
+                </p>
+                <div class="mt-6 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                    <div class="rounded-[1.25rem] bg-black/15 p-4">
+                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Organization</div>
+                        <div class="mt-2 text-white">@Title.OrganizationSlug</div>
+                    </div>
+                    <div class="rounded-[1.25rem] bg-black/15 p-4">
+                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Media assets</div>
+                        <div class="mt-2 text-white">@Title.MediaAssets.Count</div>
+                    </div>
+                </div>
+            </div>
+            <div class="app-panel p-6">
+                <div class="app-chip w-fit">Current release</div>
+                <dl class="mt-4 grid gap-3 text-sm text-slate-300">
+                    <div class="flex justify-between gap-4"><dt>Version</dt><dd>@(Title.CurrentRelease?.Version ?? "Not published")</dd></div>
+                    <div class="flex justify-between gap-4"><dt>Metadata revision</dt><dd>@(Title.CurrentRelease?.MetadataRevisionNumber.ToString() ?? "-")</dd></div>
+                    <div class="flex justify-between gap-4"><dt>Provider</dt><dd>@(Title.Acquisition?.ProviderDisplayName ?? "External")</dd></div>
+                </dl>
+            </div>
+        </section>
+    }
+</section>
+
+@code {
+    [Parameter] public string OrganizationSlug { get; set; } = string.Empty;
+
+    [Parameter] public string TitleSlug { get; set; } = string.Empty;
+
+    private CatalogTitle? Title { get; set; }
+
+    private string? ErrorMessage { get; set; }
+
+    private string HeroBackgroundStyle => string.IsNullOrWhiteSpace(HeroImageUrl)
+        ? string.Empty
+        : $"background-image:linear-gradient(135deg, rgba(4,19,29,0.18), rgba(4,19,29,0.48)), url('{HeroImageUrl}');";
+
+    private string HeroFallbackGradient => GetFallbackGradient(Title?.GenreDisplay);
+
+    private string? HeroImageUrl =>
+        Title?.MediaAssets.FirstOrDefault(asset => string.Equals(asset.MediaRole, "hero", StringComparison.OrdinalIgnoreCase))?.SourceUrl
+        ?? Title?.CardImageUrl;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ErrorMessage = null;
+
+        try
+        {
+            Title = await ApiClient.GetCatalogTitleAsync(OrganizationSlug, TitleSlug);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+            Title = null;
+        }
+    }
+
+    private static string GetFallbackGradient(string? genreDisplay) =>
+        genreDisplay switch
+        {
+            "Arcade Shooter" => "bg-[linear-gradient(135deg,_#f8fafc,_#7dd3fc,_#1d4ed8)]",
+            "Adventure" => "bg-[linear-gradient(135deg,_#fde68a,_#fb7185,_#7c3aed)]",
+            "Puzzle" => "bg-[linear-gradient(135deg,_#d8f3dc,_#60a5fa,_#1e293b)]",
+            _ => "bg-[linear-gradient(135deg,_#fef3c7,_#f97316,_#334155)]"
+        };
+}

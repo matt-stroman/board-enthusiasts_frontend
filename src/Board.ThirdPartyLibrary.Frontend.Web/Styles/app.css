@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-cyan: #56bdc4;
+  --color-brand-ink: #09111d;
+  --color-brand-gold: #ffd166;
+  --font-body: "Aptos", "Trebuchet MS", sans-serif;
+  --font-display: "Aptos Display", "Trebuchet MS", sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: #e2e8f0;
+    background-color: #09111d;
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    background: #09111d;
+  }
+
+  a {
+    text-decoration: none;
+  }
+}
+
+@layer components {
+  .app-panel {
+    @apply rounded-[1.75rem] border border-white/10 bg-white/6 shadow-[0_24px_70px_rgba(2,6,23,0.28)] backdrop-blur;
+  }
+
+  .app-nav-link {
+    @apply rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:bg-white/8 hover:text-cyan-100;
+  }
+
+  .app-nav-link.active {
+    @apply bg-cyan-300 text-slate-950;
+  }
+
+  .app-side-link {
+    @apply rounded-2xl px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/8 hover:text-cyan-100;
+  }
+
+  .app-side-link.active {
+    @apply bg-white/10 text-white;
+  }
+
+  .app-chip {
+    @apply rounded-full border border-white/10 bg-white/6 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200;
+  }
+
+  .app-page-title {
+    @apply font-['Aptos_Display','Trebuchet_MS',sans-serif] text-4xl font-black uppercase tracking-[0.08em] text-white sm:text-5xl;
+  }
+
+  .app-card-rail {
+    @apply grid auto-cols-[minmax(180px,1fr)] grid-flow-col gap-4 overflow-x-auto pb-2;
+  }
+}

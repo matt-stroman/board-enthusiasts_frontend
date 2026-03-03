@@ -1,0 +1,20 @@
+@page "/develop/organizations/{OrganizationId:guid}/titles/new"
+@layout DeveloperLayout
+
+<PageTitle>New Title</PageTitle>
+
+<section class="app-panel max-w-5xl p-6">
+    <div class="app-chip w-fit">Create title</div>
+    <h1 class="mt-4 app-page-title">New Title</h1>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">Slug<div class="mt-2 text-white">star-blasters</div></div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">Kind<div class="mt-2 text-white">game</div></div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">Lifecycle<div class="mt-2 text-white">draft</div></div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300">Visibility<div class="mt-2 text-white">private</div></div>
+        <div class="rounded-[1.25rem] bg-black/15 p-4 text-sm text-slate-300 sm:col-span-2">Initial metadata<div class="mt-2 text-white">Display name, descriptions, genre, players, and age fields belong here.</div></div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public Guid OrganizationId { get; set; }
+}
