@@ -59,3 +59,22 @@
     @apply grid auto-cols-[minmax(180px,1fr)] grid-flow-col gap-4 overflow-x-auto pb-2;
   }
 }
+
+#blazor-error-ui {
+  display: none;
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1000;
+  padding: 0.75rem 1rem;
+  background: rgba(127, 29, 29, 0.96);
+  color: #f8fafc;
+  box-shadow: 0 -10px 30px rgba(2, 6, 23, 0.35);
+}
+
+#blazor-error-ui .reload,
+#blazor-error-ui .dismiss {
+  margin-left: 0.75rem;
+  color: #67e8f9;
+  cursor: pointer;
+}

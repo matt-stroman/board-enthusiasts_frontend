@@ -19,7 +19,10 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
 
     public AppRouteSmokeTests(TestWebApplicationFactory factory)
     {
-        client = factory.CreateClient();
+        client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
     }
 
     [Theory]
