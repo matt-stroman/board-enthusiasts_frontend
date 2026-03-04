@@ -73,6 +73,34 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         Assert.DoesNotContain("Managed organizations", content);
     }
 
+    [Fact]
+    public async Task DeveloperAccessRoute_WithPlayerOnlyAccount_ShowsEnrollmentAction()
+    {
+        using var factory = new TestWebApplicationFactory(
+            new TestApiData(
+                CurrentUser: new CurrentUserResponse(
+                    "user-456",
+                    "Player One",
+                    "player@boardtpl.local",
+                    true,
+                    null,
+                    ["player"]),
+                ManagedOrganizations: new DeveloperOrganizationListResponse([])));
+
+        using var playerClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var response = await playerClient.GetAsync("/account/developer-access");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Enable developer access", content);
+        Assert.Contains("stored in Keycloak", content, StringComparison.OrdinalIgnoreCase);
+    }
+
     public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
     {
         private readonly TestApiData data;
@@ -228,6 +256,15 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
 
         public Task<BoardProfile?> GetBoardProfileAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(data.BoardProfile);
+
+        public Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                new DeveloperEnrollmentResponse(
+                    new DeveloperEnrollment(
+                        "enabled",
+                        true,
+                        data.CurrentUser.IsDeveloper(),
+                        !data.CurrentUser.IsDeveloper())));
 
         public Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(data.ManagedOrganizations ?? new DeveloperOrganizationListResponse([]));

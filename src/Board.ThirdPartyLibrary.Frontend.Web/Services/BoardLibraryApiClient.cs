@@ -34,6 +34,11 @@ public interface IBoardLibraryApiClient
     Task<BoardProfile?> GetBoardProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Enables developer access for the current authenticated user.
+    /// </summary>
+    Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Lists organizations the current caller can manage.
     /// </summary>
     Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default);
@@ -103,6 +108,14 @@ internal sealed class BoardLibraryApiClient(
         return await SendOptionalAsync<BoardProfileResponse>(httpRequest, cancellationToken) is { } response
             ? response.BoardProfile
             : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Post, "/identity/me/developer-enrollment", requiresAuthentication: true);
+        return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment("enabled", true, true, false));
     }
 
     /// <inheritdoc />
@@ -385,6 +398,25 @@ public sealed record CurrentUserResponse(
     bool EmailVerified,
     string? IdentityProvider,
     IReadOnlyList<string> Roles);
+
+/// <summary>
+/// Developer-enrollment response wrapper.
+/// </summary>
+/// <param name="DeveloperEnrollment">Developer enrollment state.</param>
+public sealed record DeveloperEnrollmentResponse(DeveloperEnrollment DeveloperEnrollment);
+
+/// <summary>
+/// Developer-enrollment result for the current user.
+/// </summary>
+/// <param name="Status">Enrollment status.</param>
+/// <param name="DeveloperAccessEnabled">Whether developer access is enabled.</param>
+/// <param name="AlreadyEnabled">Whether developer access was already enabled before the call.</param>
+/// <param name="SessionRefreshRequired">Whether the current session must refresh tokens before developer claims appear.</param>
+public sealed record DeveloperEnrollment(
+    string Status,
+    bool DeveloperAccessEnabled,
+    bool AlreadyEnabled,
+    bool SessionRefreshRequired);
 
 /// <summary>
 /// Linked Board profile response wrapper.

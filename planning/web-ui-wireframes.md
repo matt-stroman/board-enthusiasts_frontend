@@ -297,7 +297,7 @@ Goal:
 
 Goal:
 
-- provide the explicit post-sign-in route where a player can opt into developer workflows later
+- provide the explicit post-sign-in route where a player can enable developer workflows
 
 ```text
 +------------------------------------------------------+
@@ -305,7 +305,8 @@ Goal:
 +------------------------------------------------------+
 | Explanation: new accounts start as players           |
 | Current state: enabled / not enabled                 |
-| Future action: request developer access              |
+| Action: enable developer access                      |
+| Follow-up: refresh session to load new claims        |
 | Back to player library                               |
 +------------------------------------------------------+
 ```
