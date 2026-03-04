@@ -34,9 +34,29 @@ public interface IBoardLibraryApiClient
     Task<BoardProfile?> GetBoardProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Enables developer access for the current authenticated user.
+    /// Gets the current developer-enrollment state for the authenticated user.
     /// </summary>
-    Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default);
+    Task<DeveloperEnrollmentResponse> GetDeveloperEnrollmentAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Submits the current user's developer-enrollment request.
+    /// </summary>
+    Task<DeveloperEnrollmentResponse> SubmitDeveloperEnrollmentAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists developer-enrollment requests for moderators.
+    /// </summary>
+    Task<DeveloperEnrollmentRequestListResponse> GetDeveloperEnrollmentRequestsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Approves a developer-enrollment request as a moderator.
+    /// </summary>
+    Task<DeveloperEnrollmentRequestResponse> ApproveDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rejects a developer-enrollment request as a moderator.
+    /// </summary>
+    Task<DeveloperEnrollmentRequestResponse> RejectDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists organizations the current caller can manage.
@@ -111,11 +131,69 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default)
+    public async Task<DeveloperEnrollmentResponse> GetDeveloperEnrollmentAsync(CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Get, "/identity/me/developer-enrollment", requiresAuthentication: true);
+        return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(null, "not_requested", false, true, null, null, null));
+    }
+
+    /// <inheritdoc />
+    public async Task<DeveloperEnrollmentResponse> SubmitDeveloperEnrollmentAsync(CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(HttpMethod.Post, "/identity/me/developer-enrollment", requiresAuthentication: true);
         return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment("enabled", true, true, false));
+            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(null, "not_requested", false, true, null, null, null));
+    }
+
+    /// <inheritdoc />
+    public async Task<DeveloperEnrollmentRequestListResponse> GetDeveloperEnrollmentRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(HttpMethod.Get, "/moderation/developer-enrollment-requests", requiresAuthentication: true);
+        return await SendAsync<DeveloperEnrollmentRequestListResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperEnrollmentRequestListResponse([]);
+    }
+
+    /// <inheritdoc />
+    public async Task<DeveloperEnrollmentRequestResponse> ApproveDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Post,
+            $"/moderation/developer-enrollment-requests/{requestId:D}/approve",
+            requiresAuthentication: true);
+
+        return await SendAsync<DeveloperEnrollmentRequestResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperEnrollmentRequestResponse(new DeveloperEnrollmentRequest(
+                requestId,
+                string.Empty,
+                null,
+                null,
+                "approved",
+                true,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                null));
+    }
+
+    /// <inheritdoc />
+    public async Task<DeveloperEnrollmentRequestResponse> RejectDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Post,
+            $"/moderation/developer-enrollment-requests/{requestId:D}/reject",
+            requiresAuthentication: true);
+
+        return await SendAsync<DeveloperEnrollmentRequestResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperEnrollmentRequestResponse(new DeveloperEnrollmentRequest(
+                requestId,
+                string.Empty,
+                null,
+                null,
+                "rejected",
+                false,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                null));
     }
 
     /// <inheritdoc />
@@ -142,6 +220,8 @@ internal sealed class BoardLibraryApiClient(
     {
         var request = new HttpRequestMessage(method, relativeUri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Version = HttpVersion.Version20;
+        request.VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
 
         if (!requiresAuthentication)
         {
@@ -171,7 +251,7 @@ internal sealed class BoardLibraryApiClient(
     private async Task<T?> SendAsync<T>(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
         return await response.Content.ReadFromJsonAsync<T>(SerializerOptions, cancellationToken);
     }
 
@@ -183,8 +263,32 @@ internal sealed class BoardLibraryApiClient(
             return default;
         }
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
         return await response.Content.ReadFromJsonAsync<T>(SerializerOptions, cancellationToken);
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        ApiProblemResponse? problem = null;
+
+        try
+        {
+            problem = await response.Content.ReadFromJsonAsync<ApiProblemResponse>(SerializerOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+        }
+
+        throw new BoardLibraryApiException(
+            response.StatusCode,
+            problem?.Title ?? $"The backend returned {(int)response.StatusCode}.",
+            problem?.Detail,
+            problem?.Code);
     }
 }
 
@@ -408,15 +512,56 @@ public sealed record DeveloperEnrollmentResponse(DeveloperEnrollment DeveloperEn
 /// <summary>
 /// Developer-enrollment result for the current user.
 /// </summary>
+/// <param name="RequestId">Application-owned request identifier when one exists.</param>
 /// <param name="Status">Enrollment status.</param>
 /// <param name="DeveloperAccessEnabled">Whether developer access is enabled.</param>
-/// <param name="AlreadyEnabled">Whether developer access was already enabled before the call.</param>
-/// <param name="SessionRefreshRequired">Whether the current session must refresh tokens before developer claims appear.</param>
+/// <param name="CanSubmitRequest">Whether the user may submit a request.</param>
+/// <param name="RequestedAt">UTC timestamp when the request was created.</param>
+/// <param name="ReviewedAt">UTC timestamp when the request was reviewed.</param>
+/// <param name="ReviewerSubject">Reviewer Keycloak subject when one exists.</param>
 public sealed record DeveloperEnrollment(
+    Guid? RequestId,
     string Status,
     bool DeveloperAccessEnabled,
-    bool AlreadyEnabled,
-    bool SessionRefreshRequired);
+    bool CanSubmitRequest,
+    DateTime? RequestedAt,
+    DateTime? ReviewedAt,
+    string? ReviewerSubject);
+
+/// <summary>
+/// Moderator-visible developer-enrollment request list.
+/// </summary>
+/// <param name="Requests">Returned enrollment requests.</param>
+public sealed record DeveloperEnrollmentRequestListResponse(IReadOnlyList<DeveloperEnrollmentRequest> Requests);
+
+/// <summary>
+/// Moderator-visible developer-enrollment request wrapper.
+/// </summary>
+/// <param name="DeveloperEnrollmentRequest">Returned request.</param>
+public sealed record DeveloperEnrollmentRequestResponse(DeveloperEnrollmentRequest DeveloperEnrollmentRequest);
+
+/// <summary>
+/// Developer-enrollment request shown to moderators.
+/// </summary>
+/// <param name="RequestId">Request identifier.</param>
+/// <param name="ApplicantSubject">Applicant Keycloak subject.</param>
+/// <param name="ApplicantDisplayName">Applicant display name.</param>
+/// <param name="ApplicantEmail">Applicant email address.</param>
+/// <param name="Status">Review status.</param>
+/// <param name="DeveloperAccessEnabled">Whether developer access is enabled.</param>
+/// <param name="RequestedAt">UTC timestamp when the request was submitted.</param>
+/// <param name="ReviewedAt">UTC timestamp when the request was reviewed.</param>
+/// <param name="ReviewerSubject">Reviewer Keycloak subject.</param>
+public sealed record DeveloperEnrollmentRequest(
+    Guid RequestId,
+    string ApplicantSubject,
+    string? ApplicantDisplayName,
+    string? ApplicantEmail,
+    string Status,
+    bool DeveloperAccessEnabled,
+    DateTime RequestedAt,
+    DateTime? ReviewedAt,
+    string? ReviewerSubject);
 
 /// <summary>
 /// Linked Board profile response wrapper.
@@ -467,3 +612,33 @@ public sealed record DeveloperOrganizationSummary(
 /// </summary>
 /// <param name="Titles">Titles the caller can manage in the organization.</param>
 public sealed record DeveloperTitleListResponse(IReadOnlyList<CatalogTitleSummary> Titles);
+
+/// <summary>
+/// Problem details returned by the backend API.
+/// </summary>
+/// <param name="Type">Problem type URI.</param>
+/// <param name="Title">Problem title.</param>
+/// <param name="Status">HTTP status code.</param>
+/// <param name="Detail">Detailed message.</param>
+/// <param name="Code">Stable application error code.</param>
+internal sealed record ApiProblemResponse(string? Type, string Title, int Status, string? Detail, string? Code);
+
+/// <summary>
+/// Exception thrown when the backend API returns a handled non-success response.
+/// </summary>
+internal sealed class BoardLibraryApiException : Exception
+{
+    public BoardLibraryApiException(HttpStatusCode statusCode, string message, string? detail, string? code)
+        : base(string.IsNullOrWhiteSpace(detail) ? message : $"{message} {detail}")
+    {
+        StatusCode = statusCode;
+        Detail = detail;
+        Code = code;
+    }
+
+    public HttpStatusCode StatusCode { get; }
+
+    public string? Detail { get; }
+
+    public string? Code { get; }
+}

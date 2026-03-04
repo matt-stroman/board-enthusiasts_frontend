@@ -12,52 +12,73 @@
             <p class="mt-3 text-sm leading-7 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (CurrentUser is null || (CurrentUser.IsDeveloper() && ManagedOrganizations is null))
+    else if (CurrentUser is null || EnrollmentState is null || (HasDeveloperAccess && ManagedOrganizations is null))
     {
         <section class="app-panel p-6">
             <div class="h-8 w-52 animate-pulse rounded-full bg-white/10"></div>
             <div class="mt-4 h-40 animate-pulse rounded-[1.75rem] bg-white/10"></div>
         </section>
     }
-    else if (!CurrentUser.IsDeveloper())
+    else if (!HasDeveloperAccess)
     {
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
                 <div class="app-chip w-fit">Developer onboarding</div>
-                <h1 class="mt-4 app-page-title">Become A Developer</h1>
+                <h1 class="mt-4 app-page-title">@DevelopTitle</h1>
                 <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                    New accounts begin as players. Developer access is a separate post-sign-in step so organization and title controls do not appear automatically for every verified user.
+                    @DevelopSummary
                 </p>
             </div>
             <div class="flex flex-col gap-3 sm:flex-row">
-                <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/account/developer-access">Review developer access</a>
+                <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SubmitEnrollmentAsync" disabled="@(IsSubmitting || !CanSubmitEnrollment)">
+                    @DevelopActionLabel
+                </button>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account/developer-access">Open developer status</a>
                 <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player/library">Back to player library</a>
             </div>
         </div>
 
+        <section class="@StatusPanelClass">
+            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Current status</div>
+            <h2 class="mt-3 text-2xl font-semibold text-white">@EnrollmentState.ToStatusLabel()</h2>
+            <p class="mt-3 text-sm leading-7 text-slate-200/90">@StatusDetail</p>
+        </section>
+
         <section class="grid gap-4 lg:grid-cols-3">
             <section class="app-panel p-6">
                 <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 1</div>
-                <h2 class="mt-3 text-xl font-semibold text-white">Player-first account</h2>
+                <h2 class="mt-3 text-xl font-semibold text-white">Sign up as a player</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Registration and email verification finish in Keycloak, then the web app brings the user into the authenticated player library.
+                    Every authenticated library account starts with player access only, so catalog browsing and future purchases stay separate from backend controls.
                 </p>
             </section>
             <section class="app-panel p-6">
                 <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 2</div>
-                <h2 class="mt-3 text-xl font-semibold text-white">Request access later</h2>
+                <h2 class="mt-3 text-xl font-semibold text-white">Register as a developer</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Developer enrollment stays separate from registration so backend management controls remain intentionally opt-in.
+                    The register action creates a pending request instead of granting organization tools immediately.
                 </p>
             </section>
             <section class="app-panel p-6">
                 <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 3</div>
-                <h2 class="mt-3 text-xl font-semibold text-white">Open organization tools</h2>
+                <h2 class="mt-3 text-xl font-semibold text-white">Wait for moderation</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Once developer access exists, this route becomes the entry point for organizations, titles, releases, media, and acquisition setup.
+                    Moderators can approve or reject requests later. Approved accounts open the developer console from this route automatically.
                 </p>
             </section>
         </section>
+
+        @if (CurrentUser.IsModerator())
+        {
+            <section class="app-panel p-6">
+                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Moderator tools</div>
+                <h2 class="mt-3 text-xl font-semibold text-white">Review developer requests</h2>
+                <p class="mt-3 text-sm leading-7 text-slate-300">
+                    This account can review pending registrations from the moderation queue.
+                </p>
+                <a class="mt-4 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/moderation/developer-enrollment-requests">Open moderation queue</a>
+            </section>
+        }
     }
     else
     {
@@ -75,6 +96,10 @@
                 {
                     <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/develop/organizations/{PrimaryOrganization.Id}/titles/new")">New title</a>
                 }
+                @if (CurrentUser.IsModerator())
+                {
+                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/moderation/developer-enrollment-requests">Moderation queue</a>
+                }
             </div>
         </div>
 
@@ -90,7 +115,7 @@
                     </div>
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer access</div>
-                        <div class="mt-2 text-base font-semibold text-white">Enabled</div>
+                        <div class="mt-2 text-base font-semibold text-white">@EnrollmentState.ToStatusLabel()</div>
                     </div>
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email status</div>
@@ -119,11 +144,11 @@
         }
         else
         {
-                <section class="space-y-4">
-                    <div class="flex items-center justify-between">
+            <section class="space-y-4">
+                <div class="flex items-center justify-between">
                     <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Your organizations</h2>
-                        <div class="text-sm text-slate-400">Membership and links come from the live management API.</div>
-                    </div>
+                    <div class="text-sm text-slate-400">Membership and links come from the live management API.</div>
+                </div>
                 <section class="grid gap-4 lg:grid-cols-3">
                     @foreach (var organization in ManagedOrganizations!.Organizations)
                     {
@@ -173,15 +198,104 @@
 @code {
     private CurrentUserResponse? CurrentUser { get; set; }
 
+    private DeveloperEnrollment? EnrollmentState { get; set; }
+
     private DeveloperOrganizationListResponse? ManagedOrganizations { get; set; }
 
     private IReadOnlyList<CatalogTitleSummary> PrimaryOrganizationTitles { get; set; } = [];
 
     private DeveloperOrganizationSummary? PrimaryOrganization => ManagedOrganizations?.Organizations.FirstOrDefault();
 
+    private bool HasDeveloperAccess => EnrollmentState.HasDeveloperAccess();
+
+    private bool CanSubmitEnrollment => EnrollmentState?.CanSubmitRequest == true;
+
+    private bool IsSubmitting { get; set; }
+
     private string? ErrorMessage { get; set; }
 
+    private string DevelopTitle =>
+        EnrollmentState switch
+        {
+            _ when EnrollmentState.IsPending() => "Developer Registration Pending",
+            _ when EnrollmentState.IsRejected() => "Developer Registration Rejected",
+            _ => "Register As A Developer"
+        };
+
+    private string DevelopSummary =>
+        EnrollmentState switch
+        {
+            _ when EnrollmentState.IsPending() => "Your request is on file and waiting for moderator review. Developer tools stay hidden until that review is approved.",
+            _ when EnrollmentState.IsRejected() => "This request was rejected by moderation. The developer console stays unavailable for now and resubmission is disabled until the workflow is expanded.",
+            _ => "New accounts begin as players. Registering as a developer is a separate step that creates a pending moderation request before organization and title controls become available."
+        };
+
+    private string DevelopActionLabel =>
+        IsSubmitting
+            ? "Submitting request..."
+            : EnrollmentState switch
+            {
+                _ when EnrollmentState.HasDeveloperAccess() => "Developer access enabled",
+                _ when EnrollmentState.IsPending() => "Request pending",
+                _ when EnrollmentState.IsRejected() => "Request rejected",
+                _ => "Register as a Developer"
+            };
+
+    private string StatusDetail =>
+        EnrollmentState switch
+        {
+            _ when EnrollmentState.IsPending() && EnrollmentState?.RequestedAt is not null
+                => $"Your registration was submitted on {EnrollmentState.RequestedAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt}. Moderators can approve or reject it from their review queue.",
+            _ when EnrollmentState.IsRejected() && EnrollmentState?.ReviewedAt is not null
+                => $"This request was reviewed on {EnrollmentState.ReviewedAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt}. Resubmission is intentionally disabled for now.",
+            _ when EnrollmentState.IsRejected()
+                => "This request was rejected. Resubmission is intentionally disabled for now.",
+            _ => EnrollmentState.ToStatusDescription()
+        };
+
+    private string StatusPanelClass =>
+        EnrollmentState switch
+        {
+            _ when EnrollmentState.IsRejected() => "rounded-[1.5rem] border border-rose-300/20 bg-rose-300/10 p-5",
+            _ when EnrollmentState.IsPending() => "rounded-[1.5rem] border border-amber-300/20 bg-amber-300/10 p-5",
+            _ => "rounded-[1.5rem] border border-cyan-200/15 bg-cyan-200/10 p-5"
+        };
+
     protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task SubmitEnrollmentAsync()
+    {
+        if (CurrentUser is null || IsSubmitting || !CanSubmitEnrollment)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        IsSubmitting = true;
+
+        try
+        {
+            EnrollmentState = (await ApiClient.SubmitDeveloperEnrollmentAsync()).DeveloperEnrollment;
+
+            if (HasDeveloperAccess)
+            {
+                await LoadDeveloperWorkspaceAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task LoadAsync()
     {
         ErrorMessage = null;
 
@@ -195,24 +309,32 @@
                 return;
             }
 
-            if (!CurrentUser.IsDeveloper())
+            EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
+
+            if (HasDeveloperAccess)
             {
-                ManagedOrganizations = new DeveloperOrganizationListResponse([]);
-                PrimaryOrganizationTitles = [];
+                await LoadDeveloperWorkspaceAsync();
                 return;
             }
 
-            ManagedOrganizations = await ApiClient.GetManagedOrganizationsAsync();
-
-            if (PrimaryOrganization is not null)
-            {
-                var titleResponse = await ApiClient.GetOrganizationTitlesAsync(PrimaryOrganization.Id);
-                PrimaryOrganizationTitles = titleResponse.Titles.Take(3).ToArray();
-            }
+            ManagedOrganizations = new DeveloperOrganizationListResponse([]);
+            PrimaryOrganizationTitles = [];
         }
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
+        }
+    }
+
+    private async Task LoadDeveloperWorkspaceAsync()
+    {
+        ManagedOrganizations = await ApiClient.GetManagedOrganizationsAsync();
+        PrimaryOrganizationTitles = [];
+
+        if (PrimaryOrganization is not null)
+        {
+            var titleResponse = await ApiClient.GetOrganizationTitlesAsync(PrimaryOrganization.Id);
+            PrimaryOrganizationTitles = titleResponse.Titles.Take(3).ToArray();
         }
     }
 }

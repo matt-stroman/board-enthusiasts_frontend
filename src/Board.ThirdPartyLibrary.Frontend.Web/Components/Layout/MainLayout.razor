@@ -16,11 +16,16 @@
                 <NavLink class="app-nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
                 <NavLink class="app-nav-link" href="/library">Public Library</NavLink>
                 <AuthorizeView>
-                    <Authorized>
+                    <Authorized Context="authenticatedNav">
                         <NavLink class="app-nav-link" href="/player/library">Player Library</NavLink>
                         <NavLink class="app-nav-link" href="/player/wishlist">Wishlist</NavLink>
                         <NavLink class="app-nav-link" href="/develop">Develop</NavLink>
                         <NavLink class="app-nav-link" href="/account">Account</NavLink>
+                        <AuthorizeView Roles="moderator,admin">
+                            <Authorized Context="moderatorNav">
+                                <NavLink class="app-nav-link" href="/moderation/developer-enrollment-requests">Moderation</NavLink>
+                            </Authorized>
+                        </AuthorizeView>
                     </Authorized>
                     <NotAuthorized>
                         <NavLink class="app-nav-link" href="/develop">Develop</NavLink>
@@ -29,8 +34,13 @@
             </nav>
             <div class="hidden items-center gap-3 md:flex">
                 <AuthorizeView>
-                    <Authorized>
+                    <Authorized Context="authenticatedActions">
                         <a class="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/player/library">Player Library</a>
+                        <AuthorizeView Roles="moderator,admin">
+                            <Authorized Context="moderatorActions">
+                                <a class="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/moderation/developer-enrollment-requests">Moderation</a>
+                            </Authorized>
+                        </AuthorizeView>
                         <a class="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href="/auth/signout?returnUrl=%2Flibrary" data-enhance-nav="false">Sign out</a>
                     </Authorized>
                     <NotAuthorized>
@@ -53,11 +63,16 @@
             <div class="flex gap-4 text-slate-400">
                 <a class="transition hover:text-cyan-200" href="/library">Public Library</a>
                 <AuthorizeView>
-                    <Authorized>
+                    <Authorized Context="authenticatedFooter">
                         <a class="transition hover:text-cyan-200" href="/player/library">Player Library</a>
                         <a class="transition hover:text-cyan-200" href="/player/wishlist">Wishlist</a>
                         <a class="transition hover:text-cyan-200" href="/develop">Develop</a>
                         <a class="transition hover:text-cyan-200" href="/account">Account</a>
+                        <AuthorizeView Roles="moderator,admin">
+                            <Authorized Context="moderatorFooter">
+                                <a class="transition hover:text-cyan-200" href="/moderation/developer-enrollment-requests">Moderation</a>
+                            </Authorized>
+                        </AuthorizeView>
                     </Authorized>
                     <NotAuthorized>
                         <a class="transition hover:text-cyan-200" href="/develop">Develop</a>

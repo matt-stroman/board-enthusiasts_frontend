@@ -114,7 +114,7 @@ This keeps the user model simple:
 
 - anonymous users stay in public library routes
 - authenticated players land in player-library routes first
-- developers move into a clearly separate management area only after developer access is enabled
+- players register for developer access from `Develop`, moderators review that request, and approved users move into a clearly separate management area
 - shared account/profile concerns live outside both
 
 ## MVP Route Map
@@ -139,11 +139,16 @@ Recommended initial routes:
 - `/account/board-profile`
   - Board profile link or edit flow
 - `/account/developer-access`
-  - explicit post-sign-in developer enrollment action and session-refresh handoff
+  - current developer-registration status and submission route for the signed-in player
 - `/signin`
   - sign-in handoff route
 - `/signout`
   - sign-out handoff route
+
+### Moderation routes
+
+- `/moderation/developer-enrollment-requests`
+  - moderator queue for approving or rejecting pending developer registrations
 
 ### Player routes
 
@@ -277,7 +282,7 @@ Critical MVP end-to-end paths:
 - public library browse to title detail
 - sign-in and sign-out
 - authenticated player landing to player library
-- enable developer access and refresh session
+- submit developer registration and moderate approval
 - create organization
 - create title
 - update title metadata
