@@ -42,7 +42,7 @@
             else
             {
                 <div class="mt-6 rounded-[1.5rem] border border-cyan-200/15 bg-cyan-200/10 p-5 text-sm leading-7 text-cyan-50/90">
-                    This route is the reserved UI handoff for future developer enrollment. The backend mutation and approval rules are intentionally deferred to a later wave, but the player-first navigation path now exists.
+                    Developer access is granted through the backend and stored in Keycloak. The current session may need a fresh sign-in before the new developer claim appears in the web app.
                 </div>
                 <div class="mt-6 grid gap-4 lg:grid-cols-3">
                     <section class="rounded-[1.25rem] bg-black/15 p-4">
@@ -57,13 +57,27 @@
                     </section>
                     <section class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 3</div>
-                        <div class="mt-2 text-lg font-semibold text-white">Request developer access</div>
-                        <p class="mt-2 text-sm leading-7 text-slate-300">A future backend wave will turn this page into the actual developer-enrollment action.</p>
+                        <div class="mt-2 text-lg font-semibold text-white">Enable developer access</div>
+                        <p class="mt-2 text-sm leading-7 text-slate-300">This page now calls the authenticated developer-enrollment endpoint, which grants the Keycloak developer role for the current account.</p>
                     </section>
                 </div>
+
+                @if (!string.IsNullOrWhiteSpace(EnrollmentMessage))
+                {
+                    <div class="mt-6 rounded-[1.5rem] border border-emerald-300/20 bg-emerald-300/10 p-5 text-sm leading-7 text-emerald-50/90">
+                        @EnrollmentMessage
+                    </div>
+                }
+
                 <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/player/library">Back to player library</a>
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop">Preview developer onboarding</a>
+                    <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="EnrollAsync" disabled="@(IsSubmitting || EnrollmentResult?.DeveloperEnrollment.DeveloperAccessEnabled == true)">
+                        @(IsSubmitting ? "Enabling developer access..." : EnrollmentResult?.DeveloperEnrollment.DeveloperAccessEnabled == true ? "Developer access enabled" : "Enable developer access")
+                    </button>
+                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player/library">Back to player library</a>
+                    @if (EnrollmentResult?.DeveloperEnrollment.SessionRefreshRequired == true)
+                    {
+                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@RefreshSessionHref" data-enhance-nav="false">Refresh session and open developer console</a>
+                    }
                 </div>
             }
         </section>
@@ -73,11 +87,21 @@
 @code {
     private CurrentUserResponse? CurrentUser { get; set; }
 
+    private DeveloperEnrollmentResponse? EnrollmentResult { get; set; }
+
+    private bool IsSubmitting { get; set; }
+
+    private string? EnrollmentMessage { get; set; }
+
     private string? ErrorMessage { get; set; }
+
+    private string RefreshSessionHref => "/auth/signin?returnUrl=%2Fdevelop";
 
     protected override async Task OnInitializedAsync()
     {
         ErrorMessage = null;
+        EnrollmentResult = null;
+        EnrollmentMessage = null;
 
         try
         {
@@ -91,6 +115,35 @@
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
+        }
+    }
+
+    private async Task EnrollAsync()
+    {
+        if (CurrentUser is null || IsSubmitting)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        EnrollmentMessage = null;
+        IsSubmitting = true;
+
+        try
+        {
+            EnrollmentResult = await ApiClient.EnrollAsDeveloperAsync();
+
+            EnrollmentMessage = EnrollmentResult.DeveloperEnrollment.SessionRefreshRequired
+                ? "Developer access has been enabled in Keycloak. Refresh your session to load the updated developer claim into the web app before opening the developer console."
+                : "Developer access is already active for this session.";
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
         }
     }
 }

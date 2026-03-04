@@ -139,7 +139,7 @@ Recommended initial routes:
 - `/account/board-profile`
   - Board profile link or edit flow
 - `/account/developer-access`
-  - explicit post-sign-in developer enrollment entry point
+  - explicit post-sign-in developer enrollment action and session-refresh handoff
 - `/signin`
   - sign-in handoff route
 - `/signout`
@@ -277,6 +277,7 @@ Critical MVP end-to-end paths:
 - public library browse to title detail
 - sign-in and sign-out
 - authenticated player landing to player library
+- enable developer access and refresh session
 - create organization
 - create title
 - update title metadata
@@ -298,7 +299,6 @@ The current API surface is good enough to start UI scaffolding, but at least the
 - add explicit sort options for public catalog browsing beyond genre if the list is expected to grow quickly
 - consider text search once the catalog has enough volume for it to matter
 - add authenticated player-library and wishlist endpoints before those routes leave stub mode
-- add a separate developer-enrollment endpoint so developer access no longer depends on back-office role assignment alone
 
 Notes on current pressure points:
 
