@@ -297,16 +297,16 @@ Goal:
 
 Goal:
 
-- provide the explicit post-sign-in route where a player can enable developer workflows
+- provide the explicit post-sign-in route where a player can see developer-registration status and submit a request
 
 ```text
 +------------------------------------------------------+
 | Developer access                                     |
 +------------------------------------------------------+
 | Explanation: new accounts start as players           |
-| Current state: enabled / not enabled                 |
-| Action: enable developer access                      |
-| Follow-up: refresh session to load new claims        |
+| Current state: not requested / pending / approved / rejected |
+| Action: register as a developer                      |
+| Review state: waiting for moderator decision         |
 | Back to player library                               |
 +------------------------------------------------------+
 ```
@@ -367,10 +367,28 @@ Player-only state:
 
 ```text
 +----------------------------------------------------------------------------------+
-| Become a developer                                                               |
+| Register as a developer                                                          |
 +----------------------------------------------------------------------------------+
 | Player-first explanation                                                         |
-| CTA to developer access route                                                    |
+| Current status: not requested / pending / rejected                               |
+| CTA: submit registration request                                                 |
++----------------------------------------------------------------------------------+
+```
+
+## `/moderation/developer-enrollment-requests`
+
+Goal:
+
+- give moderators a single queue for reviewing pending developer registrations
+
+```text
++----------------------------------------------------------------------------------+
+| Developer enrollment queue                                                       |
++----------------------------------------------------------------------------------+
+| KPI strip: pending | approved | rejected                                         |
++----------------------------------------------------------------------------------+
+| [request card] applicant | requested at | approve | reject                       |
+| [request card] applicant | reviewed state                                         |
 +----------------------------------------------------------------------------------+
 ```
 

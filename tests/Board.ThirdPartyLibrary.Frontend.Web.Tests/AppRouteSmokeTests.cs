@@ -32,6 +32,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
     [InlineData("/player/wishlist", "No wishlist items yet")]
     [InlineData("/library/stellar-forge/star-blasters", "View on itch.io")]
     [InlineData("/develop", "Stellar Forge")]
+    [InlineData("/moderation/developer-enrollment-requests", "Developer Enrollment Queue")]
     [InlineData("/account", "Player library access")]
     [InlineData("/account/developer-access", "Developer Access")]
     [InlineData("/signin?error=identity-provider-unavailable", "Sign in is unavailable right now")]
@@ -69,7 +70,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Become A Developer", content);
+        Assert.Contains("Register As A Developer", content);
         Assert.DoesNotContain("Managed organizations", content);
     }
 
@@ -97,8 +98,8 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Enable developer access", content);
-        Assert.Contains("stored in Keycloak", content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Register as a Developer", content);
+        Assert.Contains("pending moderation record", content, StringComparison.OrdinalIgnoreCase);
     }
 
     public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>
@@ -124,12 +125,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
                 services.RemoveAll<IBoardLibraryApiClient>();
                 services.AddSingleton<IBoardLibraryApiClient, StubBoardLibraryApiClient>();
 
-                services.AddSingleton(new TestAuthClaimsProvider(
-                [
-                    new Claim("sub", "user-123"),
-                    new Claim(ClaimTypes.Name, "Local Admin"),
-                    new Claim(ClaimTypes.Email, "admin@boardtpl.local")
-                ]));
+                services.AddSingleton(new TestAuthClaimsProvider(BuildClaims(data.CurrentUser)));
 
                 services.AddAuthentication(options =>
                 {
@@ -139,12 +135,31 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
                 }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
             });
         }
+
+        private static IReadOnlyList<Claim> BuildClaims(CurrentUserResponse currentUser)
+        {
+            var claims = new List<Claim>
+            {
+                new("sub", currentUser.Subject),
+                new(ClaimTypes.Name, currentUser.DisplayName ?? currentUser.Subject)
+            };
+
+            if (!string.IsNullOrWhiteSpace(currentUser.Email))
+            {
+                claims.Add(new Claim(ClaimTypes.Email, currentUser.Email));
+            }
+
+            claims.AddRange(currentUser.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
+            return claims;
+        }
     }
 
     public sealed record TestApiData(
         CurrentUserResponse CurrentUser,
+        DeveloperEnrollmentResponse? DeveloperEnrollment = null,
         BoardProfile? BoardProfile = null,
-        DeveloperOrganizationListResponse? ManagedOrganizations = null)
+        DeveloperOrganizationListResponse? ManagedOrganizations = null,
+        DeveloperEnrollmentRequestListResponse? EnrollmentRequests = null)
     {
         public static TestApiData Default { get; } = new(
             CurrentUser: new CurrentUserResponse(
@@ -154,6 +169,15 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
                 true,
                 null,
                 ["admin", "developer", "player"]),
+            DeveloperEnrollment: new DeveloperEnrollmentResponse(
+                new DeveloperEnrollment(
+                    Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                    "approved",
+                    true,
+                    false,
+                    DateTime.Parse("2026-03-01T18:00:00Z"),
+                    DateTime.Parse("2026-03-01T19:00:00Z"),
+                    "moderator-1")),
             BoardProfile: new BoardProfile(
                 "board_user_12345",
                 "BoardKiddo",
@@ -169,6 +193,19 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
                         "Family co-op studio.",
                         "https://cdn.example.com/orgs/stellar-forge.png",
                         "owner")
+                ]),
+            EnrollmentRequests: new DeveloperEnrollmentRequestListResponse(
+                [
+                    new DeveloperEnrollmentRequest(
+                        Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                        "user-789",
+                        "Pending Dev",
+                        "pending-dev@boardtpl.local",
+                        "pending",
+                        false,
+                        DateTime.Parse("2026-03-02T18:00:00Z"),
+                        null,
+                        null)
                 ]));
     }
 
@@ -257,14 +294,62 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         public Task<BoardProfile?> GetBoardProfileAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(data.BoardProfile);
 
-        public Task<DeveloperEnrollmentResponse> EnrollAsDeveloperAsync(CancellationToken cancellationToken = default) =>
+        public Task<DeveloperEnrollmentResponse> GetDeveloperEnrollmentAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(
-                new DeveloperEnrollmentResponse(
+                data.DeveloperEnrollment
+                ?? new DeveloperEnrollmentResponse(
                     new DeveloperEnrollment(
-                        "enabled",
+                        null,
+                        "not_requested",
+                        false,
                         true,
-                        data.CurrentUser.IsDeveloper(),
-                        !data.CurrentUser.IsDeveloper())));
+                        null,
+                        null,
+                        null)));
+
+        public Task<DeveloperEnrollmentResponse> SubmitDeveloperEnrollmentAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                data.DeveloperEnrollment
+                ?? new DeveloperEnrollmentResponse(
+                    new DeveloperEnrollment(
+                        Guid.Parse("66666666-6666-6666-6666-666666666666"),
+                        "pending",
+                        false,
+                        false,
+                        DateTime.Parse("2026-03-03T20:00:00Z"),
+                        null,
+                        null)));
+
+        public Task<DeveloperEnrollmentRequestListResponse> GetDeveloperEnrollmentRequestsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(data.EnrollmentRequests ?? new DeveloperEnrollmentRequestListResponse([]));
+
+        public Task<DeveloperEnrollmentRequestResponse> ApproveDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                new DeveloperEnrollmentRequestResponse(
+                    new DeveloperEnrollmentRequest(
+                        requestId,
+                        "user-789",
+                        "Pending Dev",
+                        "pending-dev@boardtpl.local",
+                        "approved",
+                        true,
+                        DateTime.Parse("2026-03-02T18:00:00Z"),
+                        DateTime.Parse("2026-03-03T20:00:00Z"),
+                        data.CurrentUser.Subject)));
+
+        public Task<DeveloperEnrollmentRequestResponse> RejectDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                new DeveloperEnrollmentRequestResponse(
+                    new DeveloperEnrollmentRequest(
+                        requestId,
+                        "user-789",
+                        "Pending Dev",
+                        "pending-dev@boardtpl.local",
+                        "rejected",
+                        false,
+                        DateTime.Parse("2026-03-02T18:00:00Z"),
+                        DateTime.Parse("2026-03-03T20:00:00Z"),
+                        data.CurrentUser.Subject)));
 
         public Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(data.ManagedOrganizations ?? new DeveloperOrganizationListResponse([]));

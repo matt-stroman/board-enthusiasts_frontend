@@ -1,0 +1,201 @@
+@page "/moderation/developer-enrollment-requests"
+@attribute [Authorize]
+@inject IBoardLibraryApiClient ApiClient
+
+<PageTitle>Developer Enrollment Queue</PageTitle>
+
+<section class="space-y-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+            <div class="app-chip w-fit">Moderator queue</div>
+            <h1 class="mt-4 app-page-title">Developer Enrollment Queue</h1>
+            <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                Moderators review pending developer registrations here and decide whether accounts can open the developer console.
+            </p>
+        </div>
+        <div class="flex flex-col gap-3 sm:flex-row">
+            <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop">Back to develop</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Account</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <section class="app-panel p-6">
+            <h2 class="text-xl font-semibold text-white">Moderation unavailable</h2>
+            <p class="mt-3 text-sm leading-7 text-slate-300">@ErrorMessage</p>
+        </section>
+    }
+    else if (CurrentUser is null || Requests is null)
+    {
+        <section class="app-panel p-6">
+            <div class="h-8 w-60 animate-pulse rounded-full bg-white/10"></div>
+            <div class="mt-4 h-48 animate-pulse rounded-[1.75rem] bg-white/10"></div>
+        </section>
+    }
+    else if (!CurrentUser.IsModerator())
+    {
+        <section class="app-panel p-6">
+            <h2 class="text-xl font-semibold text-white">Moderator access required</h2>
+            <p class="mt-3 text-sm leading-7 text-slate-300">
+                This route is reserved for moderator and admin accounts reviewing developer registration requests.
+            </p>
+        </section>
+    }
+    else
+    {
+        <section class="grid gap-4 lg:grid-cols-3">
+            <section class="app-panel p-6">
+                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Pending</div>
+                <div class="mt-3 text-4xl font-black text-white">@PendingCount</div>
+            </section>
+            <section class="app-panel p-6">
+                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Approved</div>
+                <div class="mt-3 text-4xl font-black text-white">@ApprovedCount</div>
+            </section>
+            <section class="app-panel p-6">
+                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Rejected</div>
+                <div class="mt-3 text-4xl font-black text-white">@RejectedCount</div>
+            </section>
+        </section>
+
+        @if (Requests.Count == 0)
+        {
+            <section class="app-panel p-6">
+                <h2 class="text-xl font-semibold text-white">No developer enrollment requests yet</h2>
+                <p class="mt-3 text-sm leading-7 text-slate-300">
+                    New player registrations will appear here once they submit the developer registration action from the Develop area.
+                </p>
+            </section>
+        }
+        else
+        {
+            <section class="space-y-4">
+                @foreach (var request in Requests)
+                {
+                    <section class="app-panel p-6">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">@request.Status.Replace('_', ' ')</div>
+                                <h2 class="mt-3 text-2xl font-semibold text-white">@(request.ApplicantDisplayName ?? request.ApplicantSubject)</h2>
+                                <div class="mt-2 text-sm text-slate-300">@request.ApplicantEmail</div>
+                                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <div class="rounded-[1.25rem] bg-black/15 p-4">
+                                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Requested</div>
+                                        <div class="mt-2 text-base text-white">@request.RequestedAt.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</div>
+                                    </div>
+                                    <div class="rounded-[1.25rem] bg-black/15 p-4">
+                                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Reviewer</div>
+                                        <div class="mt-2 text-base text-white">@(request.ReviewerSubject ?? "Not reviewed")</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (string.Equals(request.Status, "pending", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="flex flex-col gap-3 sm:flex-row">
+                                    <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="() => ReviewAsync(request.RequestId, approve: true)" disabled="@IsBusy(request.RequestId)">
+                                        @(IsBusy(request.RequestId) ? "Working..." : "Approve")
+                                    </button>
+                                    <button class="rounded-full border border-rose-300/40 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="() => ReviewAsync(request.RequestId, approve: false)" disabled="@IsBusy(request.RequestId)">
+                                        Reject
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100">
+                                    Reviewed
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private CurrentUserResponse? CurrentUser { get; set; }
+
+    private List<DeveloperEnrollmentRequest>? Requests { get; set; }
+
+    private Guid? BusyRequestId { get; set; }
+
+    private string? ErrorMessage { get; set; }
+
+    private int PendingCount => Requests?.Count(static request => string.Equals(request.Status, "pending", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    private int ApprovedCount => Requests?.Count(static request => string.Equals(request.Status, "approved", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    private int RejectedCount => Requests?.Count(static request => string.Equals(request.Status, "rejected", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private bool IsBusy(Guid requestId) => BusyRequestId == requestId;
+
+    private async Task ReviewAsync(Guid requestId, bool approve)
+    {
+        if (BusyRequestId is not null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        BusyRequestId = requestId;
+
+        try
+        {
+            _ = approve
+                ? await ApiClient.ApproveDeveloperEnrollmentRequestAsync(requestId)
+                : await ApiClient.RejectDeveloperEnrollmentRequestAsync(requestId);
+
+            await LoadRequestsAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            BusyRequestId = null;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        ErrorMessage = null;
+
+        try
+        {
+            CurrentUser = await ApiClient.GetCurrentUserAsync();
+
+            if (CurrentUser is null)
+            {
+                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
+                return;
+            }
+
+            if (!CurrentUser.IsModerator())
+            {
+                Requests = [];
+                return;
+            }
+
+            await LoadRequestsAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+    }
+
+    private async Task LoadRequestsAsync()
+    {
+        Requests = (await ApiClient.GetDeveloperEnrollmentRequestsAsync()).Requests.ToList();
+    }
+}

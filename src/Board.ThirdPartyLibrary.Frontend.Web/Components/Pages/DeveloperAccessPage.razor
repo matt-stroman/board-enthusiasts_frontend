@@ -5,7 +5,7 @@
 <PageTitle>Developer Access</PageTitle>
 
 <section class="space-y-6">
-    <div class="app-chip w-fit">Post-sign-in onboarding</div>
+    <div class="app-chip w-fit">Developer enrollment</div>
 
     @if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
@@ -14,7 +14,7 @@
             <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (CurrentUser is null)
+    else if (CurrentUser is null || EnrollmentState is null)
     {
         <section class="app-panel p-6">
             <div class="h-8 w-52 animate-pulse rounded-full bg-white/10"></div>
@@ -26,60 +26,67 @@
         <section class="app-panel p-6">
             <h1 class="app-page-title">Developer Access</h1>
             <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                New library accounts start as players only. Developer access is a separate step after sign-in so backend controls do not appear by default for every newly registered user.
+                Developer access is a separate workflow after sign-in. Players register here, moderators review the request later, and approved accounts return to the live developer console.
             </p>
 
-            @if (CurrentUser.IsDeveloper())
-            {
-                <div class="mt-6 rounded-[1.5rem] border border-emerald-300/20 bg-emerald-300/10 p-5 text-sm leading-7 text-emerald-50/90">
-                    Developer access is already enabled for this account. You can open the developer console and manage organizations now.
-                </div>
-                <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop">Open developer console</a>
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
-                </div>
-            }
-            else
-            {
-                <div class="mt-6 rounded-[1.5rem] border border-cyan-200/15 bg-cyan-200/10 p-5 text-sm leading-7 text-cyan-50/90">
-                    Developer access is granted through the backend and stored in Keycloak. The current session may need a fresh sign-in before the new developer claim appears in the web app.
-                </div>
-                <div class="mt-6 grid gap-4 lg:grid-cols-3">
-                    <section class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 1</div>
-                        <div class="mt-2 text-lg font-semibold text-white">Register and verify</div>
-                        <p class="mt-2 text-sm leading-7 text-slate-300">Keycloak registration remains responsible for account creation and email verification.</p>
-                    </section>
-                    <section class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 2</div>
-                        <div class="mt-2 text-lg font-semibold text-white">Land as a player</div>
-                        <p class="mt-2 text-sm leading-7 text-slate-300">All authenticated users begin in the player library instead of entering developer workflows automatically.</p>
-                    </section>
-                    <section class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 3</div>
-                        <div class="mt-2 text-lg font-semibold text-white">Enable developer access</div>
-                        <p class="mt-2 text-sm leading-7 text-slate-300">This page now calls the authenticated developer-enrollment endpoint, which grants the Keycloak developer role for the current account.</p>
-                    </section>
-                </div>
-
-                @if (!string.IsNullOrWhiteSpace(EnrollmentMessage))
-                {
-                    <div class="mt-6 rounded-[1.5rem] border border-emerald-300/20 bg-emerald-300/10 p-5 text-sm leading-7 text-emerald-50/90">
-                        @EnrollmentMessage
+            <div class="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Current status</div>
+                    <h2 class="mt-3 text-2xl font-semibold text-white">@EnrollmentState.ToStatusLabel()</h2>
+                    <p class="mt-3 text-sm leading-7 text-slate-300">@StatusSummary</p>
+                </section>
+                <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Account scope</div>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div class="rounded-[1.25rem] bg-black/15 p-4">
+                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Player access</div>
+                            <div class="mt-2 text-base font-semibold text-white">Active</div>
+                        </div>
+                        <div class="rounded-[1.25rem] bg-black/15 p-4">
+                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer access</div>
+                            <div class="mt-2 text-base font-semibold text-white">@EnrollmentState.ToStatusLabel()</div>
+                        </div>
                     </div>
+                </section>
+            </div>
+
+            <div class="mt-6 grid gap-4 lg:grid-cols-3">
+                <section class="rounded-[1.25rem] bg-black/15 p-4">
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 1</div>
+                    <div class="mt-2 text-lg font-semibold text-white">Register as a player</div>
+                    <p class="mt-2 text-sm leading-7 text-slate-300">Registration and email verification stay in Keycloak, while every new account lands in the player library first.</p>
+                </section>
+                <section class="rounded-[1.25rem] bg-black/15 p-4">
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 2</div>
+                    <div class="mt-2 text-lg font-semibold text-white">Submit developer registration</div>
+                    <p class="mt-2 text-sm leading-7 text-slate-300">Submitting this request creates a pending moderation record instead of exposing backend controls immediately.</p>
+                </section>
+                <section class="rounded-[1.25rem] bg-black/15 p-4">
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Step 3</div>
+                    <div class="mt-2 text-lg font-semibold text-white">Wait for moderator review</div>
+                    <p class="mt-2 text-sm leading-7 text-slate-300">Approved requests unlock the developer console. Rejected requests remain visible here with resubmission disabled for now.</p>
+                </section>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                @if (EnrollmentState.HasDeveloperAccess())
+                {
+                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop">Open developer console</a>
+                }
+                else
+                {
+                    <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SubmitEnrollmentAsync" disabled="@(IsSubmitting || EnrollmentState.CanSubmitRequest == false)">
+                        @ActionLabel
+                    </button>
                 }
 
-                <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="EnrollAsync" disabled="@(IsSubmitting || EnrollmentResult?.DeveloperEnrollment.DeveloperAccessEnabled == true)">
-                        @(IsSubmitting ? "Enabling developer access..." : EnrollmentResult?.DeveloperEnrollment.DeveloperAccessEnabled == true ? "Developer access enabled" : "Enable developer access")
-                    </button>
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player/library">Back to player library</a>
-                    @if (EnrollmentResult?.DeveloperEnrollment.SessionRefreshRequired == true)
-                    {
-                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@RefreshSessionHref" data-enhance-nav="false">Refresh session and open developer console</a>
-                    }
-                </div>
-            }
+                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop">Go to develop</a>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
+                @if (CurrentUser.IsModerator())
+                {
+                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/moderation/developer-enrollment-requests">Open moderation queue</a>
+                }
+            </div>
         </section>
     }
 </section>
@@ -87,25 +94,71 @@
 @code {
     private CurrentUserResponse? CurrentUser { get; set; }
 
-    private DeveloperEnrollmentResponse? EnrollmentResult { get; set; }
+    private DeveloperEnrollment? EnrollmentState { get; set; }
 
     private bool IsSubmitting { get; set; }
 
-    private string? EnrollmentMessage { get; set; }
-
     private string? ErrorMessage { get; set; }
 
-    private string RefreshSessionHref => "/auth/signin?returnUrl=%2Fdevelop";
+    private string ActionLabel =>
+        IsSubmitting
+            ? "Submitting request..."
+            : EnrollmentState switch
+            {
+                _ when EnrollmentState.IsPending() => "Request pending",
+                _ when EnrollmentState.IsRejected() => "Request rejected",
+                _ => "Register as a Developer"
+            };
+
+    private string StatusSummary =>
+        EnrollmentState switch
+        {
+            _ when EnrollmentState.HasDeveloperAccess() => "Developer console access is active for this account.",
+            _ when EnrollmentState.IsPending() && EnrollmentState?.RequestedAt is not null
+                => $"The request was submitted on {EnrollmentState.RequestedAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt} and is waiting for moderator review.",
+            _ when EnrollmentState.IsRejected() && EnrollmentState?.ReviewedAt is not null
+                => $"The request was rejected on {EnrollmentState.ReviewedAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt}. Resubmission is disabled for now.",
+            _ when EnrollmentState.IsRejected() => "The request was rejected. Resubmission is disabled for now.",
+            _ => "This account has not submitted a developer registration request yet."
+        };
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAsync();
+    }
+
+    private async Task SubmitEnrollmentAsync()
+    {
+        if (CurrentUser is null || EnrollmentState?.CanSubmitRequest != true || IsSubmitting)
+        {
+            return;
+        }
+
         ErrorMessage = null;
-        EnrollmentResult = null;
-        EnrollmentMessage = null;
+        IsSubmitting = true;
+
+        try
+        {
+            EnrollmentState = (await ApiClient.SubmitDeveloperEnrollmentAsync()).DeveloperEnrollment;
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        ErrorMessage = null;
 
         try
         {
             CurrentUser = await ApiClient.GetCurrentUserAsync();
+            EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
 
             if (CurrentUser is null)
             {
@@ -115,35 +168,6 @@
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
-        }
-    }
-
-    private async Task EnrollAsync()
-    {
-        if (CurrentUser is null || IsSubmitting)
-        {
-            return;
-        }
-
-        ErrorMessage = null;
-        EnrollmentMessage = null;
-        IsSubmitting = true;
-
-        try
-        {
-            EnrollmentResult = await ApiClient.EnrollAsDeveloperAsync();
-
-            EnrollmentMessage = EnrollmentResult.DeveloperEnrollment.SessionRefreshRequired
-                ? "Developer access has been enabled in Keycloak. Refresh your session to load the updated developer claim into the web app before opening the developer console."
-                : "Developer access is already active for this session.";
-        }
-        catch (Exception exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        finally
-        {
-            IsSubmitting = false;
         }
     }
 }
