@@ -1,6 +1,5 @@
 @page "/account/developer-access"
 @attribute [Authorize]
-@using Microsoft.AspNetCore.Components.Forms
 @inject IBoardLibraryApiClient ApiClient
 
 <PageTitle>Developer Access</PageTitle>
@@ -13,7 +12,7 @@
             <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (CurrentUser is null || EnrollmentState is null)
+    else if (EnrollmentState is null)
     {
         <section class="app-panel p-6">
             <div class="h-8 w-52 animate-pulse rounded-full bg-white/10"></div>
@@ -27,33 +26,24 @@
                 <div>
                     <h1 class="app-page-title">Developer Access</h1>
                     <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                        Developer access stays separate from player access. Moderators can approve, reject with comments, or request more information without pushing you off-platform.
+                        Developer access is now self-service. Enable it once, and this account can open the developer console immediately.
                     </p>
                 </div>
-                <div class="flex flex-col gap-3 sm:flex-row">
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account/notifications">Notifications</a>
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop">Develop</a>
-                </div>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
             </div>
 
             <div class="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
                     <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Current status</div>
                     <h2 class="mt-3 text-2xl font-semibold text-white">@EnrollmentState.ToStatusLabel()</h2>
-                    <p class="mt-3 text-sm leading-7 text-slate-300">@StatusSummary</p>
+                    <p class="mt-3 text-sm leading-7 text-slate-300">@EnrollmentState.ToStatusDescription()</p>
                 </section>
                 <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
-                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Workflow</div>
-                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div class="rounded-[1.25rem] bg-black/15 p-4">
-                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Next action</div>
-                            <div class="mt-2 text-base font-semibold text-white">@NextActionLabel</div>
-                        </div>
-                        <div class="rounded-[1.25rem] bg-black/15 p-4">
-                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Updated</div>
-                            <div class="mt-2 text-base font-semibold text-white">@UpdatedLabel</div>
-                        </div>
-                    </div>
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Verification</div>
+                    <div class="mt-3 text-base font-semibold text-white">@(EnrollmentState.VerifiedDeveloper ? "Verified developer role assigned" : "Not verified")</div>
+                    <p class="mt-3 text-sm leading-7 text-slate-300">
+                        Verification is moderator-managed and remains separate from self-service developer enrollment.
+                    </p>
                 </section>
             </div>
 
@@ -65,134 +55,18 @@
                 else
                 {
                     <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SubmitEnrollmentAsync" disabled="@(IsSubmitting || !EnrollmentState.CanSubmitRequest)">
-                        @ActionLabel
+                        @(IsSubmitting ? "Enabling..." : "Become a Developer")
                     </button>
-                }
-
-                @if (EnrollmentState.CanCancelRequest && EnrollmentState.RequestId is not null)
-                {
-                    <button class="rounded-full border border-amber-300/40 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-amber-100 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="CancelEnrollmentAsync" disabled="@IsCancelling">
-                        @(IsCancelling ? "Cancelling..." : "Cancel request")
-                    </button>
-                }
-
-                <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
-                @if (CurrentUser.IsModerator())
-                {
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/moderation/developer-enrollment-requests">Open moderation queue</a>
                 }
             </div>
         </section>
-
-        @if (EnrollmentState.CanReply && EnrollmentState.RequestId is not null)
-        {
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Reply required</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">Send the requested information</h2>
-                <textarea class="mt-4 min-h-36 w-full rounded-[1.25rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100" @bind="ReplyMessage" placeholder="Answer the moderator's questions here."></textarea>
-                <div class="mt-4 flex flex-wrap items-center gap-3">
-                    <label class="app-file-button" for="@ReplyAttachmentInputId">Choose File...</label>
-                    <InputFile id="@ReplyAttachmentInputId" class="sr-only" OnChange="HandleReplyAttachmentsAsync" multiple />
-                    <span class="text-sm text-slate-300">@ReplyAttachmentSummary</span>
-                </div>
-                @if (ReplyAttachments.Count > 0)
-                {
-                    <div class="mt-4 flex flex-wrap gap-2">
-                        @foreach (var attachment in ReplyAttachments)
-                        {
-                            <div class="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-200">@attachment.FileName</div>
-                        }
-                    </div>
-                }
-                <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="ReplyAsync" disabled="@IsReplying">
-                        @(IsReplying ? "Sending..." : "Send reply")
-                    </button>
-                    <div class="text-sm leading-7 text-slate-300">Replies can include comments and file attachments. Moderators will see the full thread on the same request.</div>
-                </div>
-            </section>
-        }
-
-        @if (Conversation?.Conversation.Messages.Count > 0)
-        {
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Conversation</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">Review thread</h2>
-                <div class="mt-6 space-y-4">
-                    @foreach (var message in Conversation.Conversation.Messages)
-                    {
-                        <section class="rounded-[1.5rem] border border-white/10 bg-black/15 p-5">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div class="text-sm font-semibold text-white">@((message.AuthorDisplayName ?? message.AuthorSubject) + " • " + message.AuthorRole.Replace('_', ' '))</div>
-                                <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">@message.CreatedAt.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt")</div>
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(message.Body))
-                            {
-                                <p class="mt-3 text-sm leading-7 text-slate-300">@message.Body</p>
-                            }
-                            @if (message.Attachments.Count > 0)
-                            {
-                                <div class="mt-4 flex flex-wrap gap-2">
-                                    @foreach (var attachment in message.Attachments)
-                                    {
-                                        <a class="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-200" href="@($"/downloads/developer-enrollment/{Conversation.Conversation.RequestId:D}/attachments/{attachment.AttachmentId:D}")">@attachment.FileName (@FormatBytes(attachment.SizeBytes))</a>
-                                    }
-                                </div>
-                            }
-                        </section>
-                    }
-                </div>
-            </section>
-        }
     }
 </section>
 
 @code {
-    private const string ReplyAttachmentInputId = "developer-access-reply-attachments";
-
-    private CurrentUserResponse? CurrentUser { get; set; }
     private DeveloperEnrollment? EnrollmentState { get; set; }
-    private DeveloperEnrollmentConversationResponse? Conversation { get; set; }
-    private List<ApiUploadFile> ReplyAttachments { get; } = [];
-    private string ReplyAttachmentSummary { get; set; } = "No file chosen";
-    private string? ReplyMessage { get; set; }
     private bool IsSubmitting { get; set; }
-    private bool IsReplying { get; set; }
-    private bool IsCancelling { get; set; }
     private string? ErrorMessage { get; set; }
-
-    private string ActionLabel =>
-        IsSubmitting
-            ? "Submitting request..."
-            : EnrollmentState?.IsRejected() == true && EnrollmentState.CanSubmitRequest
-                ? "Apply again"
-                : "Register as a Developer";
-
-    private string StatusSummary =>
-        EnrollmentState switch
-        {
-            null => string.Empty,
-            _ when EnrollmentState.HasDeveloperAccess() => "Developer console access is active for this account.",
-            _ when EnrollmentState.IsPending() && EnrollmentState.RequestedAt is not null => $"Submitted on {EnrollmentState.RequestedAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt}. The queue is waiting on a moderator decision.",
-            _ when EnrollmentState.IsAwaitingApplicantResponse() => "A moderator requested more information. Reply below on the same request.",
-            _ when EnrollmentState.IsRejected() && EnrollmentState.ReapplyAvailableAt is not null && !EnrollmentState.CanSubmitRequest => $"Rejected. You may submit again after {EnrollmentState.ReapplyAvailableAt.Value.ToLocalTime():MMMM d, yyyy 'at' h:mm tt}.",
-            _ when EnrollmentState.IsRejected() && EnrollmentState.CanSubmitRequest => "Rejected previously. The probation window is over, so you can submit a fresh request.",
-            _ when EnrollmentState.IsCancelled() => "This request was cancelled. You may submit a new one whenever ready.",
-            _ => "This account has not submitted a developer registration request yet."
-        };
-
-    private string NextActionLabel =>
-        EnrollmentState?.ActionRequiredBy switch
-        {
-            "moderator" => "Moderator review",
-            "applicant" => "Your reply",
-            _ => "None"
-        };
-
-    private string UpdatedLabel =>
-        EnrollmentState?.UpdatedAt is null
-            ? "No request yet"
-            : EnrollmentState.UpdatedAt.Value.ToLocalTime().ToString("MMMM d, yyyy 'at' h:mm tt");
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -208,7 +82,6 @@
         try
         {
             EnrollmentState = (await ApiClient.SubmitDeveloperEnrollmentAsync()).DeveloperEnrollment;
-            await LoadConversationAsync();
         }
         catch (Exception exception)
         {
@@ -220,110 +93,16 @@
         }
     }
 
-    private async Task CancelEnrollmentAsync()
-    {
-        if (EnrollmentState?.RequestId is null || !EnrollmentState.CanCancelRequest || IsCancelling)
-        {
-            return;
-        }
-
-        ErrorMessage = null;
-        IsCancelling = true;
-        try
-        {
-            EnrollmentState = (await ApiClient.CancelDeveloperEnrollmentAsync(EnrollmentState.RequestId.Value)).DeveloperEnrollment;
-            await LoadConversationAsync();
-        }
-        catch (Exception exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        finally
-        {
-            IsCancelling = false;
-        }
-    }
-
-    private async Task ReplyAsync()
-    {
-        if (EnrollmentState?.RequestId is null || !EnrollmentState.CanReply || IsReplying)
-        {
-            return;
-        }
-
-        ErrorMessage = null;
-        IsReplying = true;
-        try
-        {
-            EnrollmentState = (await ApiClient.ReplyToDeveloperEnrollmentAsync(EnrollmentState.RequestId.Value, ReplyMessage, ReplyAttachments)).DeveloperEnrollment;
-            ReplyMessage = null;
-            ReplyAttachments.Clear();
-            ReplyAttachmentSummary = "No file chosen";
-            await LoadConversationAsync();
-        }
-        catch (Exception exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        finally
-        {
-            IsReplying = false;
-        }
-    }
-
-    private async Task HandleReplyAttachmentsAsync(InputFileChangeEventArgs args)
-    {
-        ReplyAttachments.Clear();
-        foreach (var file in args.GetMultipleFiles())
-        {
-            await using var stream = file.OpenReadStream(25L * 1024L * 1024L);
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            ReplyAttachments.Add(new ApiUploadFile(file.Name, file.ContentType, memoryStream.ToArray()));
-        }
-
-        ReplyAttachmentSummary = ReplyAttachments.Count switch
-        {
-            0 => "No file chosen",
-            1 => ReplyAttachments[0].FileName,
-            _ => $"{ReplyAttachments.Count} files selected"
-        };
-    }
-
     private async Task LoadAsync()
     {
         ErrorMessage = null;
         try
         {
-            CurrentUser = await ApiClient.GetCurrentUserAsync();
             EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
-            if (CurrentUser is null)
-            {
-                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
-                return;
-            }
-
-            await LoadConversationAsync();
         }
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
         }
     }
-
-    private async Task LoadConversationAsync()
-    {
-        Conversation = null;
-        if (EnrollmentState?.RequestId is null)
-        {
-            return;
-        }
-
-        Conversation = await ApiClient.GetDeveloperEnrollmentConversationAsync(EnrollmentState.RequestId.Value);
-    }
-
-    private static string FormatBytes(long value) =>
-        value >= 1024 * 1024
-            ? $"{value / 1024d / 1024d:0.#} MB"
-            : $"{value / 1024d:0.#} KB";
 }

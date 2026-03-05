@@ -1,7 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject INotificationCenter NotificationCenter
 @inject IBoardLibraryApiClient ApiClient
 @inject IUserProfileState UserProfileState
 @inject NavigationManager NavigationManager
@@ -36,16 +35,6 @@
                 </a>
                 <AuthorizeView>
                     <Authorized>
-                        <a class="relative inline-flex size-11 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/account/notifications" aria-label="@NotificationAriaLabel">
-                            <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M12 3.75a4.5 4.5 0 0 0-4.5 4.5v1.137c0 .777-.184 1.542-.537 2.234l-1.02 1.998A1.5 1.5 0 0 0 7.278 15.75h9.444a1.5 1.5 0 0 0 1.335-2.131l-1.02-1.998A4.94 4.94 0 0 1 16.5 9.387V8.25A4.5 4.5 0 0 0 12 3.75Zm0 18a3.24 3.24 0 0 1-3.182-2.625h6.364A3.24 3.24 0 0 1 12 21.75Z" />
-                            </svg>
-                            @if (NotificationCenter.UnreadCount > 0)
-                            {
-                                <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-cyan-300 px-1.5 py-0.5 text-center text-[0.65rem] font-bold leading-none tracking-normal text-slate-950" aria-hidden="true">@FormatUnreadCount(NotificationCenter.UnreadCount)</span>
-                            }
-                        </a>
-
                         <div class="relative">
                             <button class="inline-flex size-11 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-slate-900/60 text-sm font-bold text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" type="button" aria-label="Open account menu" @onclick="ToggleUserMenu">
                                 @if (!string.IsNullOrWhiteSpace(AvatarImageSource))
@@ -91,7 +80,7 @@
                                         <nav class="p-2 text-sm text-slate-200">
                                             @if (ShouldShowRequestsLink)
                                             {
-                                                <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="/account/developer-access" @onclick="CloseUserMenu">Requests</a>
+                                                <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="/account/developer-access" @onclick="CloseUserMenu">Developer Access</a>
                                             }
                                             @if (IsDeveloperRole)
                                             {
@@ -172,22 +161,12 @@
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
     {
-        NotificationCenter.Changed += HandleNotificationCenterChanged;
         UserProfileState.Changed += HandleUserProfileStateChanged;
         CurrentProfile = UserProfileState.Profile;
 
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         if (authenticationState.User.Identity?.IsAuthenticated == true)
         {
-            try
-            {
-                await NotificationCenter.EnsureLoadedAsync();
-            }
-            catch
-            {
-                // Avoid breaking shell rendering when notifications cannot be loaded.
-            }
-
             try
             {
                 CurrentUser = await ApiClient.GetCurrentUserAsync();
@@ -207,7 +186,6 @@
     /// <inheritdoc />
     public void Dispose()
     {
-        NotificationCenter.Changed -= HandleNotificationCenterChanged;
         UserProfileState.Changed -= HandleUserProfileStateChanged;
     }
 
@@ -232,8 +210,7 @@
 
     private bool IsDeveloperRole => CurrentUser.IsDeveloper();
 
-    private bool ShouldShowRequestsLink =>
-        IsDeveloperRole || EnrollmentState?.RequestId is not null;
+    private bool ShouldShowRequestsLink => true;
 
     private bool ShowDeveloperSection => ShouldShowRequestsLink || IsDeveloperRole;
 
@@ -272,8 +249,6 @@
         }
     }
 
-    private void HandleNotificationCenterChanged() => InvokeAsync(StateHasChanged);
-
     private void HandleUserProfileStateChanged()
     {
         CurrentProfile = UserProfileState.Profile;
@@ -283,13 +258,6 @@
     private void ToggleUserMenu() => IsUserMenuOpen = !IsUserMenuOpen;
 
     private void CloseUserMenu() => IsUserMenuOpen = false;
-
-    private string NotificationAriaLabel =>
-        NotificationCenter.UnreadCount > 0
-            ? $"{NotificationCenter.UnreadCount} unread notifications"
-            : "Notifications";
-
-    private static string FormatUnreadCount(int unreadCount) => unreadCount > 99 ? "99+" : unreadCount.ToString();
 
     private static string FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;

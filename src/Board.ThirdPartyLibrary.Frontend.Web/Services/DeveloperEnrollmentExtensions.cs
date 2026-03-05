@@ -1,7 +1,7 @@
 namespace Board.ThirdPartyLibrary.Frontend.Web.Services;
 
 /// <summary>
-/// Helper methods for developer-enrollment state.
+/// Helper methods for developer access state.
 /// </summary>
 internal static class DeveloperEnrollmentExtensions
 {
@@ -12,35 +12,11 @@ internal static class DeveloperEnrollmentExtensions
         enrollment?.DeveloperAccessEnabled == true;
 
     /// <summary>
-    /// Returns <see langword="true" /> when the enrollment is pending review.
+    /// Returns <see langword="true" /> when the enrollment has not been completed yet.
     /// </summary>
-    public static bool IsPending(this DeveloperEnrollment? enrollment) =>
-        string.Equals(enrollment?.Status, "pending_review", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when the enrollment is waiting on the applicant.
-    /// </summary>
-    public static bool IsAwaitingApplicantResponse(this DeveloperEnrollment? enrollment) =>
-        string.Equals(enrollment?.Status, "awaiting_applicant_response", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when the enrollment has been rejected.
-    /// </summary>
-    public static bool IsRejected(this DeveloperEnrollment? enrollment) =>
-        string.Equals(enrollment?.Status, "rejected", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when the enrollment has been cancelled.
-    /// </summary>
-    public static bool IsCancelled(this DeveloperEnrollment? enrollment) =>
-        string.Equals(enrollment?.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Returns <see langword="true" /> when the enrollment has not been requested yet.
-    /// </summary>
-    public static bool IsNotRequested(this DeveloperEnrollment? enrollment) =>
+    public static bool IsNotEnrolled(this DeveloperEnrollment? enrollment) =>
         string.IsNullOrWhiteSpace(enrollment?.Status) ||
-        string.Equals(enrollment.Status, "not_requested", StringComparison.OrdinalIgnoreCase);
+        string.Equals(enrollment.Status, "not_enrolled", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns a player-facing status label for the enrollment.
@@ -48,13 +24,10 @@ internal static class DeveloperEnrollmentExtensions
     public static string ToStatusLabel(this DeveloperEnrollment? enrollment) =>
         enrollment switch
         {
-            null => "Not requested",
-            { DeveloperAccessEnabled: true } => "Enabled",
-            _ when enrollment.IsPending() => "Pending review",
-            _ when enrollment.IsAwaitingApplicantResponse() => "Reply needed",
-            _ when enrollment.IsRejected() => "Rejected",
-            _ when enrollment.IsCancelled() => "Cancelled",
-            _ => "Not requested"
+            null => "Not enrolled",
+            { DeveloperAccessEnabled: true, VerifiedDeveloper: true } => "Verified",
+            { DeveloperAccessEnabled: true } => "Enrolled",
+            _ => "Not enrolled"
         };
 
     /// <summary>
@@ -63,14 +36,9 @@ internal static class DeveloperEnrollmentExtensions
     public static string ToStatusDescription(this DeveloperEnrollment? enrollment) =>
         enrollment switch
         {
-            null => "Developer registration is available from the Develop area.",
-            { DeveloperAccessEnabled: true } => "Developer console access is active for this account.",
-            _ when enrollment.IsPending() => "Your request is waiting for moderator review.",
-            _ when enrollment.IsAwaitingApplicantResponse() => "A moderator requested more information before they can finish the review.",
-            _ when enrollment.IsRejected() => enrollment.CanSubmitRequest
-                ? "Your request was rejected, and you may now submit a new request."
-                : "Your request was rejected and cannot be resubmitted yet.",
-            _ when enrollment.IsCancelled() => "The previous request was cancelled. You may submit a new request whenever ready.",
-            _ => "Developer registration is available from the Develop area."
+            null => "Developer access can be enabled from account settings.",
+            { DeveloperAccessEnabled: true, VerifiedDeveloper: true } => "Developer access is enabled and this account is marked as a verified developer.",
+            { DeveloperAccessEnabled: true } => "Developer access is enabled for this account.",
+            _ => "Developer access is not enabled yet."
         };
 }

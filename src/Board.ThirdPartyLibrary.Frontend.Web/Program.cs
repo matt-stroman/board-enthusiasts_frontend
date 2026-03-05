@@ -116,7 +116,6 @@ builder.Services.AddHttpClient<IBoardLibraryApiClient, BoardLibraryApiClient>(cl
     client.DefaultRequestVersion = HttpVersion.Version20;
     client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
 });
-builder.Services.AddScoped<INotificationCenter, NotificationCenter>();
 builder.Services.AddScoped<IUserProfileState, UserProfileState>();
 
 static string SanitizeReturnUrl(string? returnUrl)
@@ -275,28 +274,6 @@ app.MapGet("/auth/update-email", (
     var sanitizedReturnUrl = SanitizeReturnUrl(returnUrl);
     return Results.Redirect($"/auth/update-profile?returnUrl={Uri.EscapeDataString(sanitizedReturnUrl)}");
 });
-app.MapGet("/downloads/developer-enrollment/{requestId:guid}/attachments/{attachmentId:guid}", async (
-    Guid requestId,
-    Guid attachmentId,
-    IBoardLibraryApiClient apiClient,
-    CancellationToken cancellationToken) =>
-{
-    var file = await apiClient.GetDeveloperEnrollmentAttachmentAsync(requestId, attachmentId, cancellationToken);
-    return file is null
-        ? Results.NotFound()
-        : Results.File(file.Content, file.ContentType, file.FileName);
-}).RequireAuthorization();
-app.MapGet("/downloads/moderation/developer-enrollment/{requestId:guid}/attachments/{attachmentId:guid}", async (
-    Guid requestId,
-    Guid attachmentId,
-    IBoardLibraryApiClient apiClient,
-    CancellationToken cancellationToken) =>
-{
-    var file = await apiClient.GetModeratedDeveloperEnrollmentAttachmentAsync(requestId, attachmentId, cancellationToken);
-    return file is null
-        ? Results.NotFound()
-        : Results.File(file.Content, file.ContentType, file.FileName);
-}).RequireAuthorization();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

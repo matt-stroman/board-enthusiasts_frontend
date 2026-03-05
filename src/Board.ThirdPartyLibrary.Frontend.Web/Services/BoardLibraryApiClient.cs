@@ -85,66 +85,6 @@ public interface IBoardLibraryApiClient
     Task<DeveloperEnrollmentResponse> SubmitDeveloperEnrollmentAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cancels the current user's open developer-enrollment request.
-    /// </summary>
-    Task<DeveloperEnrollmentResponse> CancelDeveloperEnrollmentAsync(Guid requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the conversation history for the current user's developer-enrollment request.
-    /// </summary>
-    Task<DeveloperEnrollmentConversationResponse> GetDeveloperEnrollmentConversationAsync(Guid requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Downloads a developer-enrollment attachment for the current user.
-    /// </summary>
-    Task<ApiFileDownload?> GetDeveloperEnrollmentAttachmentAsync(Guid requestId, Guid attachmentId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Replies to a developer-enrollment information request.
-    /// </summary>
-    Task<DeveloperEnrollmentResponse> ReplyToDeveloperEnrollmentAsync(Guid requestId, string? message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Lists developer-enrollment requests for moderators.
-    /// </summary>
-    Task<DeveloperEnrollmentRequestListResponse> GetDeveloperEnrollmentRequestsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Approves a developer-enrollment request as a moderator.
-    /// </summary>
-    Task<DeveloperEnrollmentRequestResponse> ApproveDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Rejects a developer-enrollment request as a moderator.
-    /// </summary>
-    Task<DeveloperEnrollmentRequestResponse> RejectDeveloperEnrollmentRequestAsync(Guid requestId, string message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Requests more information from an applicant as a moderator.
-    /// </summary>
-    Task<DeveloperEnrollmentRequestResponse> RequestMoreInformationForDeveloperEnrollmentAsync(Guid requestId, string message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the conversation history for a moderated developer-enrollment request.
-    /// </summary>
-    Task<DeveloperEnrollmentConversationResponse> GetModeratedDeveloperEnrollmentConversationAsync(Guid requestId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Downloads a moderated developer-enrollment attachment.
-    /// </summary>
-    Task<ApiFileDownload?> GetModeratedDeveloperEnrollmentAttachmentAsync(Guid requestId, Guid attachmentId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Lists in-app notifications for the current user.
-    /// </summary>
-    Task<NotificationListResponse> GetNotificationsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Marks an in-app notification as read.
-    /// </summary>
-    Task<NotificationResponse> MarkNotificationReadAsync(Guid notificationId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Lists organizations the current caller can manage.
     /// </summary>
     Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default);
@@ -440,7 +380,7 @@ internal sealed class BoardLibraryApiClient(
     {
         using var httpRequest = CreateRequest(HttpMethod.Get, "/identity/me/developer-enrollment", requiresAuthentication: true);
         return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(null, "not_requested", "none", false, true, false, false, null, null, null, null, null));
+            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment("not_enrolled", "none", false, true, false));
     }
 
     /// <inheritdoc />
@@ -448,183 +388,7 @@ internal sealed class BoardLibraryApiClient(
     {
         using var httpRequest = CreateRequest(HttpMethod.Post, "/identity/me/developer-enrollment", requiresAuthentication: true);
         return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(null, "not_requested", "none", false, true, false, false, null, null, null, null, null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentResponse> CancelDeveloperEnrollmentAsync(Guid requestId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Post,
-            $"/identity/me/developer-enrollment/{requestId:D}/cancel",
-            requiresAuthentication: true);
-
-        return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(requestId, "cancelled", "none", false, true, false, false, DateTime.UtcNow, DateTime.UtcNow, null, null, null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentConversationResponse> GetDeveloperEnrollmentConversationAsync(Guid requestId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Get,
-            $"/identity/me/developer-enrollment/{requestId:D}/conversation",
-            requiresAuthentication: true);
-
-        return await SendAsync<DeveloperEnrollmentConversationResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentConversationResponse(new DeveloperEnrollmentConversation(requestId, "not_requested", "none", null, null, []));
-    }
-
-    /// <inheritdoc />
-    public async Task<ApiFileDownload?> GetDeveloperEnrollmentAttachmentAsync(Guid requestId, Guid attachmentId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Get,
-            $"/identity/me/developer-enrollment/{requestId:D}/attachments/{attachmentId:D}",
-            requiresAuthentication: true);
-
-        return await SendFileOptionalAsync(httpRequest, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentResponse> ReplyToDeveloperEnrollmentAsync(Guid requestId, string? message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateMultipartRequest(
-            $"/identity/me/developer-enrollment/{requestId:D}/messages",
-            message,
-            attachments);
-
-        await AttachAuthorizationAsync(httpRequest);
-
-        return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment(requestId, "pending_review", "moderator", false, false, false, false, DateTime.UtcNow, DateTime.UtcNow, null, null, null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentRequestListResponse> GetDeveloperEnrollmentRequestsAsync(CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(HttpMethod.Get, "/moderation/developer-enrollment-requests", requiresAuthentication: true);
-        return await SendAsync<DeveloperEnrollmentRequestListResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentRequestListResponse([]);
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentRequestResponse> ApproveDeveloperEnrollmentRequestAsync(Guid requestId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Post,
-            $"/moderation/developer-enrollment-requests/{requestId:D}/approve",
-            requiresAuthentication: true);
-
-        return await SendAsync<DeveloperEnrollmentRequestResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentRequestResponse(new DeveloperEnrollmentRequest(
-                requestId,
-                string.Empty,
-                null,
-                null,
-                "approved",
-                "none",
-                true,
-                DateTime.UtcNow,
-                DateTime.UtcNow,
-                DateTime.UtcNow,
-                null,
-                null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentRequestResponse> RejectDeveloperEnrollmentRequestAsync(Guid requestId, string message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateMultipartRequest(
-            $"/moderation/developer-enrollment-requests/{requestId:D}/reject",
-            message,
-            attachments);
-
-        await AttachAuthorizationAsync(httpRequest);
-
-        return await SendAsync<DeveloperEnrollmentRequestResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentRequestResponse(new DeveloperEnrollmentRequest(
-                requestId,
-                string.Empty,
-                null,
-                null,
-                "rejected",
-                "none",
-                false,
-                DateTime.UtcNow,
-                DateTime.UtcNow,
-                DateTime.UtcNow,
-                DateTime.UtcNow.AddDays(30),
-                null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentRequestResponse> RequestMoreInformationForDeveloperEnrollmentAsync(Guid requestId, string message, IReadOnlyList<ApiUploadFile> attachments, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateMultipartRequest(
-            $"/moderation/developer-enrollment-requests/{requestId:D}/request-more-information",
-            message,
-            attachments);
-
-        await AttachAuthorizationAsync(httpRequest);
-
-        return await SendAsync<DeveloperEnrollmentRequestResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentRequestResponse(new DeveloperEnrollmentRequest(
-                requestId,
-                string.Empty,
-                null,
-                null,
-                "awaiting_applicant_response",
-                "applicant",
-                false,
-                DateTime.UtcNow,
-                DateTime.UtcNow,
-                null,
-                null,
-                null));
-    }
-
-    /// <inheritdoc />
-    public async Task<DeveloperEnrollmentConversationResponse> GetModeratedDeveloperEnrollmentConversationAsync(Guid requestId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Get,
-            $"/moderation/developer-enrollment-requests/{requestId:D}/conversation",
-            requiresAuthentication: true);
-
-        return await SendAsync<DeveloperEnrollmentConversationResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperEnrollmentConversationResponse(new DeveloperEnrollmentConversation(requestId, "not_requested", "none", null, null, []));
-    }
-
-    /// <inheritdoc />
-    public async Task<ApiFileDownload?> GetModeratedDeveloperEnrollmentAttachmentAsync(Guid requestId, Guid attachmentId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Get,
-            $"/moderation/developer-enrollment-requests/{requestId:D}/attachments/{attachmentId:D}",
-            requiresAuthentication: true);
-
-        return await SendFileOptionalAsync(httpRequest, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotificationListResponse> GetNotificationsAsync(CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(HttpMethod.Get, "/identity/me/notifications", requiresAuthentication: true);
-        return await SendAsync<NotificationListResponse>(httpRequest, cancellationToken)
-            ?? new NotificationListResponse([]);
-    }
-
-    /// <inheritdoc />
-    public async Task<NotificationResponse> MarkNotificationReadAsync(Guid notificationId, CancellationToken cancellationToken = default)
-    {
-        using var httpRequest = CreateRequest(
-            HttpMethod.Post,
-            $"/identity/me/notifications/{notificationId:D}/read",
-            requiresAuthentication: true);
-
-        return await SendAsync<NotificationResponse>(httpRequest, cancellationToken)
-            ?? new NotificationResponse(new UserNotification(notificationId, "developer_enrollment", string.Empty, string.Empty, null, true, DateTime.UtcNow, DateTime.UtcNow));
+            ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment("not_enrolled", "none", false, true, false));
     }
 
     /// <inheritdoc />
@@ -1040,30 +804,6 @@ internal sealed class BoardLibraryApiClient(
         return request;
     }
 
-    private HttpRequestMessage CreateMultipartRequest(string relativeUri, string? message, IReadOnlyList<ApiUploadFile> attachments)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Post, relativeUri);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Version = HttpVersion.Version20;
-        request.VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
-
-        var content = new MultipartFormDataContent();
-        if (!string.IsNullOrWhiteSpace(message))
-        {
-            content.Add(new StringContent(message), "message");
-        }
-
-        foreach (var attachment in attachments)
-        {
-            var fileContent = new ByteArrayContent(attachment.Content);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrWhiteSpace(attachment.ContentType) ? "application/octet-stream" : attachment.ContentType);
-            content.Add(fileContent, "attachments", attachment.FileName);
-        }
-
-        request.Content = content;
-        return request;
-    }
-
     private async Task AttachAuthorizationAsync(HttpRequestMessage request)
     {
         var accessToken = await GetAccessTokenAsync();
@@ -1266,24 +1006,6 @@ internal sealed class BoardLibraryApiClient(
 
         await EnsureSuccessAsync(response, cancellationToken);
         return await response.Content.ReadFromJsonAsync<T>(SerializerOptions, cancellationToken);
-    }
-
-    private async Task<ApiFileDownload?> SendFileOptionalAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized)
-        {
-            return null;
-        }
-
-        await EnsureSuccessAsync(response, cancellationToken);
-        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
-            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
-            ?? "attachment.bin";
-
-        return new ApiFileDownload(fileName, contentType, content);
     }
 
     private async Task SendNoContentAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -1636,129 +1358,17 @@ public sealed record DeveloperEnrollmentResponse(DeveloperEnrollment DeveloperEn
 /// <summary>
 /// Developer-enrollment result for the current user.
 /// </summary>
-/// <param name="RequestId">Application-owned request identifier when one exists.</param>
 /// <param name="Status">Enrollment status.</param>
 /// <param name="ActionRequiredBy">Which workflow actor must act next.</param>
 /// <param name="DeveloperAccessEnabled">Whether developer access is enabled.</param>
 /// <param name="CanSubmitRequest">Whether the user may submit a request.</param>
-/// <param name="CanCancelRequest">Whether the active request can be cancelled.</param>
-/// <param name="CanReply">Whether the user can reply with more information.</param>
-/// <param name="RequestedAt">UTC timestamp when the request was created.</param>
-/// <param name="UpdatedAt">UTC timestamp of the latest workflow activity.</param>
-/// <param name="ReviewedAt">UTC timestamp when the request was reviewed.</param>
-/// <param name="ReapplyAvailableAt">UTC timestamp when a new request may be created again.</param>
-/// <param name="ReviewerSubject">Reviewer Keycloak subject when one exists.</param>
+/// <param name="VerifiedDeveloper">Whether verified developer role is enabled.</param>
 public sealed record DeveloperEnrollment(
-    Guid? RequestId,
     string Status,
     string ActionRequiredBy,
     bool DeveloperAccessEnabled,
     bool CanSubmitRequest,
-    bool CanCancelRequest,
-    bool CanReply,
-    DateTime? RequestedAt,
-    DateTime? UpdatedAt,
-    DateTime? ReviewedAt,
-    DateTime? ReapplyAvailableAt,
-    string? ReviewerSubject);
-
-/// <summary>
-/// Moderator-visible developer-enrollment request list.
-/// </summary>
-/// <param name="Requests">Returned enrollment requests.</param>
-public sealed record DeveloperEnrollmentRequestListResponse(IReadOnlyList<DeveloperEnrollmentRequest> Requests);
-
-/// <summary>
-/// Moderator-visible developer-enrollment request wrapper.
-/// </summary>
-/// <param name="DeveloperEnrollmentRequest">Returned request.</param>
-public sealed record DeveloperEnrollmentRequestResponse(DeveloperEnrollmentRequest DeveloperEnrollmentRequest);
-
-/// <summary>
-/// Developer-enrollment request shown to moderators.
-/// </summary>
-/// <param name="RequestId">Request identifier.</param>
-/// <param name="ApplicantSubject">Applicant Keycloak subject.</param>
-/// <param name="ApplicantDisplayName">Applicant display name.</param>
-/// <param name="ApplicantEmail">Applicant email address.</param>
-/// <param name="Status">Review status.</param>
-/// <param name="ActionRequiredBy">Which workflow actor must act next.</param>
-/// <param name="DeveloperAccessEnabled">Whether developer access is enabled.</param>
-/// <param name="RequestedAt">UTC timestamp when the request was submitted.</param>
-/// <param name="UpdatedAt">UTC timestamp of the latest workflow activity.</param>
-/// <param name="ReviewedAt">UTC timestamp when the request was reviewed.</param>
-/// <param name="ReapplyAvailableAt">UTC timestamp when the applicant may submit again.</param>
-/// <param name="ReviewerSubject">Reviewer Keycloak subject.</param>
-public sealed record DeveloperEnrollmentRequest(
-    Guid RequestId,
-    string ApplicantSubject,
-    string? ApplicantDisplayName,
-    string? ApplicantEmail,
-    string Status,
-    string ActionRequiredBy,
-    bool DeveloperAccessEnabled,
-    DateTime RequestedAt,
-    DateTime UpdatedAt,
-    DateTime? ReviewedAt,
-    DateTime? ReapplyAvailableAt,
-    string? ReviewerSubject);
-
-/// <summary>
-/// Developer-enrollment conversation response wrapper.
-/// </summary>
-/// <param name="Conversation">Returned conversation.</param>
-public sealed record DeveloperEnrollmentConversationResponse(DeveloperEnrollmentConversation Conversation);
-
-/// <summary>
-/// Developer-enrollment conversation detail.
-/// </summary>
-/// <param name="RequestId">Enrollment request identifier.</param>
-/// <param name="Status">Current request status.</param>
-/// <param name="ActionRequiredBy">Which workflow actor must act next.</param>
-/// <param name="ReviewedAt">UTC review timestamp when applicable.</param>
-/// <param name="ReviewerSubject">Reviewer Keycloak subject when one exists.</param>
-/// <param name="Messages">Conversation messages.</param>
-public sealed record DeveloperEnrollmentConversation(
-    Guid RequestId,
-    string Status,
-    string ActionRequiredBy,
-    DateTime? ReviewedAt,
-    string? ReviewerSubject,
-    IReadOnlyList<DeveloperEnrollmentConversationMessage> Messages);
-
-/// <summary>
-/// Developer-enrollment conversation message.
-/// </summary>
-/// <param name="MessageId">Conversation message identifier.</param>
-/// <param name="AuthorRole">Message author role.</param>
-/// <param name="AuthorSubject">Message author subject.</param>
-/// <param name="AuthorDisplayName">Message author display name.</param>
-/// <param name="MessageKind">Semantic message kind.</param>
-/// <param name="Body">Message body text.</param>
-/// <param name="CreatedAt">UTC creation timestamp.</param>
-/// <param name="Attachments">Message attachments.</param>
-public sealed record DeveloperEnrollmentConversationMessage(
-    Guid MessageId,
-    string AuthorRole,
-    string AuthorSubject,
-    string? AuthorDisplayName,
-    string MessageKind,
-    string? Body,
-    DateTime CreatedAt,
-    IReadOnlyList<DeveloperEnrollmentConversationAttachment> Attachments);
-
-/// <summary>
-/// Developer-enrollment conversation attachment.
-/// </summary>
-/// <param name="AttachmentId">Attachment identifier.</param>
-/// <param name="FileName">Original file name.</param>
-/// <param name="ContentType">Attachment content type.</param>
-/// <param name="SizeBytes">Attachment size in bytes.</param>
-public sealed record DeveloperEnrollmentConversationAttachment(
-    Guid AttachmentId,
-    string FileName,
-    string ContentType,
-    long SizeBytes);
+    bool VerifiedDeveloper = false);
 
 /// <summary>
 /// Binary file upload sent to the backend.
@@ -1767,47 +1377,6 @@ public sealed record DeveloperEnrollmentConversationAttachment(
 /// <param name="ContentType">Normalized content type.</param>
 /// <param name="Content">Binary file content.</param>
 public sealed record ApiUploadFile(string FileName, string ContentType, byte[] Content);
-
-/// <summary>
-/// Binary file downloaded from the backend.
-/// </summary>
-/// <param name="FileName">Original file name.</param>
-/// <param name="ContentType">Normalized content type.</param>
-/// <param name="Content">Binary file content.</param>
-public sealed record ApiFileDownload(string FileName, string ContentType, byte[] Content);
-
-/// <summary>
-/// Notification list response wrapper.
-/// </summary>
-/// <param name="Notifications">Returned notifications.</param>
-public sealed record NotificationListResponse(IReadOnlyList<UserNotification> Notifications);
-
-/// <summary>
-/// Notification response wrapper.
-/// </summary>
-/// <param name="Notification">Returned notification.</param>
-public sealed record NotificationResponse(UserNotification Notification);
-
-/// <summary>
-/// In-app user notification.
-/// </summary>
-/// <param name="NotificationId">Notification identifier.</param>
-/// <param name="Category">Notification category.</param>
-/// <param name="Title">Short notification title.</param>
-/// <param name="Body">Notification body text.</param>
-/// <param name="ActionUrl">Optional route opened by the notification.</param>
-/// <param name="IsRead">Whether the notification is read.</param>
-/// <param name="CreatedAt">UTC creation timestamp.</param>
-/// <param name="ReadAt">UTC read timestamp.</param>
-public sealed record UserNotification(
-    Guid NotificationId,
-    string Category,
-    string Title,
-    string Body,
-    string? ActionUrl,
-    bool IsRead,
-    DateTime CreatedAt,
-    DateTime? ReadAt);
 
 /// <summary>
 /// Linked Board profile response wrapper.
