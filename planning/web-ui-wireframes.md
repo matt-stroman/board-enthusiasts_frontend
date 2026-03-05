@@ -20,7 +20,6 @@ Used by:
 - `/organizations/:slug`
 - `/account`
 - `/account/board-profile`
-- `/account/developer-access`
 
 Desktop structure:
 
@@ -290,25 +289,6 @@ Goal:
 | avatarUrl                                            |
 | Save                                                 |
 | Remove link                                          |
-+------------------------------------------------------+
-```
-
-## `/account/developer-access`
-
-Goal:
-
-- provide the explicit post-sign-in route where a player can see developer-registration status, submit or cancel a request, and reply to moderator follow-up questions on the same request
-
-```text
-+------------------------------------------------------+
-| Developer access                                     |
-+------------------------------------------------------+
-| Explanation: new accounts start as players           |
-| Current state: not requested / pending / awaiting reply / approved / rejected |
-| Action: register as a developer / cancel request     |
-| Conversation thread + attachments                    |
-| Review state: waiting for moderator decision or applicant reply |
-| Back to player library                               |
 +------------------------------------------------------+
 ```
 

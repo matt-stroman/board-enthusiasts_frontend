@@ -138,8 +138,6 @@ Recommended initial routes:
   - current user summary, access status, and sign-in state
 - `/account/board-profile`
   - Board profile link or edit flow
-- `/account/developer-access`
-  - current developer-registration status and submission route for the signed-in player
 - `/signin`
   - sign-in handoff route
 - `/signout`

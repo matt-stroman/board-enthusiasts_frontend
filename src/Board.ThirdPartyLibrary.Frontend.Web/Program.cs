@@ -83,6 +83,26 @@ builder.Services.AddAuthentication(options =>
 
                 return Task.CompletedTask;
             },
+            OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+
+                var requestedReturnUrl = context.Properties?.RedirectUri;
+                var sanitizedReturnUrl = string.IsNullOrWhiteSpace(requestedReturnUrl) || !requestedReturnUrl.StartsWith("/", StringComparison.Ordinal)
+                    ? "/player/games"
+                    : requestedReturnUrl;
+
+                var isCorrelationFailure =
+                    context.Failure?.Message?.Contains("Correlation failed", StringComparison.OrdinalIgnoreCase) == true ||
+                    context.Failure?.InnerException?.Message?.Contains("Correlation failed", StringComparison.OrdinalIgnoreCase) == true;
+
+                var target = isCorrelationFailure
+                    ? BuildSignInSessionExpiredUrl(sanitizedReturnUrl)
+                    : BuildSignInFailedUrl(sanitizedReturnUrl);
+
+                context.Response.Redirect(target);
+                return Task.CompletedTask;
+            },
             OnRedirectToIdentityProviderForSignOut = async context =>
             {
                 context.ProtocolMessage.ClientId = context.Options.ClientId;
@@ -116,7 +136,6 @@ builder.Services.AddHttpClient<IBoardLibraryApiClient, BoardLibraryApiClient>(cl
     client.DefaultRequestVersion = HttpVersion.Version20;
     client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
 });
-builder.Services.AddScoped<INotificationCenter, NotificationCenter>();
 builder.Services.AddScoped<IUserProfileState, UserProfileState>();
 
 static string SanitizeReturnUrl(string? returnUrl)
@@ -131,6 +150,9 @@ static string SanitizeReturnUrl(string? returnUrl)
 
 static string BuildSignInUnavailableUrl(string returnUrl) =>
     $"/signin?error=identity-provider-unavailable&returnUrl={Uri.EscapeDataString(returnUrl)}";
+
+static string BuildSignInSessionExpiredUrl(string returnUrl) =>
+    $"/signin?error=identity-provider-session-expired&returnUrl={Uri.EscapeDataString(returnUrl)}";
 
 static string BuildSignInFailedUrl(string returnUrl) =>
     $"/signin?error=identity-provider-auth-failed&returnUrl={Uri.EscapeDataString(returnUrl)}";
@@ -275,28 +297,6 @@ app.MapGet("/auth/update-email", (
     var sanitizedReturnUrl = SanitizeReturnUrl(returnUrl);
     return Results.Redirect($"/auth/update-profile?returnUrl={Uri.EscapeDataString(sanitizedReturnUrl)}");
 });
-app.MapGet("/downloads/developer-enrollment/{requestId:guid}/attachments/{attachmentId:guid}", async (
-    Guid requestId,
-    Guid attachmentId,
-    IBoardLibraryApiClient apiClient,
-    CancellationToken cancellationToken) =>
-{
-    var file = await apiClient.GetDeveloperEnrollmentAttachmentAsync(requestId, attachmentId, cancellationToken);
-    return file is null
-        ? Results.NotFound()
-        : Results.File(file.Content, file.ContentType, file.FileName);
-}).RequireAuthorization();
-app.MapGet("/downloads/moderation/developer-enrollment/{requestId:guid}/attachments/{attachmentId:guid}", async (
-    Guid requestId,
-    Guid attachmentId,
-    IBoardLibraryApiClient apiClient,
-    CancellationToken cancellationToken) =>
-{
-    var file = await apiClient.GetModeratedDeveloperEnrollmentAttachmentAsync(requestId, attachmentId, cancellationToken);
-    return file is null
-        ? Results.NotFound()
-        : Results.File(file.Content, file.ContentType, file.FileName);
-}).RequireAuthorization();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
