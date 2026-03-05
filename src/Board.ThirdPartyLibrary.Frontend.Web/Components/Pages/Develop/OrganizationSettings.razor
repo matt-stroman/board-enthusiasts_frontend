@@ -17,7 +17,7 @@
         <section class="app-panel max-w-4xl p-6">
             <h1 class="app-page-title">Organization settings unavailable</h1>
             <p class="mt-4 text-base leading-8 text-slate-300">@LoadErrorMessage</p>
-            <a class="mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/organizations/@OrganizationId">Back to workspace</a>
+            <a class="mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/organizations/@OrganizationId">Back to organization</a>
         </section>
     }
     else if (Organization is null)
@@ -35,7 +35,7 @@
         <section class="app-panel max-w-4xl p-6">
             <h1 class="mt-4 app-page-title">@Organization.DisplayName</h1>
             <p class="mt-4 text-base leading-8 text-slate-300">
-                Update organization details used across the developer workspace and public catalog.
+                Update your studio details.
             </p>
 
             @if (!string.IsNullOrWhiteSpace(FormErrorMessage))
@@ -66,7 +66,7 @@
                 <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SaveAsync" disabled="@IsSubmitting">
                     @(IsSubmitting ? "Saving..." : "Save changes")
                 </button>
-                <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/organizations/@OrganizationId">Back to workspace</a>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/organizations/@OrganizationId">Back to organization</a>
             </div>
         </section>
     }

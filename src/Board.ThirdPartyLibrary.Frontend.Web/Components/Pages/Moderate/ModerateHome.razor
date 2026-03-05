@@ -22,10 +22,9 @@
     else if (!IsModerator)
     {
         <section class="app-panel p-6">
-            <div class="app-chip w-fit">Moderator role required</div>
-            <h1 class="mt-4 app-page-title">Moderation access unavailable</h1>
+            <h1 class="app-page-title">Moderation access unavailable</h1>
             <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                This workspace is only available to users with the moderator role.
+                This area is available only to users with the moderator role.
             </p>
         </section>
     }
@@ -33,10 +32,9 @@
     {
         <section class="space-y-4">
             <div>
-                <div class="app-chip w-fit">Moderation workspace</div>
-                <h1 class="mt-4 app-page-title">Moderate</h1>
+                <h1 class="app-page-title">Moderate</h1>
                 <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                    Manage moderation workflows in place without leaving this route.
+                    Manage moderation tools.
                 </p>
             </div>
 
@@ -57,7 +55,7 @@
                 <section class="app-panel p-6">
                     <h2 class="text-2xl font-semibold text-white">Verified Developer Role</h2>
                     <p class="mt-3 text-sm leading-7 text-slate-300">
-                        Grant or remove the <code class="rounded bg-black/30 px-2 py-1 text-cyan-100">verified_developer</code> role for a developer subject.
+                        Grant or remove the <code class="rounded bg-black/30 px-2 py-1 text-cyan-100">verified_developer</code> role for a developer account.
                     </p>
 
                     @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -66,10 +64,10 @@
                     }
 
                     <div class="mt-6 grid gap-4 sm:grid-cols-2">
-                        <label class="text-sm text-slate-300 sm:col-span-2">Developer subject
+                        <label class="text-sm text-slate-300 sm:col-span-2">Developer ID
                             <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
                                    @bind="DeveloperSubject"
-                                   placeholder="keycloak-subject-id" />
+                                   placeholder="user-id" />
                         </label>
                     </div>
 
@@ -131,7 +129,7 @@
 
         if (string.IsNullOrWhiteSpace(DeveloperSubject))
         {
-            ErrorMessage = "Developer subject is required.";
+            ErrorMessage = "Developer ID is required.";
             StatusMessage = null;
             return;
         }

@@ -28,10 +28,10 @@
                     <div class="flex flex-wrap gap-2">
                         @foreach (var genreTag in ParseGenreTags(CatalogEntry.GenreDisplay))
                         {
-                            <span class="app-chip">@genreTag</span>
+                            <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">@genreTag</span>
                         }
-                        <span class="app-chip">@CatalogEntry.PlayerCountDisplay</span>
-                        <span class="app-chip">@CatalogEntry.AgeDisplay</span>
+                        <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">@CatalogEntry.PlayerCountDisplay</span>
+                        <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">@CatalogEntry.AgeDisplay</span>
                     </div>
                     <div>
                         <h1 class="app-page-title">@CatalogEntry.DisplayName</h1>
@@ -55,7 +55,7 @@
 
         <section class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div class="app-panel p-6">
-                <div class="app-chip w-fit">About</div>
+                <h2 class="text-xl font-semibold text-white">About</h2>
                 <p class="mt-4 text-base leading-8 text-slate-300">
                     @CatalogEntry.ShortDescription
                 </p>
@@ -71,7 +71,7 @@
                 </div>
             </div>
             <div class="app-panel p-6">
-                <div class="app-chip w-fit">Current release</div>
+                <h2 class="text-xl font-semibold text-white">Current release</h2>
                 <dl class="mt-4 grid gap-3 text-sm text-slate-300">
                     <div class="flex justify-between gap-4"><dt>Version</dt><dd>@(CatalogEntry.CurrentRelease?.Version ?? "Not published")</dd></div>
                     <div class="flex justify-between gap-4"><dt>Metadata revision</dt><dd>@(CatalogEntry.CurrentRelease?.MetadataRevisionNumber.ToString() ?? "-")</dd></div>

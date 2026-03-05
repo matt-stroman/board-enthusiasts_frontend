@@ -13,7 +13,7 @@
             <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (Profile is null || EnrollmentState is null)
+    else if (Profile is null)
     {
         <section class="app-panel p-6">
             <div class="h-8 w-44 animate-pulse rounded-full bg-white/10"></div>
@@ -25,12 +25,12 @@
         <section class="app-panel max-w-3xl p-6">
             <h1 class="app-page-title">Account Settings</h1>
             <p class="mt-4 text-sm leading-7 text-slate-300">
-                Username, first name, last name, and email are sourced from Keycloak and edited through the identity provider profile flow.
+                Update your basic account details from your account profile page.
             </p>
 
             <div class="mt-6 grid gap-4">
                 <div class="text-sm text-slate-300">
-                    <div>Username (identity provider managed)</div>
+                    <div>Username</div>
                     <div class="mt-2 flex items-center gap-2">
                         <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.UserName" readonly />
                         <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit username" title="Edit username">
@@ -41,7 +41,7 @@
                     </div>
                 </div>
                 <div class="text-sm text-slate-300">
-                    <div>First Name (identity provider managed)</div>
+                    <div>First Name</div>
                     <div class="mt-2 flex items-center gap-2">
                         <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.FirstName" readonly />
                         <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit first name" title="Edit first name">
@@ -52,7 +52,7 @@
                     </div>
                 </div>
                 <div class="text-sm text-slate-300">
-                    <div>Last Name (identity provider managed)</div>
+                    <div>Last Name</div>
                     <div class="mt-2 flex items-center gap-2">
                         <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.LastName" readonly />
                         <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit last name" title="Edit last name">
@@ -63,7 +63,7 @@
                     </div>
                 </div>
                 <div class="text-sm text-slate-300">
-                    <div>Email (identity provider managed)</div>
+                    <div>Email</div>
                     <div class="mt-2 flex items-center gap-2">
                         <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.Email" readonly />
                         <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit email address" title="Edit email address">
@@ -78,24 +78,6 @@
                 </div>
             </div>
 
-            <section class="mt-6 rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer access</div>
-                <h2 class="mt-3 text-xl font-semibold text-white">@EnrollmentState.ToStatusLabel()</h2>
-                <p class="mt-3 text-sm leading-7 text-slate-300">@EnrollmentState.ToStatusDescription()</p>
-                <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-                    @if (EnrollmentState.HasDeveloperAccess())
-                    {
-                        <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop">Open developer console</a>
-                    }
-                    else
-                    {
-                        <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="BecomeDeveloperAsync" disabled="@(IsSubmittingEnrollment || !EnrollmentState.CanSubmitRequest)">
-                            @(IsSubmittingEnrollment ? "Enabling..." : "Become a Developer")
-                        </button>
-                    }
-                </div>
-            </section>
-
             <div class="mt-6 flex flex-wrap gap-3">
                 <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account/profile">Profile</a>
                 <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
@@ -108,35 +90,10 @@
     private const string EditIdentityProfileHref = "/auth/update-profile?returnUrl=%2Faccount%2Fsettings";
 
     private UserProfile? Profile { get; set; }
-    private DeveloperEnrollment? EnrollmentState { get; set; }
 
     private string? ErrorMessage { get; set; }
-    private bool IsSubmittingEnrollment { get; set; }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
-
-    private async Task BecomeDeveloperAsync()
-    {
-        if (EnrollmentState?.CanSubmitRequest != true || IsSubmittingEnrollment)
-        {
-            return;
-        }
-
-        ErrorMessage = null;
-        IsSubmittingEnrollment = true;
-        try
-        {
-            EnrollmentState = (await ApiClient.SubmitDeveloperEnrollmentAsync()).DeveloperEnrollment;
-        }
-        catch (Exception exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        finally
-        {
-            IsSubmittingEnrollment = false;
-        }
-    }
 
     private async Task LoadAsync()
     {
@@ -149,7 +106,6 @@
                 throw new InvalidOperationException("The current user profile could not be loaded.");
             }
 
-            EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
             SetProfile(profile);
         }
         catch (Exception exception)

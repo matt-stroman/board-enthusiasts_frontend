@@ -1,16 +1,24 @@
 @page "/develop/organizations/{OrganizationId:guid}/integrations"
+@attribute [Authorize]
+@inject NavigationManager NavigationManager
 
 <PageTitle>Organization Integrations</PageTitle>
 
 <section class="app-panel p-6">
-    <div class="app-chip w-fit">Integration connections</div>
-    <h1 class="mt-4 app-page-title">Publisher Connections</h1>
-    <div class="mt-6 space-y-3 text-sm text-slate-300">
-        <div class="rounded-[1.25rem] bg-black/15 p-4">itch.io • enabled • reusable for title bindings</div>
-        <div class="rounded-[1.25rem] bg-black/15 p-4">Stellar Forge Direct • enabled • custom publisher fallback</div>
-    </div>
+    <h1 class="app-page-title">Publisher Connections</h1>
+    <p class="mt-4 text-sm leading-7 text-slate-300">
+        Connection management now lives in the Developer Console.
+    </p>
+    <a class="mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop" data-enhance-nav="false">
+        Open Developer Console
+    </a>
 </section>
 
 @code {
     [Parameter] public Guid OrganizationId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.NavigateTo("/develop", forceLoad: true);
+    }
 }

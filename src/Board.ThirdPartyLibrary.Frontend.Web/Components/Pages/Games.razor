@@ -11,15 +11,17 @@
         <div class="space-y-3">
             <h1 class="app-page-title">Games</h1>
             <p class="max-w-3xl text-base leading-8 text-slate-300">
-                Browse publicly visible titles. Only titles in Testing or Published lifecycle with Public visibility are shown.
+                Browse games and apps from the community.
             </p>
         </div>
         @if (FilteredCount > 0)
         {
             <div class="app-panel flex flex-wrap gap-3 p-4 text-sm">
-                <span class="app-chip">@FilteredCount titles</span>
-                <span class="app-chip">@VisibleOrganizationEntries.Count organizations</span>
-                <span class="app-chip">Page @CurrentPageNumber of @TotalPages</span>
+                <span>@FilteredCount titles</span>
+                <span class="text-slate-500">•</span>
+                <span>@VisibleOrganizationEntries.Count organizations</span>
+                <span class="text-slate-500">•</span>
+                <span>Page @CurrentPageNumber of @TotalPages</span>
             </div>
         }
     </div>
@@ -91,12 +93,12 @@
         <section class="app-panel grid gap-6 overflow-hidden p-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
             <div class="space-y-5">
                 <div class="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/75">
-                    <span class="app-chip">@SpotlightTitle!.PlayerCountDisplay</span>
+                    <span class="rounded-full border border-white/15 px-3 py-1">@SpotlightTitle!.PlayerCountDisplay</span>
                     @foreach (var genreTag in ParseGenreTags(SpotlightTitle.GenreDisplay))
                     {
-                        <span class="app-chip">@genreTag</span>
+                        <span class="rounded-full border border-white/15 px-3 py-1">@genreTag</span>
                     }
-                    <span class="app-chip">@SpotlightTitle.AgeDisplay</span>
+                    <span class="rounded-full border border-white/15 px-3 py-1">@SpotlightTitle.AgeDisplay</span>
                 </div>
                 <div>
                     <div class="text-sm uppercase tracking-[0.28em] text-cyan-100/70">Spotlight</div>
@@ -114,7 +116,7 @@
         <section class="app-panel p-6">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Browse organizations</h2>
-                <a class="app-chip" href="@BuildGamesHref(clearOrganizationFilters: true, pageNumber: 1)">Clear organization filters</a>
+                <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@BuildGamesHref(clearOrganizationFilters: true, pageNumber: 1)">Clear organization filters</a>
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
                 @foreach (var organization in VisibleOrganizationEntries)
@@ -130,7 +132,7 @@
         <section class="app-panel p-6">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Genres</h2>
-                <a class="app-chip" href="@BuildGamesHref(clearGenreFilters: true, pageNumber: 1)">Clear genre filters</a>
+                <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@BuildGamesHref(clearGenreFilters: true, pageNumber: 1)">Clear genre filters</a>
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
                 @foreach (var genreTag in AvailableGenreTags)
@@ -160,7 +162,7 @@
                         <div class="mt-4 flex flex-wrap gap-2">
                             @foreach (var genreTag in ParseGenreTags(title.GenreDisplay))
                             {
-                                <span class="app-chip">@genreTag</span>
+                                <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">@genreTag</span>
                             }
                         </div>
                         <div class="mt-3 font-semibold text-white">@title.DisplayName</div>

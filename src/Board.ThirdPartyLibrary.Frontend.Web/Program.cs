@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,7 +33,10 @@ var keycloakOptions = builder.Configuration.GetSection(KeycloakOptions.SectionNa
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = builder.Environment.IsDevelopment();
+    });
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization();
@@ -137,6 +141,7 @@ builder.Services.AddHttpClient<IBoardLibraryApiClient, BoardLibraryApiClient>(cl
     client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
 });
 builder.Services.AddScoped<IUserProfileState, UserProfileState>();
+builder.Services.AddSingleton<CircuitHandler, LoggingCircuitHandler>();
 
 static string SanitizeReturnUrl(string? returnUrl)
 {

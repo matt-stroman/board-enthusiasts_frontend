@@ -98,7 +98,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
 
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("Studio Overview", content);
-        Assert.Contains("Create Studio", content);
+        Assert.Contains("Create studio", content);
         Assert.Contains("Studio Settings", content);
         Assert.Contains("Edit in console", content);
     }
@@ -152,6 +152,8 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         Assert.Contains("Edit first name", content);
         Assert.Contains("Edit last name", content);
         Assert.Contains("Edit email address", content);
+        Assert.DoesNotContain("Developer access", content, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Become a Developer", content, StringComparison.OrdinalIgnoreCase);
     }
 
     public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>

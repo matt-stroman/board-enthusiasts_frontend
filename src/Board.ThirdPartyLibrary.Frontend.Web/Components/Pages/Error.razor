@@ -4,10 +4,9 @@
 <PageTitle>Error</PageTitle>
 
 <section class="mx-auto max-w-3xl app-panel p-8">
-    <div class="app-chip w-fit">Application error</div>
-    <h1 class="mt-4 app-page-title">Unexpected Error</h1>
+    <h1 class="app-page-title">Unexpected Error</h1>
     <p class="mt-4 text-base leading-8 text-slate-300">
-        An unhandled error occurred while rendering the current route.
+        Something went wrong while loading this page.
     </p>
 
     @if (ShowRequestId)
@@ -18,7 +17,7 @@
     }
 
     <div class="mt-6 rounded-[1.25rem] bg-black/15 p-4 text-sm leading-7 text-slate-300">
-        See the application logs with the request ID above if you need to trace the failure.
+        If this keeps happening, reload the page and try again.
     </div>
 </section>
 

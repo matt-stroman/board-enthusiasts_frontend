@@ -5,8 +5,6 @@
 <PageTitle>Account</PageTitle>
 
 <section class="space-y-6">
-    <div class="app-chip w-fit">Current user</div>
-
     @if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
         <section class="app-panel p-6">
@@ -26,7 +24,7 @@
         <section class="app-panel p-6">
             <h1 class="app-page-title">Account</h1>
             <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                Account shows player-facing access state and profile details without exposing raw backend control codes.
+                Manage your profile, access, and connected Board account.
             </p>
 
             <dl class="mt-6 grid gap-4 text-sm text-slate-300 sm:grid-cols-2">
@@ -41,15 +39,15 @@
             <div class="mt-6 grid gap-4 lg:grid-cols-2">
                 <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
                     <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Player area</div>
-                    <h2 class="mt-3 text-xl font-semibold text-white">Player-first default</h2>
+                    <h2 class="mt-3 text-xl font-semibold text-white">My games and wishlist</h2>
                     <p class="mt-3 text-sm leading-7 text-slate-300">
-                        New accounts start in the player library. Wishlist, collections, favorites, and owned-title management will build from that authenticated player surface.
+                        Open your player library and wishlist.
                     </p>
                     <a class="mt-4 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/player/games">Open my games</a>
                 </section>
                 <section class="rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
                     <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer area</div>
-                    <h2 class="mt-3 text-xl font-semibold text-white">Separate developer enrollment</h2>
+                    <h2 class="mt-3 text-xl font-semibold text-white">Developer Console</h2>
                     <p class="mt-3 text-sm leading-7 text-slate-300">
                         @EnrollmentState.ToStatusDescription()
                     </p>
@@ -88,7 +86,7 @@
 
             if (CurrentUser is null)
             {
-                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
+                ErrorMessage = "Your profile could not be loaded.";
             }
         }
         catch (Exception exception)

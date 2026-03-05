@@ -15,7 +15,7 @@
     else if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
         <section class="app-panel p-6">
-            <h1 class="app-page-title">Title workspace unavailable</h1>
+            <h1 class="app-page-title">Title unavailable</h1>
             <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
         </section>
     }
@@ -37,10 +37,10 @@
                     <div class="mt-3 text-xs uppercase tracking-[0.2em] text-slate-400">Auto slug: @GeneratedSlug</div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <a class="app-chip" href="/develop/titles/@TitleId/metadata">Metadata</a>
-                    <a class="app-chip" href="/develop/titles/@TitleId/media">Media</a>
-                    <a class="app-chip" href="/develop/titles/@TitleId/releases">Releases</a>
-                    <a class="app-chip" href="/develop/titles/@TitleId/acquisition">Acquisition</a>
+                    <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/develop/titles/@TitleId/metadata">Metadata</a>
+                    <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/develop/titles/@TitleId/media">Media</a>
+                    <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/develop/titles/@TitleId/releases">Releases</a>
+                    <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="/develop/titles/@TitleId/acquisition">Acquisition</a>
                 </div>
             </div>
 

@@ -9,7 +9,7 @@
         <div>
             <h1 class="mt-4 app-page-title">My Games</h1>
             <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                This is the signed-in player library. New accounts land here first, while purchased titles, favorites, and collections arrive in a later backend wave.
+                Your library titles will appear here.
             </p>
         </div>
         <div class="flex flex-col gap-3 sm:flex-row">
@@ -43,7 +43,7 @@
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Player access</div>
                         <div class="mt-2 text-lg font-semibold text-white">Active</div>
-                        <div class="mt-2 text-sm text-slate-300">Every library account starts as a player.</div>
+                        <div class="mt-2 text-sm text-slate-300">Ready to browse and manage your library.</div>
                     </div>
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer access</div>
@@ -54,35 +54,10 @@
             </section>
 
             <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Planned player features</div>
-                <ul class="mt-4 space-y-3 text-sm leading-7 text-slate-300">
-                    <li>Purchased games and apps will appear here once entitlements are modeled in the backend.</li>
-                    <li>Collections and favorites will layer on top of owned titles after the library read model exists.</li>
-                    <li>Board-native install actions will follow after entitlement and delivery waves are complete.</li>
-                </ul>
-            </section>
-        </section>
-
-        <section class="grid gap-4 lg:grid-cols-3">
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Owned titles</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">Future wave</h2>
+                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Library</div>
+                <h2 class="mt-3 text-2xl font-semibold text-white">No games yet</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Purchased titles will render here once the player library API is implemented.
-                </p>
-            </section>
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Collections</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">Future wave</h2>
-                <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Player-defined collections will let users organize titles for family, party, or age-specific play.
-                </p>
-            </section>
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Favorites</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">Future wave</h2>
-                <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Favorite markers will become part of the authenticated player library rather than the public catalog.
+                    When you add games, they will show up here for quick access.
                 </p>
             </section>
         </section>
@@ -107,7 +82,7 @@
 
             if (CurrentUser is null)
             {
-                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
+                ErrorMessage = "Your profile could not be loaded.";
             }
         }
         catch (Exception exception)

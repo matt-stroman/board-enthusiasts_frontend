@@ -7,15 +7,8 @@
     {
         <h1 class="mt-4 app-page-title">Sign in is unavailable right now</h1>
         <p class="mt-4 text-base leading-8 text-slate-300">
-            The web app could not reach the local Keycloak identity provider at <code>https://localhost:8443</code>.
-            Start the local auth dependency first, then try again.
+            The sign-in service is temporarily unavailable. Try again in a moment.
         </p>
-        <div class="mt-6 rounded-[1.25rem] border border-amber-300/20 bg-amber-300/10 p-4 text-left text-sm leading-7 text-amber-50/90">
-            Recommended local command:
-            <code class="mt-2 block">python .\scripts\dev.py up --dependencies-only</code>
-            If you also need the API running, use:
-            <code class="mt-2 block">python .\scripts\dev.py up</code>
-        </div>
         <div class="mt-6 flex justify-center gap-3">
             <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@RetryHref" data-enhance-nav="false">Try again</a>
             <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/games">Back to library</a>
@@ -25,14 +18,8 @@
     {
         <h1 class="mt-4 app-page-title">Sign in could not start</h1>
         <p class="mt-4 text-base leading-8 text-slate-300">
-            The app reached Keycloak, but the identity provider rejected the current sign-in request configuration.
+            This sign-in request could not be completed. Try again.
         </p>
-        <div class="mt-6 rounded-[1.25rem] border border-amber-300/20 bg-amber-300/10 p-4 text-left text-sm leading-7 text-amber-50/90">
-            This is usually a local client configuration mismatch, such as an invalid redirect URI or client ID.
-            If you recently pulled auth config changes, restart local dependencies so Keycloak re-imports the updated realm:
-            <code class="mt-2 block">python .\scripts\dev.py web-stop --down-dependencies</code>
-            <code class="mt-2 block">python .\scripts\dev.py web --hot-reload</code>
-        </div>
         <div class="mt-6 flex justify-center gap-3">
             <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@SignInHref" data-enhance-nav="false">Try again</a>
             <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/games">Back to library</a>
@@ -42,7 +29,7 @@
     {
         <h1 class="mt-4 app-page-title">Sign-in session expired</h1>
         <p class="mt-4 text-base leading-8 text-slate-300">
-            The previous Keycloak sign-in callback is no longer valid for this browser tab. Start a fresh sign-in flow and continue.
+            Your previous sign-in attempt expired in this tab. Start a new sign-in.
         </p>
         <div class="mt-6 flex justify-center gap-3">
             <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@SignInHref" data-enhance-nav="false">Start new sign in</a>
@@ -53,7 +40,7 @@
     {
         <h1 class="mt-4 app-page-title">Redirecting to sign in</h1>
         <p class="mt-4 text-base leading-8 text-slate-300">
-            Continue to the secure Keycloak sign-in flow and the app will return you to your player library when authentication completes.
+            Continue to secure sign in and return to your library when authentication completes.
         </p>
         <div class="mt-6 flex justify-center gap-3">
             <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@SignInHref" data-enhance-nav="false">Continue to sign in</a>

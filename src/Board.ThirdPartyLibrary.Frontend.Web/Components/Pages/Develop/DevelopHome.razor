@@ -8,7 +8,7 @@
     @if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
         <section class="app-panel p-6">
-            <h2 class="text-xl font-semibold text-white">Developer workspace unavailable</h2>
+            <h2 class="text-xl font-semibold text-white">Developer console unavailable</h2>
             <p class="mt-3 text-sm leading-7 text-slate-300">@ErrorMessage</p>
         </section>
     }
@@ -22,10 +22,12 @@
     else if (!HasDeveloperAccess)
     {
         <section class="app-panel p-6">
-            <div class="app-chip w-fit">Developer onboarding</div>
             <h1 class="mt-4 app-page-title">Become a Developer</h1>
             <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                Player accounts stay the default. Enable developer access to create studios, manage titles, and publish releases from this workspace.
+                Want to create games and apps for Board? Great!
+            </p>
+            <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                Click below to gain access to the developer console, where you can manage your studios, titles, releases, and more.
             </p>
             <div class="mt-6">
                 <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SubmitEnrollmentAsync" disabled="@(IsSubmitting || !CanSubmitEnrollment)">
@@ -37,20 +39,11 @@
     else
     {
         <section class="space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                    <div class="app-chip w-fit">Developer workspace</div>
-                    <h1 class="mt-4 app-page-title">Developer Console</h1>
-                    <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                        Switch workflows in place with domain tabs and contextual side navigation.
-                    </p>
-                </div>
-                <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                        type="button"
-                        @onclick="RefreshActiveDomainAsync"
-                        disabled="@IsBusy">
-                    @(IsBusy ? "Refreshing..." : "Refresh view")
-                </button>
+            <div>
+                <h1 class="app-page-title">Developer Console</h1>
+                <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                    Manage studios, titles, releases, and publishing settings.
+                </p>
             </div>
 
             <section class="app-panel p-4">
@@ -68,7 +61,69 @@
 
             <section class="grid gap-4 xl:grid-cols-[18rem_1fr]">
                 <aside class="app-panel p-4">
-                    <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Workflow</div>
+
+                    @if (ActiveOrganization is not null)
+                    {
+                        <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio</div>
+                        <div class="mt-2 flex items-center gap-2">
+                            <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                                    @onchange="OnActiveOrganizationChanged">
+                                @foreach (var organization in Organizations)
+                                {
+                                    <option value="@organization.Id" selected="@(organization.Id == ActiveOrganizationId)">@organization.DisplayName</option>
+                                }
+                            </select>
+                            <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100"
+                                    type="button"
+                                    title="Create studio"
+                                    aria-label="Create studio"
+                                    @onclick="OpenCreateStudioWorkflowAsync">
+                                +
+                            </button>
+                        </div>
+                    }
+
+                    @if (ActiveDomain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing && ActiveOrganization is not null)
+                    {
+                        <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Title</div>
+
+                        @if (ActiveOrganizationTitles.Count == 0)
+                        {
+                            <div class="mt-2 flex items-center gap-2">
+                                <p class="text-sm text-slate-300">No titles yet.</p>
+                                <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        type="button"
+                                        title="Create title"
+                                        aria-label="Create title"
+                                        @onclick="OpenCreateTitleWorkflowAsync"
+                                        disabled="@IsBusy">
+                                    +
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mt-2 flex items-center gap-2">
+                                <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                                        @onchange="OnActiveTitleChanged">
+                                    @foreach (var title in ActiveOrganizationTitles)
+                                    {
+                                        <option value="@title.Id" selected="@(title.Id == ActiveTitleId)">@title.DisplayName</option>
+                                    }
+                                </select>
+                                <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        type="button"
+                                        title="Create title"
+                                        aria-label="Create title"
+                                        @onclick="OpenCreateTitleWorkflowAsync"
+                                        disabled="@IsBusy">
+                                    +
+                                </button>
+                            </div>
+                        }
+                    }
+
+                    <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Workflow</div>
                     <nav class="mt-3 space-y-2">
                         @foreach (var workflow in GetWorkflows(ActiveDomain))
                         {
@@ -79,30 +134,6 @@
                             </button>
                         }
                     </nav>
-
-                    @if (ActiveOrganization is not null)
-                    {
-                        <div class="mt-6 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio context</div>
-                        <select class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-                                @onchange="OnActiveOrganizationChanged">
-                            @foreach (var organization in Organizations)
-                            {
-                                <option value="@organization.Id" selected="@(organization.Id == ActiveOrganizationId)">@organization.DisplayName</option>
-                            }
-                        </select>
-                    }
-
-                    @if (ActiveTitle is not null && (ActiveDomain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing))
-                    {
-                        <div class="mt-6 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Title context</div>
-                        <select class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-                                @onchange="OnActiveTitleChanged">
-                            @foreach (var title in ActiveOrganizationTitles)
-                            {
-                                <option value="@title.Id" selected="@(title.Id == ActiveTitleId)">@title.DisplayName</option>
-                            }
-                        </select>
-                    }
                 </aside>
 
                 <section class="app-panel p-6">
@@ -116,9 +147,6 @@
                         @if (ActiveWorkflow == "studios-overview")
                         {
                             <h2 class="text-2xl font-semibold text-white">Studios</h2>
-                            <p class="mt-3 text-sm leading-7 text-slate-300">
-                                Browse managed studios and jump to settings without leaving this workspace.
-                            </p>
 
                             @if (Organizations.Count == 0)
                             {
@@ -143,9 +171,6 @@
                                                         @onclick="() => SelectStudioForSettings(organization.Id)">
                                                     Edit in console
                                                 </button>
-                                                <a class="text-cyan-200 transition hover:text-cyan-100" href="/develop/organizations/@organization.Id/settings">
-                                                    Open legacy settings page
-                                                </a>
                                             </div>
                                         </section>
                                     }
@@ -261,29 +286,189 @@
                                             disabled="@IsSaveStudioDisabled">
                                         @(IsStudioMutationInFlight ? "Saving..." : "Save Settings")
                                     </button>
-                                    <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100"
-                                       href="/develop/organizations/@ActiveOrganization.Id/settings">
-                                        Open legacy settings page
-                                    </a>
                                 </div>
                             }
                         }
                     }
                     else if (ActiveDomain == DevelopDomain.Titles)
                     {
-                        @RenderTitlesContent()
+                        @if (ActiveOrganization is null)
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Titles</h2>
+                            <p class="mt-3 text-sm text-slate-300">Select or create a studio first.</p>
+                        }
+                        else if (ActiveWorkflow == "titles-overview")
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Titles</h2>
+                            <p class="mt-3 text-sm leading-7 text-slate-300">
+                                Active studio: <strong class="text-white">@ActiveOrganization.DisplayName</strong>
+                            </p>
+
+                            @if (ActiveOrganizationTitles.Count == 0)
+                            {
+                                <p class="mt-6 text-sm text-slate-300">No titles found for this studio.</p>
+                            }
+                            else
+                            {
+                                <div class="mt-6 space-y-3">
+                                    @foreach (var title in ActiveOrganizationTitles)
+                                    {
+                                        <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
+                                            <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">@title.ContentKind</div>
+                                            <div class="mt-2 text-lg font-semibold text-white">@title.DisplayName</div>
+                                            <p class="mt-2 text-sm text-slate-300">@title.ShortDescription</p>
+                                            <div class="mt-4 flex flex-wrap gap-3 text-sm">
+                                                <a class="text-cyan-200 transition hover:text-cyan-100" href="/develop/titles/@title.Id" data-enhance-nav="false">Overview</a>
+                                                <a class="text-cyan-200 transition hover:text-cyan-100" href="/develop/titles/@title.Id/metadata" data-enhance-nav="false">Metadata</a>
+                                                <a class="text-cyan-200 transition hover:text-cyan-100" href="/develop/titles/@title.Id/releases" data-enhance-nav="false">Releases</a>
+                                                <a class="text-cyan-200 transition hover:text-cyan-100" href="/develop/titles/@title.Id/acquisition" data-enhance-nav="false">Acquisition</a>
+                                            </div>
+                                        </section>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Create Title</h2>
+                            <p class="mt-3 text-sm leading-7 text-slate-300">
+                                Create a new title under <strong class="text-white">@ActiveOrganization.DisplayName</strong>.
+                            </p>
+                            <a class="mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950"
+                               href="/develop/organizations/@ActiveOrganization.Id/titles/new"
+                               data-enhance-nav="false">
+                                Open title creation form
+                            </a>
+                        }
                     }
                     else if (ActiveDomain == DevelopDomain.Releases)
                     {
-                        @RenderReleasesContent()
+                        @if (ActiveTitle is null)
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Releases</h2>
+                            <p class="mt-3 text-sm text-slate-300">Choose a title to inspect releases.</p>
+                        }
+                        else
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Releases</h2>
+                            <p class="mt-3 text-sm leading-7 text-slate-300">
+                                Title: <strong class="text-white">@ActiveTitle.DisplayName</strong>
+                            </p>
+
+                            @if (ActiveTitleReleases.Count == 0)
+                            {
+                                <p class="mt-6 text-sm text-slate-300">No releases for this title yet.</p>
+                            }
+                            else
+                            {
+                                <div class="mt-6 space-y-3">
+                                    @foreach (var release in ActiveTitleReleases)
+                                    {
+                                        <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
+                                            <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">@release.Status</div>
+                                            <div class="mt-2 text-lg font-semibold text-white">Version @release.Version</div>
+                                            <div class="mt-2 text-sm text-slate-300">Metadata revision @release.MetadataRevisionNumber</div>
+                                        </section>
+                                    }
+                                </div>
+                            }
+
+                            <a class="mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100"
+                               href="/develop/titles/@ActiveTitle.Id/releases"
+                               data-enhance-nav="false">
+                                Open release manager
+                            </a>
+                        }
                     }
                     else if (ActiveDomain == DevelopDomain.Publishing)
                     {
-                        @RenderPublishingContent()
+                        @if (ActiveWorkflow == "publishing-connections")
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Publishing Connections</h2>
+
+                            @if (ActiveOrganization is null)
+                            {
+                                <p class="mt-3 text-sm text-slate-300">Choose a studio to view publisher connections.</p>
+                            }
+                            else
+                            {
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    Studio: <strong class="text-white">@ActiveOrganization.DisplayName</strong>
+                                </p>
+
+                                @if (ActiveOrganizationConnections.Count == 0)
+                                {
+                                    <p class="mt-6 text-sm text-slate-300">No integration connections configured yet.</p>
+                                }
+                                else
+                                {
+                                    <div class="mt-6 space-y-3">
+                                        @foreach (var connection in ActiveOrganizationConnections)
+                                        {
+                                            var connectionName = connection.SupportedPublisher?.DisplayName
+                                                ?? connection.CustomPublisherDisplayName
+                                                ?? connection.Id.ToString("D");
+                                            <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
+                                                <div class="text-lg font-semibold text-white">@connectionName</div>
+                                                <div class="mt-2 text-sm text-slate-300">Enabled: @(connection.IsEnabled ? "Yes" : "No")</div>
+                                            </section>
+                                        }
+                                    </div>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <h2 class="text-2xl font-semibold text-white">Acquisition Bindings</h2>
+
+                            @if (ActiveTitle is null)
+                            {
+                                <p class="mt-3 text-sm text-slate-300">Choose a title to view acquisition bindings.</p>
+                            }
+                            else
+                            {
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    Title: <strong class="text-white">@ActiveTitle.DisplayName</strong>
+                                </p>
+
+                                @if (ActiveTitleBindings.Count == 0)
+                                {
+                                    <p class="mt-6 text-sm text-slate-300">No acquisition bindings configured yet.</p>
+                                }
+                                else
+                                {
+                                    <div class="mt-6 space-y-3">
+                                        @foreach (var binding in ActiveTitleBindings)
+                                        {
+                                            var connectionName = binding.IntegrationConnection.SupportedPublisher?.DisplayName
+                                                ?? binding.IntegrationConnection.CustomPublisherDisplayName
+                                                ?? binding.IntegrationConnectionId.ToString("D");
+                                            <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
+                                                <div class="text-lg font-semibold text-white">@connectionName</div>
+                                                <a class="mt-2 block text-sm text-cyan-200 transition hover:text-cyan-100"
+                                                   href="@binding.AcquisitionUrl"
+                                                   target="_blank"
+                                                   rel="noreferrer"
+                                                   data-enhance-nav="false">
+                                                    @binding.AcquisitionUrl
+                                                </a>
+                                                <div class="mt-2 text-sm text-slate-300">Primary: @(binding.IsPrimary ? "Yes" : "No")</div>
+                                            </section>
+                                        }
+                                    </div>
+                                }
+
+                                <a class="mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100"
+                                   href="/develop/titles/@ActiveTitle.Id/acquisition"
+                                   data-enhance-nav="false">
+                                    Open acquisition manager
+                                </a>
+                            }
+                        }
                     }
                     else
                     {
-                        <p class="text-sm text-slate-300">Select a workflow.</p>
+                        <p class="text-sm text-slate-300">Select an option.</p>
                     }
                 </section>
             </section>
@@ -481,7 +666,26 @@
         }
     }
 
-    private async Task RefreshActiveDomainAsync() => await EnsureDomainDataAsync(ActiveDomain, forceRefresh: true);
+    private async Task OpenCreateStudioWorkflowAsync()
+    {
+        ActiveDomain = DevelopDomain.Studios;
+        ActiveWorkflow = "studios-create";
+        StudioStatusMessage = null;
+        await EnsureDomainDataAsync(DevelopDomain.Studios);
+    }
+
+    private async Task OpenCreateTitleWorkflowAsync()
+    {
+        if (ActiveOrganization is null)
+        {
+            return;
+        }
+
+        ActiveDomain = DevelopDomain.Titles;
+        ActiveWorkflow = "titles-create";
+        StudioStatusMessage = null;
+        await EnsureDomainDataAsync(DevelopDomain.Titles);
+    }
 
     private async Task EnsureDomainDataAsync(DevelopDomain domain, bool forceRefresh = false)
     {
@@ -867,138 +1071,6 @@
             _ => false
         };
 
-    private RenderFragment RenderTitlesContent() => builder =>
-    {
-        var sequence = 0;
-
-        if (ActiveOrganization is null)
-        {
-            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Titles</h2><p class=\"mt-3 text-sm text-slate-300\">Select or create a studio first.</p>");
-            return;
-        }
-
-        if (ActiveWorkflow == "titles-overview")
-        {
-            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Titles</h2>");
-            builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Active studio: <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong></p>");
-
-            if (ActiveOrganizationTitles.Count == 0)
-            {
-                builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No titles found for this studio.</p>");
-                return;
-            }
-
-            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
-            foreach (var title in ActiveOrganizationTitles)
-            {
-                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-xs uppercase tracking-[0.2em] text-cyan-100/70\">{title.ContentKind}</div><div class=\"mt-2 text-lg font-semibold text-white\">{title.DisplayName}</div><p class=\"mt-2 text-sm text-slate-300\">{title.ShortDescription}</p><div class=\"mt-4 flex flex-wrap gap-3 text-sm\"><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}\">Overview</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/metadata\">Metadata</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/releases\">Releases</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/acquisition\">Acquisition</a></div></section>");
-            }
-            builder.AddMarkupContent(sequence++, "</div>");
-            return;
-        }
-
-        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Create Title</h2>");
-        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Create a new title under <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong>.</p>");
-        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950\" href=\"/develop/organizations/{ActiveOrganization.Id:D}/titles/new\">Open title creation form</a>");
-    };
-
-    private RenderFragment RenderReleasesContent() => builder =>
-    {
-        var sequence = 0;
-
-        if (ActiveTitle is null)
-        {
-            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Releases</h2><p class=\"mt-3 text-sm text-slate-300\">Choose a title to inspect releases.</p>");
-            return;
-        }
-
-        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Releases</h2>");
-        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Title: <strong class=\"text-white\">{ActiveTitle.DisplayName}</strong></p>");
-
-        if (ActiveTitleReleases.Count == 0)
-        {
-            builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No releases for this title yet.</p>");
-        }
-        else
-        {
-            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
-            foreach (var release in ActiveTitleReleases)
-            {
-                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-xs uppercase tracking-[0.2em] text-cyan-100/70\">{release.Status}</div><div class=\"mt-2 text-lg font-semibold text-white\">Version {release.Version}</div><div class=\"mt-2 text-sm text-slate-300\">Metadata revision {release.MetadataRevisionNumber}</div></section>");
-            }
-            builder.AddMarkupContent(sequence++, "</div>");
-        }
-
-        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/titles/{ActiveTitle.Id:D}/releases\">Open release manager</a>");
-    };
-
-    private RenderFragment RenderPublishingContent() => builder =>
-    {
-        var sequence = 0;
-
-        if (ActiveWorkflow == "publishing-connections")
-        {
-            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Publishing Connections</h2>");
-
-            if (ActiveOrganization is null)
-            {
-                builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm text-slate-300\">Choose a studio to view publisher connections.</p>");
-                return;
-            }
-
-            builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Studio: <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong></p>");
-
-            if (ActiveOrganizationConnections.Count == 0)
-            {
-                builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No integration connections configured yet.</p>");
-            }
-            else
-            {
-                builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
-                foreach (var connection in ActiveOrganizationConnections)
-                {
-                    var connectionName = connection.SupportedPublisher?.DisplayName
-                        ?? connection.CustomPublisherDisplayName
-                        ?? connection.Id.ToString("D");
-                    builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-lg font-semibold text-white\">{connectionName}</div><div class=\"mt-2 text-sm text-slate-300\">Enabled: {(connection.IsEnabled ? "Yes" : "No")}</div></section>");
-                }
-                builder.AddMarkupContent(sequence++, "</div>");
-            }
-
-            builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/organizations/{ActiveOrganization.Id:D}/integrations\">Open integration manager</a>");
-            return;
-        }
-
-        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Acquisition Bindings</h2>");
-
-        if (ActiveTitle is null)
-        {
-            builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm text-slate-300\">Choose a title to view acquisition bindings.</p>");
-            return;
-        }
-
-        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Title: <strong class=\"text-white\">{ActiveTitle.DisplayName}</strong></p>");
-
-        if (ActiveTitleBindings.Count == 0)
-        {
-            builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No acquisition bindings configured yet.</p>");
-        }
-        else
-        {
-            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
-            foreach (var binding in ActiveTitleBindings)
-            {
-                var connectionName = binding.IntegrationConnection.SupportedPublisher?.DisplayName
-                    ?? binding.IntegrationConnection.CustomPublisherDisplayName
-                    ?? binding.IntegrationConnectionId.ToString("D");
-                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-lg font-semibold text-white\">{connectionName}</div><a class=\"mt-2 block text-sm text-cyan-200 transition hover:text-cyan-100\" href=\"{binding.AcquisitionUrl}\" target=\"_blank\" rel=\"noreferrer\">{binding.AcquisitionUrl}</a><div class=\"mt-2 text-sm text-slate-300\">Primary: {(binding.IsPrimary ? "Yes" : "No")}</div></section>");
-            }
-            builder.AddMarkupContent(sequence++, "</div>");
-        }
-
-        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/titles/{ActiveTitle.Id:D}/acquisition\">Open acquisition manager</a>");
-    };
-
     private static string GetDomainLabel(DevelopDomain domain) => domain switch
     {
         DevelopDomain.Studios => "Studios",
@@ -1013,13 +1085,11 @@
         DevelopDomain.Studios =>
         [
             new("studios-overview", "Studio Overview"),
-            new("studios-create", "Create Studio"),
             new("studios-settings", "Studio Settings")
         ],
         DevelopDomain.Titles =>
         [
-            new("titles-overview", "Title Overview"),
-            new("titles-create", "Create Title")
+            new("titles-overview", "Title Overview")
         ],
         DevelopDomain.Releases =>
         [
