@@ -1,14 +1,14 @@
 @page "/games"
-@page "/library"
+
 @inject IBoardLibraryApiClient ApiClient
 @using Microsoft.AspNetCore.WebUtilities
 
-<PageTitle>Library</PageTitle>
+<PageTitle>Games</PageTitle>
 
 <section class="space-y-8">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-3">
-            <h1 class="app-page-title">Library</h1>
+            <h1 class="app-page-title">Games</h1>
             <p class="max-w-3xl text-base leading-8 text-slate-300">
                 Browse the live public catalog with a Board-inspired hero spotlight, paging metadata, and low-hit query controls backed by the current API contract.
             </p>
@@ -72,7 +72,7 @@
                     @SpotlightTitle.ShortDescription
                 </p>
                 <div class="flex flex-col gap-3 sm:flex-row">
-                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@($"/library/{SpotlightTitle.OrganizationSlug}/{SpotlightTitle.Slug}")">Open details</a>
+                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@($"/games/{SpotlightTitle.OrganizationSlug}/{SpotlightTitle.Slug}")">Open details</a>
                     @if (!string.IsNullOrWhiteSpace(SpotlightTitle.AcquisitionUrl))
                     {
                         <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@SpotlightTitle.AcquisitionUrl" target="_blank" rel="noreferrer">View acquisition</a>
@@ -100,7 +100,7 @@
             <div class="app-card-rail">
                 @foreach (var title in Catalog.Titles)
                 {
-                    <a class="app-panel min-h-52 p-4 transition hover:-translate-y-1 hover:border-cyan-300/35" href="@($"/library/{title.OrganizationSlug}/{title.Slug}")">
+                    <a class="app-panel min-h-52 p-4 transition hover:-translate-y-1 hover:border-cyan-300/35" href="@($"/games/{title.OrganizationSlug}/{title.Slug}")">
                         <div class="h-28 rounded-[1.25rem] bg-cover bg-center @GetCardFallbackGradient(title)" style="@GetCardStyle(title)"></div>
                         <div class="mt-4 text-xs uppercase tracking-[0.22em] text-cyan-100/75">@title.GenreDisplay</div>
                         <div class="mt-2 font-semibold text-white">@title.DisplayName</div>
@@ -190,7 +190,7 @@
             query["genre"] = effectiveGenre;
         }
 
-        return QueryHelpers.AddQueryString("/library", query);
+        return QueryHelpers.AddQueryString("/games", query);
     }
 
     private static string GetCardStyle(CatalogTitleSummary? title) =>

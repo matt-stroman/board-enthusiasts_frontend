@@ -27,10 +27,10 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
 
     [Theory]
     [InlineData("/", "Board Enthusiasts")]
-    [InlineData("/library", "Star Blasters")]
+    [InlineData("/games", "Star Blasters")]
     [InlineData("/player/games", "My Games")]
     [InlineData("/player/wishlist", "No wishlist items yet")]
-    [InlineData("/library/stellar-forge/star-blasters", "View on itch.io")]
+    [InlineData("/games/stellar-forge/star-blasters", "View on itch.io")]
     [InlineData("/develop", "Stellar Forge")]
     [InlineData("/develop/organizations/new", "Create organization")]
     [InlineData("/develop/organizations/11111111-1111-1111-1111-111111111111", "Edit organization")]

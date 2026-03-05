@@ -180,7 +180,7 @@
                         <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             @foreach (var title in PrimaryOrganizationTitles)
                             {
-                                <a class="rounded-[1.25rem] border border-white/10 bg-black/15 p-4 transition hover:border-cyan-300/35" href="@($"/library/{title.OrganizationSlug}/{title.Slug}")">
+                                <a class="rounded-[1.25rem] border border-white/10 bg-black/15 p-4 transition hover:border-cyan-300/35" href="@($"/games/{title.OrganizationSlug}/{title.Slug}")">
                                     <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">@title.GenreDisplay</div>
                                     <div class="mt-3 text-lg font-semibold text-white">@title.DisplayName</div>
                                     <div class="mt-2 text-sm text-slate-300">@title.ShortDescription</div>

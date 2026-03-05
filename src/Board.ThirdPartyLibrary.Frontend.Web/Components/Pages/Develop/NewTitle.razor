@@ -1,6 +1,9 @@
 @page "/develop/organizations/{OrganizationId:guid}/titles/new"
 @attribute [Authorize]
+@using System.Net
+@using Microsoft.AspNetCore.Components.Forms
 @inject IBoardLibraryApiClient ApiClient
+@inject IJSRuntime JsRuntime
 @inject NavigationManager NavigationManager
 
 <PageTitle>New Title</PageTitle>
@@ -9,7 +12,7 @@
     <section class="app-panel max-w-5xl p-6">
         <h1 class="app-page-title">New Title</h1>
         <p class="mt-4 text-base leading-8 text-slate-300">
-            Create a title and its first metadata revision. Slug is generated automatically from display name.
+            Create a title and its first metadata revision. New titles always start as Draft and Private, and slug is generated automatically from display name.
         </p>
 
         @if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -18,15 +21,15 @@
         }
         else if (!string.IsNullOrWhiteSpace(StatusMessage))
         {
-            <div class="mt-4 rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">@StatusMessage</div>
+            <div class="mt-4 rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">
+                @StatusMessage
+            </div>
         }
 
         <div class="mt-6 grid gap-4 sm:grid-cols-2">
             <label class="text-sm text-slate-300">Display name
                 <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="DisplayName" placeholder="Star Blasters" />
-            </label>
-            <label class="text-sm text-slate-300">Slug (auto-generated)
-                <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/55 px-4 py-3 text-slate-300" value="@GeneratedSlug" readonly />
+                <span class="mt-2 block text-xs uppercase tracking-[0.2em] text-slate-400">Generated slug: @GeneratedSlug</span>
             </label>
             <label class="text-sm text-slate-300">Content kind
                 <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="ContentKind">
@@ -34,23 +37,34 @@
                     <option value="app">App</option>
                 </select>
             </label>
-            <label class="text-sm text-slate-300">Lifecycle status
-                <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="LifecycleStatus">
-                    <option value="draft">Draft</option>
-                    <option value="testing">Testing</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                </select>
-            </label>
-            <label class="text-sm text-slate-300">Visibility
-                <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="Visibility" disabled="@IsDraftLifecycle">
-                    <option value="private">Private</option>
-                    <option value="unlisted">Unlisted</option>
-                    <option value="listed">Listed</option>
-                </select>
-            </label>
-            <label class="text-sm text-slate-300">Genre
-                <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="GenreDisplay" placeholder="Arcade Shooter" />
+            <label class="text-sm text-slate-300">Genres
+                <div class="mt-2 min-h-[3.1rem] rounded-[1rem] border border-white/10 bg-slate-950/55 p-3">
+                    @if (GenreTags.Count == 0)
+                    {
+                        <span class="text-slate-400">No genres selected.</span>
+                    }
+                    else
+                    {
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (var genre in GenreTags)
+                            {
+                                <button class="rounded-full border border-cyan-200/35 bg-cyan-400/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-50" type="button" @onclick="() => RemoveGenreTag(genre)">
+                                    @genre <span class="ml-1 text-cyan-100/80">×</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="mt-3 flex gap-2">
+                    <input class="w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="GenreTagInput" placeholder="Add genre tag (e.g. Action)" />
+                    <button class="rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100" type="button" @onclick="AddGenreTagFromInput">Add</button>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @foreach (var suggestedGenre in SuggestedGenres)
+                    {
+                        <button class="rounded-full border border-white/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-200 disabled:opacity-45" type="button" @onclick="() => AddSuggestedGenre(suggestedGenre)" disabled="@IsGenreSelected(suggestedGenre)">@suggestedGenre</button>
+                    }
+                </div>
             </label>
             <label class="text-sm text-slate-300 sm:col-span-2">Short description
                 <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="ShortDescription" />
@@ -73,46 +87,156 @@
             <label class="text-sm text-slate-300">Minimum age (years)
                 <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" type="number" min="0" @bind="MinAgeYears" />
             </label>
+
+            <section class="rounded-[1.25rem] border border-white/10 bg-black/15 p-4 sm:col-span-2">
+                <h2 class="text-sm uppercase tracking-[0.2em] text-cyan-100/70">Images</h2>
+                <p class="mt-3 text-sm text-slate-300">Optional card, hero, and logo images can be set with URL or upload. Upload max is 25 MB per image.</p>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                    @foreach (var mediaRole in MediaRoles)
+                    {
+                        var mediaState = GetMediaRoleState(mediaRole);
+                        var fileInputId = $"new-title-media-{mediaRole}";
+                        <section class="rounded-[1rem] border border-white/10 bg-slate-950/35 p-3">
+                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">@GetMediaRoleLabel(mediaRole)</div>
+                            <div class="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40">
+                                @if (!string.IsNullOrWhiteSpace(GetMediaPreviewSource(mediaState)))
+                                {
+                                    <img class="h-24 w-full object-cover" src="@GetMediaPreviewSource(mediaState)" alt="@(string.IsNullOrWhiteSpace(mediaState.AltText) ? $"{GetMediaRoleLabel(mediaRole)} preview" : mediaState.AltText)" />
+                                }
+                                else
+                                {
+                                    <div class="grid h-24 place-items-center text-xs uppercase tracking-[0.2em] text-slate-400">No preview</div>
+                                }
+                            </div>
+                            <label class="mt-3 block text-sm text-slate-300">URL
+                                <input class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-slate-100" @bind="mediaState.UrlInput" @bind:event="oninput" placeholder="https://..." />
+                            </label>
+                            <label class="mt-3 block text-sm text-slate-300">Alt text (optional)
+                                <input class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-slate-100" @bind="mediaState.AltText" placeholder="Accessible image description" />
+                            </label>
+                            <div class="mt-3 flex flex-wrap items-center gap-2">
+                                <label class="app-file-button" for="@fileInputId">Choose File...</label>
+                                <InputFile id="@fileInputId" class="sr-only" OnChange="@(args => HandleMediaFileSelectionAsync(mediaRole, args))" accept="image/jpeg,image/png,image/webp,image/gif" />
+                                <span class="text-xs text-slate-300">@mediaState.UploadSummary</span>
+                            </div>
+                        </section>
+                    }
+                </div>
+
+                <p class="mt-4 text-xs text-slate-400">
+                    File uploads are previewed immediately in this tab. Only URL/metadata draft values are persisted locally across reload.
+                </p>
+            </section>
         </div>
 
         <div class="mt-6 flex flex-wrap gap-3">
             <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="CreateTitleAsync" disabled="@IsSubmitting">
                 @(IsSubmitting ? "Creating..." : "Create title")
             </button>
+            <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" type="button" @onclick="SaveDraftAsync">
+                Save draft locally
+            </button>
+            <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" type="button" @onclick="TogglePreviewPanel">
+                @(IsPreviewVisible ? "Hide preview" : "Preview title")
+            </button>
             <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/organizations/@OrganizationId/titles">Back to titles</a>
         </div>
+
+        @if (IsPreviewVisible)
+        {
+            var heroPreview = GetMediaPreviewSource(GetMediaRoleState("hero"));
+            var cardPreview = GetMediaPreviewSource(GetMediaRoleState("card"));
+            var logoPreview = GetMediaPreviewSource(GetMediaRoleState("logo"));
+            <section class="mt-6 rounded-[1.25rem] border border-white/10 bg-black/15 p-4">
+                <h2 class="text-sm uppercase tracking-[0.2em] text-cyan-100/70">Draft Preview</h2>
+                <div class="mt-4 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/50">
+                    @if (!string.IsNullOrWhiteSpace(heroPreview))
+                    {
+                        <img class="h-56 w-full object-cover" src="@heroPreview" alt="Hero preview" />
+                    }
+                    else
+                    {
+                        <div class="grid h-56 place-items-center text-xs uppercase tracking-[0.2em] text-slate-400">Hero image preview</div>
+                    }
+                </div>
+                <div class="mt-4">
+                    <h3 class="text-3xl font-black uppercase tracking-[0.08em] text-white">@((DisplayName ?? "Title").Trim())</h3>
+                    <p class="mt-2 text-slate-300">@((ShortDescription ?? "Short description preview").Trim())</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @foreach (var genre in GenreTags)
+                        {
+                            <span class="rounded-full border border-cyan-200/30 bg-cyan-400/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-50">@genre</span>
+                        }
+                        <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-200">@MinPlayers-@MaxPlayers players</span>
+                        <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-200">@AgeRatingAuthority @AgeRatingValue</span>
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div class="overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40">
+                        @if (!string.IsNullOrWhiteSpace(cardPreview))
+                        {
+                            <img class="h-40 w-full object-cover" src="@cardPreview" alt="Card preview" />
+                        }
+                        else
+                        {
+                            <div class="grid h-40 place-items-center text-xs uppercase tracking-[0.2em] text-slate-400">Card image preview</div>
+                        }
+                    </div>
+                    <div class="overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40">
+                        @if (!string.IsNullOrWhiteSpace(logoPreview))
+                        {
+                            <img class="h-40 w-full object-contain p-4" src="@logoPreview" alt="Logo preview" />
+                        }
+                        else
+                        {
+                            <div class="grid h-40 place-items-center text-xs uppercase tracking-[0.2em] text-slate-400">Logo image preview</div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
     </section>
 </section>
 
 @code {
     [Parameter] public Guid OrganizationId { get; set; }
 
+    private const string CreateLifecycleStatus = "draft";
+
+    private const string CreateVisibility = "private";
+
+    private const long MaxMediaUploadBytes = 25L * 1024L * 1024L;
+
+    private const string LocalDraftStorageKeyPrefix = "new-title-draft";
+
+    private static readonly string[] SuggestedGenres =
+    [
+        "Action",
+        "Shooter",
+        "Puzzle",
+        "Adventure",
+        "Strategy",
+        "Racing",
+        "Sports",
+        "Simulation",
+        "Platformer",
+        "Family"
+    ];
+
+    private static readonly string[] MediaRoles = ["card", "hero", "logo"];
+
     private string? DisplayName { get; set; }
 
     private string ContentKind { get; set; } = "game";
-
-    private string lifecycleStatus = "draft";
-
-    private string LifecycleStatus
-    {
-        get => lifecycleStatus;
-        set
-        {
-            lifecycleStatus = value;
-            if (IsDraftLifecycle)
-            {
-                Visibility = "private";
-            }
-        }
-    }
-
-    private string Visibility { get; set; } = "private";
 
     private string? ShortDescription { get; set; }
 
     private string? Description { get; set; }
 
-    private string? GenreDisplay { get; set; }
+    private List<string> GenreTags { get; } = [];
+
+    private string? GenreTagInput { get; set; }
 
     private int MinPlayers { get; set; } = 1;
 
@@ -126,13 +250,28 @@
 
     private bool IsSubmitting { get; set; }
 
+    private bool IsPreviewVisible { get; set; }
+
+    private bool HasRestoredDraft { get; set; }
+
     private string? ErrorMessage { get; set; }
 
     private string? StatusMessage { get; set; }
 
-    private bool IsDraftLifecycle => string.Equals(LifecycleStatus, "draft", StringComparison.Ordinal);
+    private Dictionary<string, NewTitleMediaRoleState> MediaRoleStates { get; } = new(StringComparer.Ordinal);
 
     private string GeneratedSlug => SlugGenerator.ToKebabCase(DisplayName, "title");
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || HasRestoredDraft)
+        {
+            return;
+        }
+
+        HasRestoredDraft = true;
+        await RestoreDraftAsync();
+    }
 
     private async Task CreateTitleAsync()
     {
@@ -148,6 +287,8 @@
             return;
         }
 
+        await PersistDraftAsync();
+
         IsSubmitting = true;
         try
         {
@@ -156,21 +297,31 @@
                 new CreateDeveloperTitleRequest(
                     GeneratedSlug,
                     ContentKind,
-                    LifecycleStatus,
-                    Visibility,
+                    CreateLifecycleStatus,
+                    CreateVisibility,
                     new UpsertTitleMetadataRequest(
                         DisplayName!.Trim(),
                         ShortDescription!.Trim(),
                         Description!.Trim(),
-                        GenreDisplay!.Trim(),
+                        BuildGenreDisplay(),
                         MinPlayers,
                         MaxPlayers,
                         AgeRatingAuthority!.Trim(),
                         AgeRatingValue!.Trim(),
                         MinAgeYears)));
 
-            StatusMessage = "Title created.";
-            NavigationManager.NavigateTo($"/develop/titles/{response.Title.Id:D}");
+            var mediaFailures = await ApplyInitialMediaAsync(response.Title.Id);
+            await ClearDraftAsync();
+            NavigationManager.NavigateTo(mediaFailures.Count == 0
+                ? $"/develop/titles/{response.Title.Id:D}"
+                : $"/develop/titles/{response.Title.Id:D}/media");
+        }
+        catch (BoardLibraryApiException exception) when (exception.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            ErrorMessage = "Your session expired while creating this title. Sign in again to continue; your local draft is saved.";
+            var relativeUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            var returnUrl = relativeUrl.StartsWith('/') ? relativeUrl : $"/{relativeUrl}";
+            NavigationManager.NavigateTo($"/signin?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
         }
         catch (Exception exception)
         {
@@ -184,6 +335,9 @@
 
     private string? Validate()
     {
+        AddGenreTokenList(GenreTagInput);
+        GenreTagInput = null;
+
         if (string.IsNullOrWhiteSpace(DisplayName))
         {
             return "Display name is required.";
@@ -199,9 +353,9 @@
             return "Description is required.";
         }
 
-        if (string.IsNullOrWhiteSpace(GenreDisplay))
+        if (GenreTags.Count == 0)
         {
-            return "Genre is required.";
+            return "At least one genre tag is required.";
         }
 
         if (MinPlayers < 1)
@@ -229,11 +383,332 @@
             return "Minimum age must be zero or greater.";
         }
 
-        if (IsDraftLifecycle)
+        return null;
+    }
+
+    private void TogglePreviewPanel() => IsPreviewVisible = !IsPreviewVisible;
+
+    private async Task SaveDraftAsync()
+    {
+        await PersistDraftAsync();
+        ErrorMessage = null;
+        StatusMessage = "Draft saved locally in this browser tab.";
+    }
+
+    private string BuildGenreDisplay() => string.Join(", ", GenreTags);
+
+    private void AddGenreTagFromInput()
+    {
+        AddGenreTokenList(GenreTagInput);
+        GenreTagInput = null;
+    }
+
+    private void AddSuggestedGenre(string genre) => AddGenreToken(genre);
+
+    private bool IsGenreSelected(string genre) =>
+        GenreTags.Any(candidate => string.Equals(candidate, genre, StringComparison.OrdinalIgnoreCase));
+
+    private void RemoveGenreTag(string genre)
+    {
+        var selected = GenreTags.FirstOrDefault(candidate => string.Equals(candidate, genre, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(selected))
         {
-            Visibility = "private";
+            GenreTags.Remove(selected);
+        }
+    }
+
+    private void AddGenreTokenList(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return;
+        }
+
+        foreach (var token in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            AddGenreToken(token);
+        }
+    }
+
+    private void AddGenreToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return;
+        }
+
+        var normalized = token.Trim();
+        if (normalized.Length == 0 || normalized.Length > 40)
+        {
+            return;
+        }
+
+        if (GenreTags.Any(candidate => string.Equals(candidate, normalized, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        GenreTags.Add(normalized);
+    }
+
+    private NewTitleMediaRoleState GetMediaRoleState(string mediaRole)
+    {
+        if (MediaRoleStates.TryGetValue(mediaRole, out var state))
+        {
+            return state;
+        }
+
+        state = new NewTitleMediaRoleState();
+        MediaRoleStates[mediaRole] = state;
+        return state;
+    }
+
+    private async Task HandleMediaFileSelectionAsync(string mediaRole, InputFileChangeEventArgs args)
+    {
+        var state = GetMediaRoleState(mediaRole);
+        ErrorMessage = null;
+
+        try
+        {
+            var file = args.File;
+            await using var stream = file.OpenReadStream(MaxMediaUploadBytes);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            state.UploadedFile = new ApiUploadFile(file.Name, file.ContentType, memoryStream.ToArray());
+            state.UploadedPreviewSource = $"data:{file.ContentType};base64,{Convert.ToBase64String(state.UploadedFile.Content)}";
+            state.UploadSummary = file.Name;
+        }
+        catch (Exception exception)
+        {
+            state.UploadedFile = null;
+            state.UploadedPreviewSource = null;
+            state.UploadSummary = "No file chosen";
+            ErrorMessage = exception.Message;
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> ApplyInitialMediaAsync(Guid titleId)
+    {
+        var failedRoles = new List<string>();
+
+        foreach (var mediaRole in MediaRoles)
+        {
+            var state = GetMediaRoleState(mediaRole);
+            if (state.UploadedFile is null && string.IsNullOrWhiteSpace(state.UrlInput))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (state.UploadedFile is not null)
+                {
+                    await ApiClient.UploadTitleMediaAssetAsync(
+                        titleId,
+                        mediaRole,
+                        state.UploadedFile,
+                        NormalizeOptional(state.AltText));
+                }
+                else if (!string.IsNullOrWhiteSpace(state.UrlInput))
+                {
+                    await ApiClient.UpsertTitleMediaAssetAsync(
+                        titleId,
+                        mediaRole,
+                        new UpsertTitleMediaAssetRequest(
+                            state.UrlInput.Trim(),
+                            NormalizeOptional(state.AltText),
+                            null,
+                            null,
+                            null));
+                }
+            }
+            catch
+            {
+                failedRoles.Add(mediaRole);
+            }
+        }
+
+        return failedRoles;
+    }
+
+    private static string GetMediaRoleLabel(string mediaRole) =>
+        mediaRole switch
+        {
+            "card" => "Card image",
+            "hero" => "Hero image",
+            "logo" => "Logo image",
+            _ => mediaRole
+        };
+
+    private static string? GetMediaPreviewSource(NewTitleMediaRoleState state)
+    {
+        if (!string.IsNullOrWhiteSpace(state.UploadedPreviewSource))
+        {
+            return state.UploadedPreviewSource;
+        }
+
+        if (Uri.TryCreate(state.UrlInput?.Trim(), UriKind.Absolute, out var uri))
+        {
+            return uri.ToString();
         }
 
         return null;
+    }
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task PersistDraftAsync()
+    {
+        try
+        {
+            var draft = new NewTitleDraftState
+            {
+                DisplayName = DisplayName,
+                ContentKind = ContentKind,
+                ShortDescription = ShortDescription,
+                Description = Description,
+                GenreTags = [.. GenreTags],
+                MinPlayers = MinPlayers,
+                MaxPlayers = MaxPlayers,
+                AgeRatingAuthority = AgeRatingAuthority,
+                AgeRatingValue = AgeRatingValue,
+                MinAgeYears = MinAgeYears,
+                Media = MediaRoles
+                    .Select(mediaRole =>
+                    {
+                        var state = GetMediaRoleState(mediaRole);
+                        return new NewTitleDraftMediaState
+                        {
+                            MediaRole = mediaRole,
+                            UrlInput = state.UrlInput,
+                            AltText = state.AltText
+                        };
+                    })
+                    .ToList()
+            };
+
+            var payload = System.Text.Json.JsonSerializer.Serialize(draft);
+            await JsRuntime.InvokeVoidAsync("sessionStorage.setItem", DraftStorageKey, payload);
+        }
+        catch
+        {
+            // Local draft persistence is best effort.
+        }
+    }
+
+    private async Task RestoreDraftAsync()
+    {
+        try
+        {
+            var payload = await JsRuntime.InvokeAsync<string?>("sessionStorage.getItem", DraftStorageKey);
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return;
+            }
+
+            var draft = System.Text.Json.JsonSerializer.Deserialize<NewTitleDraftState>(payload);
+            if (draft is null)
+            {
+                return;
+            }
+
+            DisplayName = draft.DisplayName;
+            ContentKind = string.IsNullOrWhiteSpace(draft.ContentKind) ? "game" : draft.ContentKind;
+            ShortDescription = draft.ShortDescription;
+            Description = draft.Description;
+            GenreTags.Clear();
+            foreach (var genre in draft.GenreTags ?? [])
+            {
+                AddGenreToken(genre);
+            }
+
+            MinPlayers = draft.MinPlayers <= 0 ? 1 : draft.MinPlayers;
+            MaxPlayers = draft.MaxPlayers < MinPlayers ? MinPlayers : draft.MaxPlayers;
+            AgeRatingAuthority = string.IsNullOrWhiteSpace(draft.AgeRatingAuthority) ? "ESRB" : draft.AgeRatingAuthority;
+            AgeRatingValue = string.IsNullOrWhiteSpace(draft.AgeRatingValue) ? "E10+" : draft.AgeRatingValue;
+            MinAgeYears = draft.MinAgeYears < 0 ? 0 : draft.MinAgeYears;
+
+            foreach (var mediaDraftState in draft.Media ?? [])
+            {
+                if (!MediaRoles.Contains(mediaDraftState.MediaRole, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                var state = GetMediaRoleState(mediaDraftState.MediaRole);
+                state.UrlInput = mediaDraftState.UrlInput;
+                state.AltText = mediaDraftState.AltText;
+            }
+
+            StatusMessage = "Restored unsaved local draft values for this title form.";
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Local draft restore is best effort.
+        }
+    }
+
+    private async Task ClearDraftAsync()
+    {
+        try
+        {
+            await JsRuntime.InvokeVoidAsync("sessionStorage.removeItem", DraftStorageKey);
+        }
+        catch
+        {
+            // Local draft clear is best effort.
+        }
+    }
+
+    private string DraftStorageKey => $"{LocalDraftStorageKeyPrefix}:{OrganizationId:D}";
+
+    private sealed class NewTitleMediaRoleState
+    {
+        public string? UrlInput { get; set; }
+
+        public string? AltText { get; set; }
+
+        public ApiUploadFile? UploadedFile { get; set; }
+
+        public string? UploadedPreviewSource { get; set; }
+
+        public string UploadSummary { get; set; } = "No file chosen";
+    }
+
+    private sealed class NewTitleDraftState
+    {
+        public string? DisplayName { get; set; }
+
+        public string? ContentKind { get; set; }
+
+        public string? ShortDescription { get; set; }
+
+        public string? Description { get; set; }
+
+        public List<string>? GenreTags { get; set; }
+
+        public int MinPlayers { get; set; }
+
+        public int MaxPlayers { get; set; }
+
+        public string? AgeRatingAuthority { get; set; }
+
+        public string? AgeRatingValue { get; set; }
+
+        public int MinAgeYears { get; set; }
+
+        public List<NewTitleDraftMediaState>? Media { get; set; }
+    }
+
+    private sealed class NewTitleDraftMediaState
+    {
+        public string MediaRole { get; set; } = string.Empty;
+
+        public string? UrlInput { get; set; }
+
+        public string? AltText { get; set; }
     }
 }

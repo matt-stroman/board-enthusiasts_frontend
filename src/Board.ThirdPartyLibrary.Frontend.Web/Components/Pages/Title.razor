@@ -1,4 +1,4 @@
-@page "/library/{OrganizationSlug}/{TitleSlug}"
+@page "/games/{OrganizationSlug}/{TitleSlug}"
 @inject IBoardLibraryApiClient ApiClient
 
 <PageTitle>Title Details</PageTitle>
@@ -13,7 +13,7 @@
             <p class="mt-4 text-base leading-8 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (Title is null)
+    else if (CatalogEntry is null)
     {
         <section class="app-panel p-6">
             <h1 class="app-page-title">Title not found</h1>
@@ -28,24 +28,24 @@
             <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                 <div class="space-y-5">
                     <div class="flex flex-wrap gap-2">
-                        <span class="app-chip">@Title.GenreDisplay</span>
-                        <span class="app-chip">@Title.PlayerCountDisplay</span>
-                        <span class="app-chip">@Title.AgeDisplay</span>
+                        <span class="app-chip">@CatalogEntry.GenreDisplay</span>
+                        <span class="app-chip">@CatalogEntry.PlayerCountDisplay</span>
+                        <span class="app-chip">@CatalogEntry.AgeDisplay</span>
                     </div>
                     <div>
-                        <h1 class="app-page-title">@Title.DisplayName</h1>
+                        <h1 class="app-page-title">@CatalogEntry.DisplayName</h1>
                         <p class="mt-4 max-w-2xl text-base leading-8 text-slate-300">
-                            @Title.Description
+                            @CatalogEntry.Description
                         </p>
                     </div>
                     <div class="flex flex-col gap-3 sm:flex-row">
-                        @if (!string.IsNullOrWhiteSpace(Title.Acquisition?.Url ?? Title.AcquisitionUrl))
+                        @if (!string.IsNullOrWhiteSpace(CatalogEntry.Acquisition?.Url ?? CatalogEntry.AcquisitionUrl))
                         {
-                            <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@(Title.Acquisition?.Url ?? Title.AcquisitionUrl)" target="_blank" rel="noreferrer">
-                                @(Title.Acquisition?.Label ?? "View acquisition")
+                            <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@(CatalogEntry.Acquisition?.Url ?? CatalogEntry.AcquisitionUrl)" target="_blank" rel="noreferrer">
+                                @(CatalogEntry.Acquisition?.Label ?? "View acquisition")
                             </a>
                         }
-                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/organizations/{Title.OrganizationSlug}")">Open organization</a>
+                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/organizations/{CatalogEntry.OrganizationSlug}")">Open organization</a>
                     </div>
                 </div>
                 <div class="min-h-[320px] rounded-[1.75rem] bg-cover bg-center @HeroFallbackGradient" style="@HeroBackgroundStyle"></div>
@@ -56,25 +56,25 @@
             <div class="app-panel p-6">
                 <div class="app-chip w-fit">About</div>
                 <p class="mt-4 text-base leading-8 text-slate-300">
-                    @Title.ShortDescription
+                    @CatalogEntry.ShortDescription
                 </p>
                 <div class="mt-6 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Organization</div>
-                        <div class="mt-2 text-white">@Title.OrganizationSlug</div>
+                        <div class="mt-2 text-white">@CatalogEntry.OrganizationSlug</div>
                     </div>
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Media assets</div>
-                        <div class="mt-2 text-white">@Title.MediaAssets.Count</div>
+                        <div class="mt-2 text-white">@CatalogEntry.MediaAssets.Count</div>
                     </div>
                 </div>
             </div>
             <div class="app-panel p-6">
                 <div class="app-chip w-fit">Current release</div>
                 <dl class="mt-4 grid gap-3 text-sm text-slate-300">
-                    <div class="flex justify-between gap-4"><dt>Version</dt><dd>@(Title.CurrentRelease?.Version ?? "Not published")</dd></div>
-                    <div class="flex justify-between gap-4"><dt>Metadata revision</dt><dd>@(Title.CurrentRelease?.MetadataRevisionNumber.ToString() ?? "-")</dd></div>
-                    <div class="flex justify-between gap-4"><dt>Provider</dt><dd>@(Title.Acquisition?.ProviderDisplayName ?? "External")</dd></div>
+                    <div class="flex justify-between gap-4"><dt>Version</dt><dd>@(CatalogEntry.CurrentRelease?.Version ?? "Not published")</dd></div>
+                    <div class="flex justify-between gap-4"><dt>Metadata revision</dt><dd>@(CatalogEntry.CurrentRelease?.MetadataRevisionNumber.ToString() ?? "-")</dd></div>
+                    <div class="flex justify-between gap-4"><dt>Provider</dt><dd>@(CatalogEntry.Acquisition?.ProviderDisplayName ?? "External")</dd></div>
                 </dl>
             </div>
         </section>
@@ -86,7 +86,7 @@
 
     [Parameter] public string TitleSlug { get; set; } = string.Empty;
 
-    private CatalogTitle? Title { get; set; }
+    private CatalogTitle? CatalogEntry { get; set; }
 
     private string? ErrorMessage { get; set; }
 
@@ -94,11 +94,11 @@
         ? string.Empty
         : $"background-image:linear-gradient(135deg, rgba(4,19,29,0.18), rgba(4,19,29,0.48)), url('{HeroImageUrl}');";
 
-    private string HeroFallbackGradient => GetFallbackGradient(Title?.GenreDisplay);
+    private string HeroFallbackGradient => GetFallbackGradient(CatalogEntry?.GenreDisplay);
 
     private string? HeroImageUrl =>
-        Title?.MediaAssets.FirstOrDefault(asset => string.Equals(asset.MediaRole, "hero", StringComparison.OrdinalIgnoreCase))?.SourceUrl
-        ?? Title?.CardImageUrl;
+        CatalogEntry?.MediaAssets.FirstOrDefault(asset => string.Equals(asset.MediaRole, "hero", StringComparison.OrdinalIgnoreCase))?.SourceUrl
+        ?? CatalogEntry?.CardImageUrl;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -106,12 +106,12 @@
 
         try
         {
-            Title = await ApiClient.GetCatalogTitleAsync(OrganizationSlug, TitleSlug);
+            CatalogEntry = await ApiClient.GetCatalogTitleAsync(OrganizationSlug, TitleSlug);
         }
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
-            Title = null;
+            CatalogEntry = null;
         }
     }
 

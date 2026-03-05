@@ -1,10 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Board.ThirdPartyLibrary.Frontend.Web.Configuration;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace Board.ThirdPartyLibrary.Frontend.Web.Services;
 
@@ -279,10 +285,16 @@ public interface IBoardLibraryApiClient
 /// </summary>
 /// <param name="httpClient">Configured backend API client.</param>
 /// <param name="httpContextAccessor">Current request accessor.</param>
+/// <param name="keycloakOptionsAccessor">Bound Keycloak authentication settings.</param>
+/// <param name="logger">Logger.</param>
 internal sealed class BoardLibraryApiClient(
     HttpClient httpClient,
-    IHttpContextAccessor httpContextAccessor) : IBoardLibraryApiClient
+    IHttpContextAccessor httpContextAccessor,
+    IOptions<KeycloakOptions> keycloakOptionsAccessor,
+    ILogger<BoardLibraryApiClient> logger) : IBoardLibraryApiClient
 {
+    private static readonly TimeSpan AccessTokenRefreshWindow = TimeSpan.FromMinutes(1);
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -1038,7 +1050,172 @@ internal sealed class BoardLibraryApiClient(
             return null;
         }
 
-        return await httpContext.GetTokenAsync("access_token");
+        var authenticationResult = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (!authenticationResult.Succeeded || authenticationResult.Principal is null || authenticationResult.Properties is null)
+        {
+            return await httpContext.GetTokenAsync("access_token");
+        }
+
+        var properties = authenticationResult.Properties;
+        var accessToken = properties.GetTokenValue("access_token");
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return null;
+        }
+
+        if (!ShouldRefreshAccessToken(properties, accessToken))
+        {
+            return accessToken;
+        }
+
+        var refreshedAccessToken = await TryRefreshAccessTokenAsync(httpContext, authenticationResult.Principal, properties, accessToken);
+        return string.IsNullOrWhiteSpace(refreshedAccessToken) ? accessToken : refreshedAccessToken;
+    }
+
+    private static bool ShouldRefreshAccessToken(AuthenticationProperties properties, string accessToken)
+    {
+        if (!TryResolveAccessTokenExpiry(properties, accessToken, out var expiresAt))
+        {
+            return false;
+        }
+
+        return expiresAt <= DateTimeOffset.UtcNow.Add(AccessTokenRefreshWindow);
+    }
+
+    private static bool TryResolveAccessTokenExpiry(
+        AuthenticationProperties properties,
+        string accessToken,
+        out DateTimeOffset expiresAt)
+    {
+        var expiresAtRaw = properties.GetTokenValue("expires_at");
+        if (!string.IsNullOrWhiteSpace(expiresAtRaw) &&
+            DateTimeOffset.TryParse(
+                expiresAtRaw,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out expiresAt))
+        {
+            return true;
+        }
+
+        return TryGetJwtExpiry(accessToken, out expiresAt);
+    }
+
+    private static bool TryGetJwtExpiry(string accessToken, out DateTimeOffset expiresAt)
+    {
+        expiresAt = default;
+
+        var segments = accessToken.Split('.');
+        if (segments.Length < 2 || string.IsNullOrWhiteSpace(segments[1]))
+        {
+            return false;
+        }
+
+        try
+        {
+            var payloadBytes = WebEncoders.Base64UrlDecode(segments[1]);
+            using var document = JsonDocument.Parse(payloadBytes);
+            if (!document.RootElement.TryGetProperty("exp", out var expProperty) || !expProperty.TryGetInt64(out var expUnixSeconds))
+            {
+                return false;
+            }
+
+            expiresAt = DateTimeOffset.FromUnixTimeSeconds(expUnixSeconds);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<string?> TryRefreshAccessTokenAsync(
+        HttpContext httpContext,
+        ClaimsPrincipal principal,
+        AuthenticationProperties properties,
+        string currentAccessToken)
+    {
+        var refreshToken = properties.GetTokenValue("refresh_token");
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return currentAccessToken;
+        }
+
+        var keycloakOptions = keycloakOptionsAccessor.Value;
+        var tokenEndpoint = $"{keycloakOptions.BaseUrl.TrimEnd('/')}/realms/{keycloakOptions.Realm}/protocol/openid-connect/token";
+
+        using var refreshHttpClient = new HttpClient
+        {
+            DefaultRequestVersion = HttpVersion.Version20,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher
+        };
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["client_id"] = keycloakOptions.ClientId,
+                ["refresh_token"] = refreshToken
+            })
+        };
+
+        if (!string.IsNullOrWhiteSpace(keycloakOptions.ClientSecret))
+        {
+            var secretBytes = Encoding.UTF8.GetBytes($"{keycloakOptions.ClientId}:{keycloakOptions.ClientSecret}");
+            refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(secretBytes));
+        }
+
+        using var refreshResponse = await refreshHttpClient.SendAsync(refreshRequest);
+        if (!refreshResponse.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "Access token refresh failed with status code {StatusCode} for Keycloak realm {Realm}.",
+                refreshResponse.StatusCode,
+                keycloakOptions.Realm);
+            return currentAccessToken;
+        }
+
+        var refreshPayload = await refreshResponse.Content.ReadFromJsonAsync<KeycloakRefreshTokenResponse>(SerializerOptions);
+        if (refreshPayload is null || string.IsNullOrWhiteSpace(refreshPayload.AccessToken))
+        {
+            logger.LogWarning("Access token refresh response did not include an access token.");
+            return currentAccessToken;
+        }
+
+        var refreshedAccessToken = refreshPayload.AccessToken;
+        var refreshedRefreshToken = string.IsNullOrWhiteSpace(refreshPayload.RefreshToken)
+            ? refreshToken
+            : refreshPayload.RefreshToken;
+        var refreshedIdToken = string.IsNullOrWhiteSpace(refreshPayload.IdToken)
+            ? properties.GetTokenValue("id_token")
+            : refreshPayload.IdToken;
+        var tokenType = string.IsNullOrWhiteSpace(refreshPayload.TokenType)
+            ? properties.GetTokenValue("token_type")
+            : refreshPayload.TokenType;
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(30, refreshPayload.ExpiresIn));
+
+        var refreshedTokens = new List<AuthenticationToken>
+        {
+            new() { Name = "access_token", Value = refreshedAccessToken },
+            new() { Name = "refresh_token", Value = refreshedRefreshToken },
+            new() { Name = "expires_at", Value = expiresAt.ToString("o", CultureInfo.InvariantCulture) }
+        };
+
+        if (!string.IsNullOrWhiteSpace(refreshedIdToken))
+        {
+            refreshedTokens.Add(new AuthenticationToken { Name = "id_token", Value = refreshedIdToken });
+        }
+
+        if (!string.IsNullOrWhiteSpace(tokenType))
+        {
+            refreshedTokens.Add(new AuthenticationToken { Name = "token_type", Value = tokenType });
+        }
+
+        properties.StoreTokens(refreshedTokens);
+
+        await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
+        return refreshedAccessToken;
     }
 
     private async Task<T?> SendAsync<T>(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -1989,3 +2166,18 @@ internal sealed class BoardLibraryApiException : Exception
 
     public string? Code { get; }
 }
+
+/// <summary>
+/// Token payload returned by Keycloak refresh-token exchange.
+/// </summary>
+/// <param name="AccessToken">Refreshed access token.</param>
+/// <param name="RefreshToken">Refreshed refresh token when rotated.</param>
+/// <param name="IdToken">Refreshed ID token when returned.</param>
+/// <param name="TokenType">Token type.</param>
+/// <param name="ExpiresIn">Access-token lifetime in seconds.</param>
+internal sealed record KeycloakRefreshTokenResponse(
+    [property: JsonPropertyName("access_token")] string AccessToken,
+    [property: JsonPropertyName("refresh_token")] string? RefreshToken,
+    [property: JsonPropertyName("id_token")] string? IdToken,
+    [property: JsonPropertyName("token_type")] string? TokenType,
+    [property: JsonPropertyName("expires_in")] int ExpiresIn);

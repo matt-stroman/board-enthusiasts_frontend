@@ -29,7 +29,6 @@
     }
     else
     {
-        <div class="app-chip w-fit">Title workspace</div>
         <section class="app-panel p-6">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -66,7 +65,7 @@
                     </select>
                 </label>
                 <label class="text-sm text-slate-300">Visibility
-                    <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="Visibility" disabled="@IsDraftLifecycle">
+                    <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="Visibility" disabled="@IsPrivateOnlyLifecycle">
                         <option value="private">Private</option>
                         <option value="unlisted">Unlisted</option>
                         <option value="listed">Listed</option>
@@ -117,7 +116,9 @@
 
     private string? StatusMessage { get; set; }
 
-    private bool IsDraftLifecycle => string.Equals(LifecycleStatus, "draft", StringComparison.Ordinal);
+    private bool IsPrivateOnlyLifecycle =>
+        string.Equals(LifecycleStatus, "draft", StringComparison.Ordinal) ||
+        string.Equals(LifecycleStatus, "archived", StringComparison.Ordinal);
 
     private string GeneratedSlug => SlugGenerator.ToKebabCase(Title?.DisplayName, "title");
 
@@ -135,7 +136,7 @@
 
         ErrorMessage = null;
         StatusMessage = null;
-        if (IsDraftLifecycle)
+        if (IsPrivateOnlyLifecycle)
         {
             Visibility = "private";
         }
