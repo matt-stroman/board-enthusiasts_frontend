@@ -6,6 +6,7 @@ using System.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.Options;
@@ -32,6 +33,12 @@ var keycloakOptions = builder.Configuration.GetSection(KeycloakOptions.SectionNa
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
+builder.Services.Configure<CircuitOptions>(options =>
+{
+    options.DetailedErrors = builder.Environment.IsDevelopment();
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+    options.DisconnectedCircuitMaxRetained = 200;
+});
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents(options =>
     {

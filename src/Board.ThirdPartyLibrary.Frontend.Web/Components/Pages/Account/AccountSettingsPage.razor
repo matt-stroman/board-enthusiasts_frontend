@@ -1,4 +1,4 @@
-@page "/account/settings"
+@page "/player/settings"
 @attribute [Authorize]
 @inject IBoardLibraryApiClient ApiClient
 @inject IUserProfileState UserProfileState
@@ -22,7 +22,7 @@
     }
     else
     {
-        <section class="app-panel max-w-3xl p-6">
+        <section class="app-panel p-6">
             <h1 class="app-page-title">Account Settings</h1>
             <p class="mt-4 text-sm leading-7 text-slate-300">
                 Update your basic account details from your account profile page.
@@ -80,14 +80,14 @@
 
             <div class="mt-6 flex flex-wrap gap-3">
                 <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player/profile">Profile</a>
-                <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/account">Back to account</a>
+                <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player">Back to play area</a>
             </div>
         </section>
     }
 </section>
 
 @code {
-    private const string EditIdentityProfileHref = "/auth/update-profile?returnUrl=%2Faccount%2Fsettings";
+    private const string EditIdentityProfileHref = "/auth/update-profile?returnUrl=%2Fplayer%2Fsettings";
 
     private UserProfile? Profile { get; set; }
 

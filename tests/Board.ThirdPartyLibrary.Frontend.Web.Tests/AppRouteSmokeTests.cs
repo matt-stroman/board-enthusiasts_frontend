@@ -46,7 +46,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
     [InlineData("/develop/titles/33333333-3333-3333-3333-333333333333/acquisition", "Current bindings")]
     [InlineData("/account", "Player library access")]
     [InlineData("/player/profile", "Profile")]
-    [InlineData("/account/settings", "Account Settings")]
+    [InlineData("/player/settings", "Account Settings")]
     [InlineData("/signin?error=identity-provider-unavailable", "Sign in is unavailable right now")]
     [InlineData("/signin?error=identity-provider-session-expired", "Sign-in session expired")]
     public async Task Route_ReturnsSuccessfulResponse_WithExpectedMarker(string route, string expectedContent)
@@ -148,14 +148,22 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
     }
 
     [Fact]
-    public async Task AccountSettingsRoute_ShowsKeycloakProfileEditActions()
+    public async Task LegacyAccountSettingsRoute_ReturnsNotFoundPage()
     {
         var response = await client.GetAsync("/account/settings");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AccountSettingsRoute_ShowsKeycloakProfileEditActions()
+    {
+        var response = await client.GetAsync("/player/settings");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("/auth/update-profile?returnUrl=%2Faccount%2Fsettings", content);
+        Assert.Contains("/auth/update-profile?returnUrl=%2Fplayer%2Fsettings", content);
         Assert.Contains("Edit username", content);
         Assert.Contains("Edit first name", content);
         Assert.Contains("Edit last name", content);
