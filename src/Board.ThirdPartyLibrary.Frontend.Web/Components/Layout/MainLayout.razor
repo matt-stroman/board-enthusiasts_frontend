@@ -25,6 +25,10 @@
             <nav class="hidden items-center gap-2 md:flex">
                 <a class="@GamesLinkClass" href="/games">Games</a>
                 <NavLink class="app-nav-link" href="/develop">Develop</NavLink>
+                @if (ShowModerateSection)
+                {
+                    <NavLink class="app-nav-link" href="/moderate">Moderate</NavLink>
+                }
                 <NavLink class="app-nav-link" href="/install-guide">Install Guide</NavLink>
             </nav>
             <div class="flex items-center gap-3">
@@ -78,8 +82,15 @@
                                     {
                                         <div class="border-t border-white/10"></div>
                                         <nav class="p-2 text-sm text-slate-200">
-                                            <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="/develop" @onclick="CloseUserMenu">Organizations</a>
-                                            <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="@DeveloperGamesHref" @onclick="CloseUserMenu">Games</a>
+                                            <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="/develop" @onclick="CloseUserMenu">Developer Console</a>
+                                        </nav>
+                                    }
+
+                                    @if (ShowModerateSection)
+                                    {
+                                        <div class="border-t border-white/10"></div>
+                                        <nav class="p-2 text-sm text-slate-200">
+                                            <a class="block rounded-xl px-3 py-2 transition hover:bg-white/10" href="/moderate" @onclick="CloseUserMenu">Moderate</a>
                                         </nav>
                                     }
 
@@ -105,6 +116,10 @@
         <div class="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-4 sm:px-6 md:hidden lg:px-8">
             <a class="@($"{GamesLinkClass} whitespace-nowrap")" href="/games">Games</a>
             <NavLink class="app-nav-link whitespace-nowrap" href="/develop">Develop</NavLink>
+            @if (ShowModerateSection)
+            {
+                <NavLink class="app-nav-link whitespace-nowrap" href="/moderate">Moderate</NavLink>
+            }
             <NavLink class="app-nav-link whitespace-nowrap" href="/install-guide">Install Guide</NavLink>
         </div>
     </header>
@@ -123,6 +138,10 @@
                         <a class="transition hover:text-cyan-200" href="/player/games">My Games</a>
                         <a class="transition hover:text-cyan-200" href="/player/wishlist">Wishlist</a>
                         <a class="transition hover:text-cyan-200" href="/develop">Develop</a>
+                        @if (ShowModerateSection)
+                        {
+                            <a class="transition hover:text-cyan-200" href="/moderate">Moderate</a>
+                        }
                         <a class="transition hover:text-cyan-200" href="/account">Account</a>
                     </Authorized>
                     <NotAuthorized>
@@ -147,8 +166,6 @@
 
     private DeveloperEnrollment? EnrollmentState { get; set; }
 
-    private DeveloperOrganizationSummary? ActiveOrganization { get; set; }
-
     private bool IsUserMenuOpen { get; set; }
 
     /// <inheritdoc />
@@ -166,8 +183,6 @@
                 CurrentProfile = await ApiClient.GetCurrentUserProfileAsync();
                 UserProfileState.SetProfile(CurrentProfile);
                 EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
-                var organizations = await ApiClient.GetManagedOrganizationsAsync();
-                ActiveOrganization = organizations.Organizations.FirstOrDefault();
             }
             catch
             {
@@ -205,10 +220,7 @@
 
     private bool ShowDeveloperSection => IsDeveloperRole;
 
-    private string DeveloperGamesHref =>
-        ActiveOrganization is null
-            ? "/develop"
-            : $"/develop/organizations/{ActiveOrganization.Id:D}/titles";
+    private bool ShowModerateSection => CurrentUser.HasRole("moderator");
 
     private string AvatarInitials => string.IsNullOrWhiteSpace(CurrentProfile?.Initials)
         ? "U"
