@@ -19,7 +19,7 @@ internal static class CurrentUserExtensions
     /// <param name="currentUser">Current user response to evaluate.</param>
     /// <returns><see langword="true" /> when the user can review moderation requests; otherwise <see langword="false" />.</returns>
     public static bool IsModerator(this CurrentUserResponse? currentUser) =>
-        currentUser.HasRole("moderator") || currentUser.HasRole("admin");
+        currentUser.HasRole("moderator");
 
     /// <summary>
     /// Determines whether the current user has the supplied platform role.

@@ -12,7 +12,7 @@
             <p class="mt-3 text-sm leading-7 text-slate-300">@ErrorMessage</p>
         </section>
     }
-    else if (CurrentUser is null || EnrollmentState is null || (HasDeveloperAccess && ManagedOrganizations is null))
+    else if (CurrentUser is null || EnrollmentState is null)
     {
         <section class="app-panel p-6">
             <div class="h-8 w-52 animate-pulse rounded-full bg-white/10"></div>
@@ -22,13 +22,11 @@
     else if (!HasDeveloperAccess)
     {
         <section class="app-panel p-6">
-            <div>
-                <div class="app-chip w-fit">Developer onboarding</div>
-                <h1 class="mt-4 app-page-title">Become a Developer</h1>
-                <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                    Player accounts stay the default. Enable developer access to create organizations, manage titles, and publish releases from this workspace.
-                </p>
-            </div>
+            <div class="app-chip w-fit">Developer onboarding</div>
+            <h1 class="mt-4 app-page-title">Become a Developer</h1>
+            <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                Player accounts stay the default. Enable developer access to create studios, manage titles, and publish releases from this workspace.
+            </p>
             <div class="mt-6">
                 <button class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SubmitEnrollmentAsync" disabled="@(IsSubmitting || !CanSubmitEnrollment)">
                     @(IsSubmitting ? "Enabling..." : "Become a Developer")
@@ -38,126 +36,208 @@
     }
     else
     {
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-                <h1 class="mt-4 app-page-title">Developer Console</h1>
-                <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-                    Workspace data is loaded from the backend: your profile, organizations, and a title preview for the active organization.
-                </p>
-            </div>
-            <div class="flex flex-col gap-3 sm:flex-row">
-                <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/develop/organizations/new">New organization</a>
-                @if (PrimaryOrganization is not null)
-                {
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/develop/organizations/{PrimaryOrganization.Id}/titles/new")">New title</a>
-                }
-            </div>
-        </div>
-
-        <section class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Signed in as</div>
-                <h2 class="mt-3 text-2xl font-semibold text-white">@CurrentUser.DisplayName</h2>
-                <div class="mt-3 text-sm text-slate-300">@CurrentUser.Email</div>
-                <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                    <div class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Player library</div>
-                        <div class="mt-2 text-base font-semibold text-white">Active</div>
-                    </div>
-                    <div class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Developer access</div>
-                        <div class="mt-2 text-base font-semibold text-white">@EnrollmentState.ToStatusLabel()</div>
-                    </div>
-                    <div class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email status</div>
-                        <div class="mt-2 text-base font-semibold text-white">@(CurrentUser.EmailVerified ? "Verified" : "Pending")</div>
-                    </div>
+        <section class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <div class="app-chip w-fit">Developer workspace</div>
+                    <h1 class="mt-4 app-page-title">Developer Console</h1>
+                    <p class="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+                        Switch workflows in place with domain tabs and contextual side navigation.
+                    </p>
                 </div>
-            </section>
+                <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        @onclick="RefreshActiveDomainAsync"
+                        disabled="@IsBusy">
+                    @(IsBusy ? "Refreshing..." : "Refresh view")
+                </button>
+            </div>
 
-            <section class="app-panel p-6">
-                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Managed organizations</div>
-                <div class="mt-3 text-4xl font-black text-white">@ManagedOrganizations!.Organizations.Count</div>
-                <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Organizations come from the authenticated developer endpoint and reflect your current membership state.
-                </p>
-            </section>
-        </section>
-
-        @if (ManagedOrganizations!.Organizations.Count == 0)
-        {
-            <section class="app-panel p-6">
-                <h2 class="text-xl font-semibold text-white">No managed organizations yet</h2>
-                <p class="mt-3 text-sm leading-7 text-slate-300">
-                    Create your first organization to unlock title CRUD, release workflows, and acquisition setup.
-                </p>
-            </section>
-        }
-        else
-        {
-            <section class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Your organizations</h2>
-                    <div class="text-sm text-slate-400">Membership and links come from the live management API.</div>
-                </div>
-                <section class="grid gap-4 lg:grid-cols-3">
-                    @foreach (var organization in ManagedOrganizations!.Organizations)
+            <section class="app-panel p-4">
+                <div class="flex flex-wrap gap-2">
+                    @foreach (var domain in DevelopDomains)
                     {
-                        <a class="app-panel p-5 transition hover:-translate-y-0.5 hover:border-cyan-300/35" href="@($"/develop/organizations/{organization.Id}")">
-                            <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">@organization.Role</div>
-                            <div class="mt-3 text-xl font-semibold text-white">@organization.DisplayName</div>
-                            <div class="mt-2 text-sm text-slate-300">@organization.Description</div>
-                        </a>
+                        <button class="@GetDomainButtonClass(domain)"
+                                type="button"
+                                @onclick="() => SelectDomainAsync(domain)">
+                            @GetDomainLabel(domain)
+                        </button>
+                    }
+                </div>
+            </section>
+
+            <section class="grid gap-4 xl:grid-cols-[18rem_1fr]">
+                <aside class="app-panel p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Workflow</div>
+                    <nav class="mt-3 space-y-2">
+                        @foreach (var workflow in GetWorkflows(ActiveDomain))
+                        {
+                            <button class="@GetWorkflowButtonClass(workflow.Key)"
+                                    type="button"
+                                    @onclick="() => ActiveWorkflow = workflow.Key">
+                                @workflow.Label
+                            </button>
+                        }
+                    </nav>
+
+                    @if (ActiveOrganization is not null)
+                    {
+                        <div class="mt-6 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio context</div>
+                        <select class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                                @onchange="OnActiveOrganizationChanged">
+                            @foreach (var organization in Organizations)
+                            {
+                                <option value="@organization.Id" selected="@(organization.Id == ActiveOrganizationId)">@organization.DisplayName</option>
+                            }
+                        </select>
+                    }
+
+                    @if (ActiveTitle is not null && (ActiveDomain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing))
+                    {
+                        <div class="mt-6 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Title context</div>
+                        <select class="mt-2 w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                                @onchange="OnActiveTitleChanged">
+                            @foreach (var title in ActiveOrganizationTitles)
+                            {
+                                <option value="@title.Id" selected="@(title.Id == ActiveTitleId)">@title.DisplayName</option>
+                            }
+                        </select>
+                    }
+                </aside>
+
+                <section class="app-panel p-6">
+                    @if (IsBusy && !HasActiveDomainData())
+                    {
+                        <div class="h-7 w-52 animate-pulse rounded-full bg-white/10"></div>
+                        <div class="mt-4 h-44 animate-pulse rounded-[1.25rem] bg-white/10"></div>
+                    }
+                    else
+                    {
+                        @switch (ActiveDomain)
+                        {
+                            case DevelopDomain.Studios:
+                                @RenderStudiosContent()
+                                break;
+                            case DevelopDomain.Titles:
+                                @RenderTitlesContent()
+                                break;
+                            case DevelopDomain.Releases:
+                                @RenderReleasesContent()
+                                break;
+                            case DevelopDomain.Publishing:
+                                @RenderPublishingContent()
+                                break;
+                        }
                     }
                 </section>
             </section>
-
-            @if (PrimaryOrganization is not null)
-            {
-                <section class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Active organization preview</h2>
-                        <a class="text-sm text-cyan-200 transition hover:text-cyan-100" href="@($"/develop/organizations/{PrimaryOrganization.Id}/titles")">Open titles</a>
-                    </div>
-                    <section class="app-panel p-6">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                            <div>
-                                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Active organization</div>
-                                <h3 class="mt-3 text-3xl font-semibold text-white">@PrimaryOrganization.DisplayName</h3>
-                                <p class="mt-3 max-w-2xl text-sm leading-7 text-slate-300">@PrimaryOrganization.Description</p>
-                            </div>
-                            <div class="app-chip">@PrimaryOrganization.Role</div>
-                        </div>
-
-                        <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            @foreach (var title in PrimaryOrganizationTitles)
-                            {
-                                <a class="rounded-[1.25rem] border border-white/10 bg-black/15 p-4 transition hover:border-cyan-300/35" href="@($"/games/{title.OrganizationSlug}/{title.Slug}")">
-                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">@title.GenreDisplay</div>
-                                    <div class="mt-3 text-lg font-semibold text-white">@title.DisplayName</div>
-                                    <div class="mt-2 text-sm text-slate-300">@title.ShortDescription</div>
-                                </a>
-                            }
-                        </div>
-                    </section>
-                </section>
-            }
-        }
+        </section>
     }
 </section>
 
 @code {
+    private static readonly DevelopDomain[] DevelopDomains =
+    [
+        DevelopDomain.Studios,
+        DevelopDomain.Titles,
+        DevelopDomain.Releases,
+        DevelopDomain.Publishing
+    ];
+
     private CurrentUserResponse? CurrentUser { get; set; }
+
     private DeveloperEnrollment? EnrollmentState { get; set; }
-    private DeveloperOrganizationListResponse? ManagedOrganizations { get; set; }
-    private IReadOnlyList<CatalogTitleSummary> PrimaryOrganizationTitles { get; set; } = [];
-    private DeveloperOrganizationSummary? PrimaryOrganization => ManagedOrganizations?.Organizations.FirstOrDefault();
-    private bool HasDeveloperAccess => EnrollmentState.HasDeveloperAccess();
-    private bool CanSubmitEnrollment => EnrollmentState?.CanSubmitRequest == true;
+
+    private List<DeveloperOrganizationSummary> Organizations { get; } = [];
+
+    private readonly Dictionary<Guid, IReadOnlyList<CatalogTitleSummary>> organizationTitles = [];
+
+    private readonly Dictionary<Guid, IReadOnlyList<TitleRelease>> titleReleases = [];
+
+    private readonly Dictionary<Guid, IReadOnlyList<IntegrationConnection>> organizationConnections = [];
+
+    private readonly Dictionary<Guid, IReadOnlyList<TitleIntegrationBinding>> titleBindings = [];
+
+    private Guid? ActiveOrganizationId { get; set; }
+
+    private Guid? ActiveTitleId { get; set; }
+
+    private DevelopDomain ActiveDomain { get; set; } = DevelopDomain.Studios;
+
+    private string ActiveWorkflow { get; set; } = "studios-overview";
+
+    private bool IsBusy { get; set; }
+
     private bool IsSubmitting { get; set; }
+
     private string? ErrorMessage { get; set; }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private bool HasDeveloperAccess => EnrollmentState.HasDeveloperAccess();
+
+    private bool CanSubmitEnrollment => EnrollmentState?.CanSubmitRequest == true;
+
+    private DeveloperOrganizationSummary? ActiveOrganization =>
+        ActiveOrganizationId is null
+            ? Organizations.FirstOrDefault()
+            : Organizations.FirstOrDefault(candidate => candidate.Id == ActiveOrganizationId);
+
+    private IReadOnlyList<CatalogTitleSummary> ActiveOrganizationTitles =>
+        ActiveOrganizationId is null
+            ? []
+            : organizationTitles.TryGetValue(ActiveOrganizationId.Value, out var titles)
+                ? titles
+                : [];
+
+    private CatalogTitleSummary? ActiveTitle =>
+        ActiveTitleId is null
+            ? ActiveOrganizationTitles.FirstOrDefault()
+            : ActiveOrganizationTitles.FirstOrDefault(candidate => candidate.Id == ActiveTitleId);
+
+    private IReadOnlyList<TitleRelease> ActiveTitleReleases =>
+        ActiveTitleId is null
+            ? []
+            : titleReleases.TryGetValue(ActiveTitleId.Value, out var releases)
+                ? releases
+                : [];
+
+    private IReadOnlyList<IntegrationConnection> ActiveOrganizationConnections =>
+        ActiveOrganizationId is null
+            ? []
+            : organizationConnections.TryGetValue(ActiveOrganizationId.Value, out var connections)
+                ? connections
+                : [];
+
+    private IReadOnlyList<TitleIntegrationBinding> ActiveTitleBindings =>
+        ActiveTitleId is null
+            ? []
+            : titleBindings.TryGetValue(ActiveTitleId.Value, out var bindings)
+                ? bindings
+                : [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBaselineAsync();
+    }
+
+    private async Task LoadBaselineAsync()
+    {
+        ErrorMessage = null;
+
+        try
+        {
+            CurrentUser = await ApiClient.GetCurrentUserAsync();
+            EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
+
+            if (HasDeveloperAccess)
+            {
+                await EnsureDomainDataAsync(ActiveDomain, forceRefresh: true);
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+    }
 
     private async Task SubmitEnrollmentAsync()
     {
@@ -174,7 +254,7 @@
             EnrollmentState = (await ApiClient.SubmitDeveloperEnrollmentAsync()).DeveloperEnrollment;
             if (HasDeveloperAccess)
             {
-                await LoadDeveloperWorkspaceAsync();
+                await EnsureDomainDataAsync(DevelopDomain.Studios, forceRefresh: true);
             }
         }
         catch (Exception exception)
@@ -187,45 +267,394 @@
         }
     }
 
-    private async Task LoadAsync()
+    private async Task SelectDomainAsync(DevelopDomain domain)
     {
+        ActiveDomain = domain;
+        ActiveWorkflow = GetWorkflows(domain).First().Key;
+        await EnsureDomainDataAsync(domain);
+    }
+
+    private async Task RefreshActiveDomainAsync() => await EnsureDomainDataAsync(ActiveDomain, forceRefresh: true);
+
+    private async Task EnsureDomainDataAsync(DevelopDomain domain, bool forceRefresh = false)
+    {
+        if (!HasDeveloperAccess)
+        {
+            return;
+        }
+
+        IsBusy = true;
         ErrorMessage = null;
 
         try
         {
-            CurrentUser = await ApiClient.GetCurrentUserAsync();
-            if (CurrentUser is null)
+            await EnsureOrganizationsAsync(forceRefresh);
+
+            if (domain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing)
             {
-                ErrorMessage = "The authenticated user profile could not be loaded from the backend.";
-                return;
+                await EnsureTitlesAsync(forceRefresh);
             }
 
-            EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
-
-            if (HasDeveloperAccess)
+            if (domain is DevelopDomain.Releases)
             {
-                await LoadDeveloperWorkspaceAsync();
-                return;
+                await EnsureReleasesAsync(forceRefresh);
             }
 
-            ManagedOrganizations = new DeveloperOrganizationListResponse([]);
-            PrimaryOrganizationTitles = [];
+            if (domain is DevelopDomain.Publishing)
+            {
+                await EnsureConnectionsAsync(forceRefresh);
+                await EnsureBindingsAsync(forceRefresh);
+            }
         }
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
         }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
-    private async Task LoadDeveloperWorkspaceAsync()
+    private async Task EnsureOrganizationsAsync(bool forceRefresh)
     {
-        ManagedOrganizations = await ApiClient.GetManagedOrganizationsAsync();
-        PrimaryOrganizationTitles = [];
-
-        if (PrimaryOrganization is not null)
+        if (!forceRefresh && Organizations.Count > 0)
         {
-            var titleResponse = await ApiClient.GetOrganizationTitlesAsync(PrimaryOrganization.Id);
-            PrimaryOrganizationTitles = titleResponse.Titles.Take(3).ToArray();
+            return;
         }
+
+        var response = await ApiClient.GetManagedOrganizationsAsync();
+        Organizations.Clear();
+        Organizations.AddRange(response.Organizations);
+
+        ActiveOrganizationId = ActiveOrganizationId is not null && Organizations.Any(candidate => candidate.Id == ActiveOrganizationId)
+            ? ActiveOrganizationId
+            : Organizations.FirstOrDefault()?.Id;
+
+        if (ActiveOrganizationId is null)
+        {
+            ActiveTitleId = null;
+        }
+    }
+
+    private async Task EnsureTitlesAsync(bool forceRefresh)
+    {
+        if (ActiveOrganizationId is null)
+        {
+            return;
+        }
+
+        if (!forceRefresh && organizationTitles.ContainsKey(ActiveOrganizationId.Value))
+        {
+            return;
+        }
+
+        var response = await ApiClient.GetOrganizationTitlesAsync(ActiveOrganizationId.Value);
+        organizationTitles[ActiveOrganizationId.Value] = response.Titles;
+
+        ActiveTitleId = ActiveTitleId is not null && response.Titles.Any(candidate => candidate.Id == ActiveTitleId)
+            ? ActiveTitleId
+            : response.Titles.FirstOrDefault()?.Id;
+    }
+
+    private async Task EnsureReleasesAsync(bool forceRefresh)
+    {
+        if (ActiveTitleId is null)
+        {
+            return;
+        }
+
+        if (!forceRefresh && titleReleases.ContainsKey(ActiveTitleId.Value))
+        {
+            return;
+        }
+
+        var response = await ApiClient.GetTitleReleasesAsync(ActiveTitleId.Value);
+        titleReleases[ActiveTitleId.Value] = response.Releases;
+    }
+
+    private async Task EnsureConnectionsAsync(bool forceRefresh)
+    {
+        if (ActiveOrganizationId is null)
+        {
+            return;
+        }
+
+        if (!forceRefresh && organizationConnections.ContainsKey(ActiveOrganizationId.Value))
+        {
+            return;
+        }
+
+        var response = await ApiClient.GetOrganizationIntegrationConnectionsAsync(ActiveOrganizationId.Value);
+        organizationConnections[ActiveOrganizationId.Value] = response.IntegrationConnections;
+    }
+
+    private async Task EnsureBindingsAsync(bool forceRefresh)
+    {
+        if (ActiveTitleId is null)
+        {
+            return;
+        }
+
+        if (!forceRefresh && titleBindings.ContainsKey(ActiveTitleId.Value))
+        {
+            return;
+        }
+
+        var response = await ApiClient.GetTitleIntegrationBindingsAsync(ActiveTitleId.Value);
+        titleBindings[ActiveTitleId.Value] = response.IntegrationBindings;
+    }
+
+    private async Task OnActiveOrganizationChanged(ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out var organizationId))
+        {
+            return;
+        }
+
+        ActiveOrganizationId = organizationId;
+        ActiveTitleId = null;
+        await EnsureDomainDataAsync(ActiveDomain, forceRefresh: true);
+    }
+
+    private async Task OnActiveTitleChanged(ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out var titleId))
+        {
+            return;
+        }
+
+        ActiveTitleId = titleId;
+        await EnsureDomainDataAsync(ActiveDomain, forceRefresh: true);
+    }
+
+    private bool HasActiveDomainData() =>
+        ActiveDomain switch
+        {
+            DevelopDomain.Studios => Organizations.Count > 0,
+            DevelopDomain.Titles => ActiveOrganizationTitles.Count > 0,
+            DevelopDomain.Releases => ActiveTitleReleases.Count > 0,
+            DevelopDomain.Publishing => ActiveOrganizationConnections.Count > 0 || ActiveTitleBindings.Count > 0,
+            _ => false
+        };
+
+    private RenderFragment RenderStudiosContent() => builder =>
+    {
+        var sequence = 0;
+
+        if (ActiveWorkflow == "studios-overview")
+        {
+            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Studios</h2>");
+            builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm leading-7 text-slate-300\">Browse your managed studios and jump to detailed settings when needed.</p>");
+
+            if (Organizations.Count == 0)
+            {
+                builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No managed studios yet.</p>");
+                return;
+            }
+
+            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 grid gap-3 lg:grid-cols-2\">");
+            foreach (var organization in Organizations)
+            {
+                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-xs uppercase tracking-[0.2em] text-cyan-100/70\">{organization.Role}</div><div class=\"mt-2 text-lg font-semibold text-white\">{organization.DisplayName}</div><p class=\"mt-2 text-sm text-slate-300\">{organization.Description}</p><a class=\"mt-4 inline-block text-sm text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/organizations/{organization.Id:D}\">Open studio workspace</a></section>");
+            }
+            builder.AddMarkupContent(sequence++, "</div>");
+            return;
+        }
+
+        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Create Studio</h2>");
+        builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm leading-7 text-slate-300\">Use the dedicated studio form to create a new managed workspace.</p>");
+        builder.AddMarkupContent(sequence++, "<a class=\"mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950\" href=\"/develop/organizations/new\">Open studio creation form</a>");
+    };
+
+    private RenderFragment RenderTitlesContent() => builder =>
+    {
+        var sequence = 0;
+
+        if (ActiveOrganization is null)
+        {
+            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Titles</h2><p class=\"mt-3 text-sm text-slate-300\">Select or create a studio first.</p>");
+            return;
+        }
+
+        if (ActiveWorkflow == "titles-overview")
+        {
+            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Titles</h2>");
+            builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Active studio: <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong></p>");
+
+            if (ActiveOrganizationTitles.Count == 0)
+            {
+                builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No titles found for this studio.</p>");
+                return;
+            }
+
+            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
+            foreach (var title in ActiveOrganizationTitles)
+            {
+                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-xs uppercase tracking-[0.2em] text-cyan-100/70\">{title.ContentKind}</div><div class=\"mt-2 text-lg font-semibold text-white\">{title.DisplayName}</div><p class=\"mt-2 text-sm text-slate-300\">{title.ShortDescription}</p><div class=\"mt-4 flex flex-wrap gap-3 text-sm\"><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}\">Overview</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/metadata\">Metadata</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/releases\">Releases</a><a class=\"text-cyan-200 transition hover:text-cyan-100\" href=\"/develop/titles/{title.Id:D}/acquisition\">Acquisition</a></div></section>");
+            }
+            builder.AddMarkupContent(sequence++, "</div>");
+            return;
+        }
+
+        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Create Title</h2>");
+        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Create a new title under <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong>.</p>");
+        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950\" href=\"/develop/organizations/{ActiveOrganization.Id:D}/titles/new\">Open title creation form</a>");
+    };
+
+    private RenderFragment RenderReleasesContent() => builder =>
+    {
+        var sequence = 0;
+
+        if (ActiveTitle is null)
+        {
+            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Releases</h2><p class=\"mt-3 text-sm text-slate-300\">Choose a title to inspect releases.</p>");
+            return;
+        }
+
+        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Releases</h2>");
+        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Title: <strong class=\"text-white\">{ActiveTitle.DisplayName}</strong></p>");
+
+        if (ActiveTitleReleases.Count == 0)
+        {
+            builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No releases for this title yet.</p>");
+        }
+        else
+        {
+            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
+            foreach (var release in ActiveTitleReleases)
+            {
+                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-xs uppercase tracking-[0.2em] text-cyan-100/70\">{release.Status}</div><div class=\"mt-2 text-lg font-semibold text-white\">Version {release.Version}</div><div class=\"mt-2 text-sm text-slate-300\">Metadata revision {release.MetadataRevisionNumber}</div></section>");
+            }
+            builder.AddMarkupContent(sequence++, "</div>");
+        }
+
+        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/titles/{ActiveTitle.Id:D}/releases\">Open release manager</a>");
+    };
+
+    private RenderFragment RenderPublishingContent() => builder =>
+    {
+        var sequence = 0;
+
+        if (ActiveWorkflow == "publishing-connections")
+        {
+            builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Publishing Connections</h2>");
+
+            if (ActiveOrganization is null)
+            {
+                builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm text-slate-300\">Choose a studio to view publisher connections.</p>");
+                return;
+            }
+
+            builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Studio: <strong class=\"text-white\">{ActiveOrganization.DisplayName}</strong></p>");
+
+            if (ActiveOrganizationConnections.Count == 0)
+            {
+                builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No integration connections configured yet.</p>");
+            }
+            else
+            {
+                builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
+                foreach (var connection in ActiveOrganizationConnections)
+                {
+                    var connectionName = connection.SupportedPublisher?.DisplayName
+                        ?? connection.CustomPublisherDisplayName
+                        ?? connection.Id.ToString("D");
+                    builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-lg font-semibold text-white\">{connectionName}</div><div class=\"mt-2 text-sm text-slate-300\">Enabled: {(connection.IsEnabled ? "Yes" : "No")}</div></section>");
+                }
+                builder.AddMarkupContent(sequence++, "</div>");
+            }
+
+            builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/organizations/{ActiveOrganization.Id:D}/integrations\">Open integration manager</a>");
+            return;
+        }
+
+        builder.AddMarkupContent(sequence++, "<h2 class=\"text-2xl font-semibold text-white\">Acquisition Bindings</h2>");
+
+        if (ActiveTitle is null)
+        {
+            builder.AddMarkupContent(sequence++, "<p class=\"mt-3 text-sm text-slate-300\">Choose a title to view acquisition bindings.</p>");
+            return;
+        }
+
+        builder.AddMarkupContent(sequence++, $"<p class=\"mt-3 text-sm leading-7 text-slate-300\">Title: <strong class=\"text-white\">{ActiveTitle.DisplayName}</strong></p>");
+
+        if (ActiveTitleBindings.Count == 0)
+        {
+            builder.AddMarkupContent(sequence++, "<p class=\"mt-6 text-sm text-slate-300\">No acquisition bindings configured yet.</p>");
+        }
+        else
+        {
+            builder.AddMarkupContent(sequence++, "<div class=\"mt-6 space-y-3\">");
+            foreach (var binding in ActiveTitleBindings)
+            {
+                var connectionName = binding.IntegrationConnection.SupportedPublisher?.DisplayName
+                    ?? binding.IntegrationConnection.CustomPublisherDisplayName
+                    ?? binding.IntegrationConnectionId.ToString("D");
+                builder.AddMarkupContent(sequence++, $"<section class=\"rounded-[1.1rem] border border-white/10 bg-black/15 p-4\"><div class=\"text-lg font-semibold text-white\">{connectionName}</div><a class=\"mt-2 block text-sm text-cyan-200 transition hover:text-cyan-100\" href=\"{binding.AcquisitionUrl}\" target=\"_blank\" rel=\"noreferrer\">{binding.AcquisitionUrl}</a><div class=\"mt-2 text-sm text-slate-300\">Primary: {(binding.IsPrimary ? "Yes" : "No")}</div></section>");
+            }
+            builder.AddMarkupContent(sequence++, "</div>");
+        }
+
+        builder.AddMarkupContent(sequence++, $"<a class=\"mt-6 inline-flex rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-100\" href=\"/develop/titles/{ActiveTitle.Id:D}/acquisition\">Open acquisition manager</a>");
+    };
+
+    private static string GetDomainLabel(DevelopDomain domain) => domain switch
+    {
+        DevelopDomain.Studios => "Studios",
+        DevelopDomain.Titles => "Titles",
+        DevelopDomain.Releases => "Releases",
+        DevelopDomain.Publishing => "Publishing",
+        _ => domain.ToString()
+    };
+
+    private static IReadOnlyList<DevelopWorkflow> GetWorkflows(DevelopDomain domain) => domain switch
+    {
+        DevelopDomain.Studios =>
+        [
+            new("studios-overview", "Studio Overview"),
+            new("studios-create", "Create Studio")
+        ],
+        DevelopDomain.Titles =>
+        [
+            new("titles-overview", "Title Overview"),
+            new("titles-create", "Create Title")
+        ],
+        DevelopDomain.Releases =>
+        [
+            new("releases-overview", "Release Overview")
+        ],
+        DevelopDomain.Publishing =>
+        [
+            new("publishing-connections", "Connections"),
+            new("publishing-bindings", "Acquisition Bindings")
+        ],
+        _ => []
+    };
+
+    private string GetDomainButtonClass(DevelopDomain domain)
+    {
+        const string baseClass = "rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-[0.14em] transition";
+        return ActiveDomain == domain
+            ? $"{baseClass} bg-cyan-300 text-slate-950"
+            : $"{baseClass} border border-white/15 text-slate-100 hover:border-cyan-300/60 hover:text-cyan-100";
+    }
+
+    private string GetWorkflowButtonClass(string workflowKey)
+    {
+        const string baseClass = "w-full rounded-[0.9rem] border px-3 py-2 text-left text-sm transition";
+        return ActiveWorkflow == workflowKey
+            ? $"{baseClass} border-cyan-300/45 bg-cyan-300/15 text-cyan-50"
+            : $"{baseClass} border-white/10 bg-black/15 text-slate-200 hover:border-cyan-300/45 hover:text-cyan-100";
+    }
+
+    private readonly record struct DevelopWorkflow(string Key, string Label);
+
+    private enum DevelopDomain
+    {
+        Studios,
+        Titles,
+        Releases,
+        Publishing
     }
 }

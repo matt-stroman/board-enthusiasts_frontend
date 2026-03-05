@@ -33,6 +33,7 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
     [InlineData("/player/wishlist", "No wishlist items yet")]
     [InlineData("/games/stellar-forge/star-blasters", "View on itch.io")]
     [InlineData("/develop", "Stellar Forge")]
+    [InlineData("/moderate", "Moderation access unavailable")]
     [InlineData("/develop/organizations/new", "Create organization")]
     [InlineData("/develop/organizations/11111111-1111-1111-1111-111111111111", "Edit organization")]
     [InlineData("/develop/organizations/11111111-1111-1111-1111-111111111111/settings", "Save changes")]
@@ -86,6 +87,34 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
         Assert.DoesNotContain("Managed organizations", content);
         Assert.DoesNotContain("Current status", content, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Step 1", content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ModerateRoute_WithModeratorRole_ShowsModerationWorkspace()
+    {
+        using var factory = new TestWebApplicationFactory(
+            new TestApiData(
+                CurrentUser: new CurrentUserResponse(
+                    "moderator-123",
+                    "Moderator One",
+                    "moderator@boardtpl.local",
+                    true,
+                    null,
+                    ["moderator", "player"]),
+                ManagedOrganizations: new DeveloperOrganizationListResponse([])));
+
+        using var moderatorClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var response = await moderatorClient.GetAsync("/moderate");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Verified Developer Role", content);
+        Assert.DoesNotContain("Moderation access unavailable", content, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -446,6 +475,22 @@ public sealed class AppRouteSmokeTests : IClassFixture<AppRouteSmokeTests.TestWe
                         "enrolled",
                         "none",
                         true,
+                        false)));
+
+        public Task<VerifiedDeveloperRoleStateResponse> GrantVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                new VerifiedDeveloperRoleStateResponse(
+                    new VerifiedDeveloperRoleState(
+                        developerSubject,
+                        true,
+                        false)));
+
+        public Task<VerifiedDeveloperRoleStateResponse> RevokeVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                new VerifiedDeveloperRoleStateResponse(
+                    new VerifiedDeveloperRoleState(
+                        developerSubject,
+                        false,
                         false)));
 
         public Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default) =>

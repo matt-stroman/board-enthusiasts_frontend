@@ -85,6 +85,16 @@ public interface IBoardLibraryApiClient
     Task<DeveloperEnrollmentResponse> SubmitDeveloperEnrollmentAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Grants verified-developer role to the target developer subject.
+    /// </summary>
+    Task<VerifiedDeveloperRoleStateResponse> GrantVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes verified-developer role from the target developer subject.
+    /// </summary>
+    Task<VerifiedDeveloperRoleStateResponse> RevokeVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Lists organizations the current caller can manage.
     /// </summary>
     Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default);
@@ -389,6 +399,32 @@ internal sealed class BoardLibraryApiClient(
         using var httpRequest = CreateRequest(HttpMethod.Post, "/identity/me/developer-enrollment", requiresAuthentication: true);
         return await SendAsync<DeveloperEnrollmentResponse>(httpRequest, cancellationToken)
             ?? new DeveloperEnrollmentResponse(new DeveloperEnrollment("not_enrolled", "none", false, true, false));
+    }
+
+    /// <inheritdoc />
+    public async Task<VerifiedDeveloperRoleStateResponse> GrantVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default)
+    {
+        var encodedSubject = Uri.EscapeDataString(developerSubject.Trim());
+        using var httpRequest = CreateRequest(
+            HttpMethod.Put,
+            $"/moderation/developers/{encodedSubject}/verified-developer",
+            requiresAuthentication: true);
+
+        return await SendAsync<VerifiedDeveloperRoleStateResponse>(httpRequest, cancellationToken)
+            ?? new VerifiedDeveloperRoleStateResponse(new VerifiedDeveloperRoleState(developerSubject, true, false));
+    }
+
+    /// <inheritdoc />
+    public async Task<VerifiedDeveloperRoleStateResponse> RevokeVerifiedDeveloperRoleAsync(string developerSubject, CancellationToken cancellationToken = default)
+    {
+        var encodedSubject = Uri.EscapeDataString(developerSubject.Trim());
+        using var httpRequest = CreateRequest(
+            HttpMethod.Delete,
+            $"/moderation/developers/{encodedSubject}/verified-developer",
+            requiresAuthentication: true);
+
+        return await SendAsync<VerifiedDeveloperRoleStateResponse>(httpRequest, cancellationToken)
+            ?? new VerifiedDeveloperRoleStateResponse(new VerifiedDeveloperRoleState(developerSubject, false, false));
     }
 
     /// <inheritdoc />
@@ -1354,6 +1390,23 @@ public sealed record SetAvatarUrlRequest(string AvatarUrl);
 /// </summary>
 /// <param name="DeveloperEnrollment">Developer enrollment state.</param>
 public sealed record DeveloperEnrollmentResponse(DeveloperEnrollment DeveloperEnrollment);
+
+/// <summary>
+/// Response wrapper for moderation verified-developer role mutations.
+/// </summary>
+/// <param name="VerifiedDeveloperRoleState">Returned moderation role state.</param>
+public sealed record VerifiedDeveloperRoleStateResponse(VerifiedDeveloperRoleState VerifiedDeveloperRoleState);
+
+/// <summary>
+/// Verified-developer role state for the target developer subject.
+/// </summary>
+/// <param name="DeveloperSubject">Target Keycloak subject.</param>
+/// <param name="VerifiedDeveloper">Whether verified-developer role is assigned.</param>
+/// <param name="AlreadyInRequestedState">Whether the role already matched the requested state.</param>
+public sealed record VerifiedDeveloperRoleState(
+    string DeveloperSubject,
+    bool VerifiedDeveloper,
+    bool AlreadyInRequestedState);
 
 /// <summary>
 /// Developer-enrollment result for the current user.
