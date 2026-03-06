@@ -62,10 +62,17 @@
             <section class="app-workspace-grid">
                 <aside class="app-panel p-4">
 
-                    @if (ActiveOrganization is not null)
-                    {
-                        <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio</div>
-                        <div class="mt-2 flex items-center gap-2">
+                    <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio</div>
+                    <div class="mt-2 flex items-center gap-2">
+                        @if (Organizations.Count == 0)
+                        {
+                            <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
+                                    disabled>
+                                <option>No studios yet</option>
+                            </select>
+                        }
+                        else
+                        {
                             <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
                                     @onchange="OnActiveOrganizationChanged">
                                 @foreach (var organization in Organizations)
@@ -73,24 +80,45 @@
                                     <option value="@organization.Id" selected="@(organization.Id == ActiveOrganizationId)">@organization.DisplayName</option>
                                 }
                             </select>
-                            <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100"
-                                    type="button"
-                                    title="Create studio"
-                                    aria-label="Create studio"
-                                    @onclick="OpenCreateStudioWorkflowAsync">
-                                +
-                            </button>
-                        </div>
-                    }
+                        }
+                        <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                type="button"
+                                title="Create studio"
+                                aria-label="Create studio"
+                                @onclick="OpenCreateStudioWorkflowAsync"
+                                disabled="@IsBusy">
+                            +
+                        </button>
+                    </div>
 
-                    @if (ActiveDomain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing && ActiveOrganization is not null)
+                    @if (ActiveDomain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing)
                     {
                         <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Title</div>
 
-                        @if (ActiveOrganizationTitles.Count == 0)
+                        @if (ActiveOrganization is null)
                         {
                             <div class="mt-2 flex items-center gap-2">
-                                <p class="text-sm text-slate-300">No titles yet.</p>
+                                <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
+                                        disabled>
+                                    <option>Select a studio first</option>
+                                </select>
+                                <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        type="button"
+                                        title="Create title"
+                                        aria-label="Create title"
+                                        @onclick="OpenCreateTitleWorkflowAsync"
+                                        disabled>
+                                    +
+                                </button>
+                            </div>
+                        }
+                        else if (ActiveOrganizationTitles.Count == 0)
+                        {
+                            <div class="mt-2 flex items-center gap-2">
+                                <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
+                                        disabled>
+                                    <option>No titles yet</option>
+                                </select>
                                 <button class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-semibold leading-none text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
                                         type="button"
                                         title="Create title"
