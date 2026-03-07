@@ -18,17 +18,17 @@ internal sealed class KeycloakOptions
     /// <summary>
     /// Gets or sets the Keycloak realm name.
     /// </summary>
-    public string Realm { get; set; } = "board-third-party-library";
+    public string Realm { get; set; } = "board-enthusiasts";
 
     /// <summary>
     /// Gets or sets the OpenID Connect client identifier.
     /// </summary>
-    public string ClientId { get; set; } = "board-third-party-library-web";
+    public string ClientId { get; set; } = "board-enthusiasts-web";
 
     /// <summary>
     /// Gets or sets the confidential client secret when required.
     /// </summary>
-    public string? ClientSecret { get; set; } = "board-third-party-library-web-secret";
+    public string? ClientSecret { get; set; } = "board-enthusiasts-web-secret";
 
     /// <summary>
     /// Gets or sets a value indicating whether discovery metadata must use HTTPS.

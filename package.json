@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "A frontend interface for Board Third Party Library users to browse the catalog and for developers to manage their studios and titles.",
+  "description": "A frontend interface for Board Enthusiasts users to browse the catalog and for developers to manage their studios and titles.",
   "directories": {
     "test": "tests"
   },

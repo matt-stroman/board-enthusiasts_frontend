@@ -1,6 +1,6 @@
 # board-enthusiasts_frontend
 
-A frontend interface for Board Third Party Library users to browse the public catalog, use authenticated player routes, and manage developer studios and titles once developer access is enabled.
+A frontend interface for Board Enthusiasts users to browse the public catalog, use authenticated player routes, and manage developer studios and titles once developer access is enabled.
 
 Developer studio/title create and settings flows now auto-generate kebab-case slugs from display names instead of requiring manual slug entry.
 

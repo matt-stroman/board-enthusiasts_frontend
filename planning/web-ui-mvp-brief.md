@@ -19,7 +19,7 @@
 
 ## Purpose
 
-This document captures the agreed MVP direction for the first browser-based UI for Board Third Party Library.
+This document captures the agreed MVP direction for the first browser-based UI for Board Enthusiasts.
 
 It converts current product discussion into an implementation-ready brief for the initial web client.
 
