@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1280" role="img" aria-label="Pioneer Broadcast card">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="58%" stop-color="#2563eb"/><stop offset="100%" stop-color="#050816"/></linearGradient>
+    <radialGradient id="glow" cx="72%" cy="18%" r="60%"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0.85"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="900" height="1280" rx="44" fill="url(#bg)"/>
+  <rect width="900" height="1280" fill="url(#glow)" opacity="0.85"/>
+  
+        <g fill="#38bdf8" opacity="0.64"><rect x="126" y="307" width="72" height="486"/><rect x="252" y="179" width="90" height="614"/><rect x="414" y="256" width="72" height="538"/><rect x="594" y="154" width="90" height="640"/></g>
+        <path d="M90 1075 L450 819 L810 1075" stroke="#22d3ee" stroke-width="23" fill="none" opacity="0.82"/>
+        <circle cx="648" cy="307" r="154" fill="none" stroke="#22d3ee" stroke-width="10" opacity="0.4"/>
+        
+  <rect x="0" y="922" width="900" height="358" fill="rgba(3,7,18,0.72)"/>
+  <text x="72" y="153" fill="#e0f2fe" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">PIONEER</text><text x="72" y="261" fill="#e0f2fe" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">BROADCAST</text><text x="72" y="452" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">Design polished show</text><text x="72" y="503" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">packages, alerts, and</text><text x="72" y="554" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">overlays for community</text>
+  <text x="72" y="1178" fill="rgba(255,255,255,0.86)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="33" font-weight="700" letter-spacing="4">APP</text>
+</svg>

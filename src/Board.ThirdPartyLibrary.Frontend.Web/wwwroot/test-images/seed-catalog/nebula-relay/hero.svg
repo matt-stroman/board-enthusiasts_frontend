@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Nebula Relay hero">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#090d24"/><stop offset="58%" stop-color="#4338ca"/><stop offset="100%" stop-color="#050816"/></linearGradient>
+    <radialGradient id="glow" cx="72%" cy="18%" r="60%"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0.85"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1600" height="900" rx="44" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#glow)" opacity="0.85"/>
+  
+        <g fill="#38bdf8" opacity="0.64"><rect x="224" y="216" width="128" height="342"/><rect x="448" y="126" width="160" height="432"/><rect x="736" y="180" width="128" height="378"/><rect x="1056" y="108" width="160" height="450"/></g>
+        <path d="M160 756 L800 576 L1440 756" stroke="#22d3ee" stroke-width="29" fill="none" opacity="0.82"/>
+        <circle cx="1152" cy="216" r="108" fill="none" stroke="#22d3ee" stroke-width="13" opacity="0.4"/>
+        
+  <rect x="0" y="648" width="1600" height="252" fill="rgba(3,7,18,0.72)"/>
+  <text x="128" y="108" fill="#eef2ff" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="63" font-weight="900" letter-spacing="6">NEBULA RELAY</text><text x="128" y="242" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="25" font-weight="600">Sprint cargo through collapsing star gates</text><text x="128" y="278" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="25" font-weight="600">before the relay burns out.</text>
+  <text x="128" y="828" fill="rgba(255,255,255,0.86)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="23" font-weight="700" letter-spacing="4">GAME</text>
+</svg>

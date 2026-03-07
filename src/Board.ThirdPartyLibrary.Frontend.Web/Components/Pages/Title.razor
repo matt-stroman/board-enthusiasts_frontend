@@ -1,4 +1,4 @@
-@page "/browse/{OrganizationSlug}/{TitleSlug}"
+@page "/browse/{StudioSlug}/{TitleSlug}"
 @inject IBoardLibraryApiClient ApiClient
 
 <PageTitle>Title Details</PageTitle>
@@ -46,7 +46,7 @@
                                 @(CatalogEntry.Acquisition?.Label ?? "View acquisition")
                             </a>
                         }
-                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/studios/{CatalogEntry.OrganizationSlug}")">Open organization</a>
+                        <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/studios/{CatalogEntry.StudioSlug}")">Open studio</a>
                     </div>
                 </div>
                 <div class="min-h-[320px] rounded-[1.75rem] bg-cover bg-center @HeroFallbackGradient" style="@HeroBackgroundStyle"></div>
@@ -61,8 +61,8 @@
                 </p>
                 <div class="mt-6 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
-                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Organization</div>
-                        <div class="mt-2 text-white">@CatalogEntry.OrganizationSlug</div>
+                        <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Studio</div>
+                        <div class="mt-2 text-white">@CatalogEntry.StudioSlug</div>
                     </div>
                     <div class="rounded-[1.25rem] bg-black/15 p-4">
                         <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Media assets</div>
@@ -83,7 +83,7 @@
 </section>
 
 @code {
-    [Parameter] public string OrganizationSlug { get; set; } = string.Empty;
+    [Parameter] public string StudioSlug { get; set; } = string.Empty;
 
     [Parameter] public string TitleSlug { get; set; } = string.Empty;
 
@@ -115,7 +115,7 @@
 
         try
         {
-            CatalogEntry = await ApiClient.GetCatalogTitleAsync(OrganizationSlug, TitleSlug);
+            CatalogEntry = await ApiClient.GetCatalogTitleAsync(StudioSlug, TitleSlug);
         }
         catch (Exception exception)
         {

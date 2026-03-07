@@ -1,0 +1,20 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 1280'>
+    <defs>
+      <linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#120f25'/><stop offset='55%' stop-color='#2d1e56'/><stop offset='100%' stop-color='#00c2ff'/></linearGradient>
+      <radialGradient id='glow' cx='76%' cy='18%' r='52%'><stop offset='0%' stop-color='#ff4a8d' stop-opacity='0.70'/><stop offset='100%' stop-color='#ff4a8d' stop-opacity='0'/></radialGradient>
+      <filter id='blur'><feGaussianBlur stdDeviation='22'/></filter>
+    </defs>
+    <rect width='900' height='1280' rx='42' fill='url(#bg)'/>
+    <rect width='900' height='1280' rx='42' fill='url(#glow)'/>
+    <g opacity='0.85'><circle cx='840.7' cy='345.8' r='2' fill='white' opacity='0.66'/><circle cx='467.7' cy='591.2' r='2' fill='white' opacity='0.44'/><circle cx='142.9' cy='285.8' r='3' fill='white' opacity='0.77'/><circle cx='271.5' cy='546.8' r='3' fill='white' opacity='0.53'/><circle cx='541.6' cy='202.3' r='2' fill='white' opacity='0.27'/><circle cx='303.7' cy='559.9' r='3' fill='white' opacity='0.78'/><circle cx='535.2' cy='278.0' r='3' fill='white' opacity='0.50'/><circle cx='689.6' cy='385.0' r='3' fill='white' opacity='0.30'/><circle cx='827.8' cy='45.7' r='1' fill='white' opacity='0.60'/><circle cx='628.5' cy='586.0' r='3' fill='white' opacity='0.69'/><circle cx='467.7' cy='77.0' r='2' fill='white' opacity='0.63'/><circle cx='123.6' cy='682.5' r='1' fill='white' opacity='0.63'/><circle cx='319.8' cy='539.0' r='3' fill='white' opacity='0.37'/><circle cx='544.9' cy='108.3' r='2' fill='white' opacity='0.43'/><circle cx='541.6' cy='505.1' r='1' fill='white' opacity='0.76'/><circle cx='332.6' cy='520.7' r='3' fill='white' opacity='0.75'/><circle cx='583.5' cy='651.2' r='1' fill='white' opacity='0.71'/><circle cx='679.9' cy='157.9' r='1' fill='white' opacity='0.67'/><circle cx='252.2' cy='614.7' r='3' fill='white' opacity='0.31'/><circle cx='795.7' cy='267.5' r='3' fill='white' opacity='0.26'/><circle cx='396.9' cy='356.3' r='3' fill='white' opacity='0.66'/><circle cx='737.8' cy='572.9' r='1' fill='white' opacity='0.48'/><circle cx='232.9' cy='552.0' r='1' fill='white' opacity='0.62'/><circle cx='197.6' cy='71.8' r='2' fill='white' opacity='0.38'/><circle cx='323.0' cy='390.2' r='2' fill='white' opacity='0.76'/><circle cx='644.5' cy='515.5' r='3' fill='white' opacity='0.66'/><circle cx='766.7' cy='371.9' r='1' fill='white' opacity='0.32'/><circle cx='81.8' cy='418.9' r='1' fill='white' opacity='0.48'/><circle cx='657.4' cy='163.1' r='3' fill='white' opacity='0.59'/><circle cx='573.8' cy='301.5' r='2' fill='white' opacity='0.34'/><circle cx='448.4' cy='314.5' r='3' fill='white' opacity='0.55'/><circle cx='606.0' cy='502.4' r='3' fill='white' opacity='0.71'/><circle cx='419.5' cy='87.4' r='1' fill='white' opacity='0.32'/><circle cx='184.7' cy='638.2' r='2' fill='white' opacity='0.78'/></g>
+    <ellipse cx='450' cy='1216' rx='414' ry='102' fill='rgba(0,0,0,0.32)' filter='url(#blur)'/>
+    <g><rect x='0' y='794' width='900' height='486' fill='rgba(22,9,37,0.62)'/><g fill='rgba(255,255,255,0.18)'><rect x='90' y='589' width='66' height='256'/><rect x='195' y='486' width='70' height='358'/><rect x='315' y='550' width='74' height='294'/><rect x='455' y='397' width='82' height='448'/><rect x='625' y='499' width='78' height='346'/></g><path d='M520 333 L520 794' stroke='#f6fbff' stroke-width='5'/><path d='M520 333 L450 666' stroke='#f6fbff' stroke-width='3'/><path d='M520 333 L590 666' stroke='#f6fbff' stroke-width='3'/><circle cx='520' cy='333' r='16' fill='#ff4a8d' opacity='0.85'/></g>
+    <rect x='0' y='947' width='900' height='333' fill='rgba(6,8,14,0.18)'/>
+    
+    <g>
+      <rect x='44' y='1066' width='812' height='170' rx='22' fill='rgba(8,10,18,0.58)' stroke='rgba(255,255,255,0.12)'/>
+      <text x='68' y='1128' fill='white' font-size='38' font-family='Segoe UI, Arial, sans-serif' font-weight='800'>HEARTHSIDE PROTOCOL</text>
+      <text x='68' y='1172' fill='rgba(240,245,255,0.94)' font-size='21' font-family='Segoe UI, Arial, sans-serif' font-weight='600'>SIGNAL</text>
+    </g>
+    
+    </svg>

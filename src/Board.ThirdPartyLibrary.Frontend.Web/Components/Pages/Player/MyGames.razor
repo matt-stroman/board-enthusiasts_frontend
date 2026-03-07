@@ -1,8 +1,11 @@
 @page "/player"
 @page "/player/wishlist"
 @attribute [Authorize]
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Forms
 @inject IBoardLibraryApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject IUserProfileState UserProfileState
 
 <PageTitle>Player Area</PageTitle>
 
@@ -99,40 +102,136 @@
                         }
                         else
                         {
-                            <div class="mt-6 grid gap-4 sm:grid-cols-2">
-                                <div class="rounded-[1rem] border border-white/10 bg-black/15 p-4">
-                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Display Name</div>
-                                    <div class="mt-2 text-white">@Profile.DisplayName</div>
-                                </div>
-                                <div class="rounded-[1rem] border border-white/10 bg-black/15 p-4">
-                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Username</div>
-                                    <div class="mt-2 text-white">@Profile.UserName</div>
-                                </div>
-                                <div class="rounded-[1rem] border border-white/10 bg-black/15 p-4">
-                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email</div>
-                                    <div class="mt-2 text-white">@Profile.Email</div>
-                                </div>
-                                <div class="rounded-[1rem] border border-white/10 bg-black/15 p-4">
-                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email Status</div>
-                                    <div class="mt-2 text-white">@(Profile.EmailVerified ? "Verified" : "Pending verification")</div>
-                                </div>
+                            <p class="mt-3 text-sm leading-7 text-slate-300">
+                                Update your display name and avatar.
+                            </p>
+
+                            @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                            {
+                                <div class="mt-4 rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">@StatusMessage</div>
+                            }
+
+                            <div class="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
+                                <section class="rounded-[1rem] border border-white/10 bg-black/15 p-5">
+                                    <div class="grid gap-4">
+                                        <label class="text-sm text-slate-300">Display Name
+                                            <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="DisplayName" />
+                                        </label>
+                                    </div>
+
+                                    <div class="mt-6">
+                                        <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SaveProfileAsync" disabled="@IsSavingProfile">
+                                            @(IsSavingProfile ? "Saving..." : "Save profile")
+                                        </button>
+                                    </div>
+                                </section>
+
+                                <section class="rounded-[1rem] border border-white/10 bg-black/15 p-5">
+                                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Avatar</div>
+                                    <div class="mt-4 flex items-center gap-4">
+                                        <div class="grid size-20 place-items-center overflow-hidden rounded-full bg-slate-800 text-lg font-bold text-slate-100">
+                                            @if (!string.IsNullOrWhiteSpace(AvatarSource))
+                                            {
+                                                <img class="size-full object-cover" src="@AvatarSource" alt="Profile avatar" />
+                                            }
+                                            else
+                                            {
+                                                <span>@AvatarInitials</span>
+                                            }
+                                        </div>
+                                        <div class="text-sm leading-7 text-slate-300">Recommended formats: JPEG, PNG, WEBP, GIF up to 2 MB.</div>
+                                    </div>
+
+                                    <div class="mt-6 grid gap-4">
+                                        <label class="text-sm text-slate-300">Avatar URL
+                                            <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="AvatarUrlInput" placeholder="https://..." />
+                                        </label>
+                                        <div class="flex flex-wrap gap-3">
+                                            <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="SaveAvatarUrlAsync" disabled="@IsSavingAvatarUrl">
+                                                @(IsSavingAvatarUrl ? "Saving..." : "Use URL")
+                                            </button>
+                                            <button class="rounded-full border border-rose-300/30 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-60" type="button" @onclick="RemoveAvatarAsync" disabled="@IsRemovingAvatar">
+                                                @(IsRemovingAvatar ? "Removing..." : "Remove avatar")
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-6">
+                                        <div class="text-sm text-slate-300">Upload avatar</div>
+                                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                                            <label class="app-file-button" for="@AvatarUploadInputId">Choose File...</label>
+                                            <InputFile id="@AvatarUploadInputId" class="sr-only" OnChange="UploadAvatarAsync" accept="image/jpeg,image/png,image/webp,image/gif" />
+                                            <span class="text-sm text-slate-300">@AvatarUploadSummary</span>
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
                         }
-
-                        <div class="mt-6 flex flex-wrap gap-3">
-                            <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/player/profile">Edit Profile</a>
-                            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/player/settings">Account Settings</a>
-                        </div>
                     }
                     else if (ActiveWorkflow == "account-settings")
                     {
                         <h2 class="text-2xl font-semibold text-white">Account Settings</h2>
-                        <p class="mt-3 text-sm leading-7 text-slate-300">
-                            Update your account details and email settings.
-                        </p>
-                        <div class="mt-6">
-                            <a class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="/player/settings">Open Account Settings</a>
-                        </div>
+                        @if (Profile is null)
+                        {
+                            <p class="mt-3 text-sm text-slate-300">Account settings are unavailable right now.</p>
+                        }
+                        else
+                        {
+                            <p class="mt-3 text-sm leading-7 text-slate-300">
+                                Review your account details and open your identity profile to make updates.
+                            </p>
+
+                            <div class="mt-6 grid gap-4">
+                                <div class="text-sm text-slate-300">
+                                    <div>Username</div>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.UserName" readonly />
+                                        <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit username" title="Edit username">
+                                            <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path d="M16.862 3.487a2.625 2.625 0 0 1 3.712 3.713L9.277 18.496a4.5 4.5 0 0 1-1.832 1.117l-3.11 1.037a.75.75 0 0 1-.95-.95l1.037-3.11a4.5 4.5 0 0 1 1.117-1.832L16.862 3.487ZM15.8 5.611l2.589 2.589 1.124-1.125a1.125 1.125 0 0 0-1.59-1.59L16.8 6.61Zm1.528 3.65-2.589-2.589-8.14 8.14a3 3 0 0 0-.745 1.223l-.647 1.94 1.94-.647a3 3 0 0 0 1.223-.745l8.14-8.14Z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="text-sm text-slate-300">
+                                    <div>First Name</div>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.FirstName" readonly />
+                                        <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit first name" title="Edit first name">
+                                            <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path d="M16.862 3.487a2.625 2.625 0 0 1 3.712 3.713L9.277 18.496a4.5 4.5 0 0 1-1.832 1.117l-3.11 1.037a.75.75 0 0 1-.95-.95l1.037-3.11a4.5 4.5 0 0 1 1.117-1.832L16.862 3.487ZM15.8 5.611l2.589 2.589 1.124-1.125a1.125 1.125 0 0 0-1.59-1.59L16.8 6.61Zm1.528 3.65-2.589-2.589-8.14 8.14a3 3 0 0 0-.745 1.223l-.647 1.94 1.94-.647a3 3 0 0 0 1.223-.745l8.14-8.14Z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="text-sm text-slate-300">
+                                    <div>Last Name</div>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.LastName" readonly />
+                                        <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit last name" title="Edit last name">
+                                            <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path d="M16.862 3.487a2.625 2.625 0 0 1 3.712 3.713L9.277 18.496a4.5 4.5 0 0 1-1.832 1.117l-3.11 1.037a.75.75 0 0 1-.95-.95l1.037-3.11a4.5 4.5 0 0 1 1.117-1.832L16.862 3.487ZM15.8 5.611l2.589 2.589 1.124-1.125a1.125 1.125 0 0 0-1.59-1.59L16.8 6.61Zm1.528 3.65-2.589-2.589-8.14 8.14a3 3 0 0 0-.745 1.223l-.647 1.94 1.94-.647a3 3 0 0 0 1.223-.745l8.14-8.14Z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="text-sm text-slate-300">
+                                    <div>Email</div>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <input class="w-full rounded-[1rem] border border-white/10 bg-slate-900/50 px-4 py-3 text-slate-300" value="@Profile.Email" readonly />
+                                        <a class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@EditIdentityProfileHref" data-enhance-nav="false" aria-label="Edit email address" title="Edit email address">
+                                            <svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path d="M16.862 3.487a2.625 2.625 0 0 1 3.712 3.713L9.277 18.496a4.5 4.5 0 0 1-1.832 1.117l-3.11 1.037a.75.75 0 0 1-.95-.95l1.037-3.11a4.5 4.5 0 0 1 1.117-1.832L16.862 3.487ZM15.8 5.611l2.589 2.589 1.124-1.125a1.125 1.125 0 0 0-1.59-1.59L16.8 6.61Zm1.528 3.65-2.589-2.589-8.14 8.14a3 3 0 0 0-.745 1.223l-.647 1.94 1.94-.647a3 3 0 0 0 1.223-.745l8.14-8.14Z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">
+                                    Email status: @(Profile.EmailVerified ? "Verified" : "Pending verification")
+                                </div>
+                            </div>
+
+                        }
                     }
                     else
                     {
@@ -145,6 +244,9 @@
 </section>
 
 @code {
+    private const string EditIdentityProfileHref = "/auth/update-profile?returnUrl=%2Fplayer%3Fworkflow%3Daccount-settings";
+    private const string AvatarUploadInputId = "player-area-profile-avatar-upload";
+
     private static readonly PlayerDomain[] PlayerDomains =
     [
         PlayerDomain.Library,
@@ -159,18 +261,43 @@
 
     private string? ErrorMessage { get; set; }
 
+    private string? DisplayName { get; set; }
+
+    private string? AvatarUrlInput { get; set; }
+
+    private string AvatarUploadSummary { get; set; } = "No file chosen";
+
+    private string? StatusMessage { get; set; }
+
+    private bool IsSavingProfile { get; set; }
+
+    private bool IsSavingAvatarUrl { get; set; }
+
+    private bool IsRemovingAvatar { get; set; }
+
     private PlayerDomain ActiveDomain { get; set; } = PlayerDomain.Library;
 
     private string ActiveWorkflow { get; set; } = "library-games";
 
+    private string AvatarInitials => string.IsNullOrWhiteSpace(Profile?.Initials) ? "U" : Profile.Initials;
+
+    private string? AvatarSource => Profile?.AvatarDataUrl ?? Profile?.AvatarUrl;
+
     protected override async Task OnInitializedAsync()
     {
+        NavigationManager.LocationChanged += HandleLocationChanged;
         await LoadBaselineAsync();
+        SyncWorkflowFromRoute();
     }
 
     protected override void OnParametersSet()
     {
         SyncWorkflowFromRoute();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
     }
 
     private async Task LoadBaselineAsync()
@@ -181,7 +308,7 @@
         {
             CurrentUser = await ApiClient.GetCurrentUserAsync();
             EnrollmentState = (await ApiClient.GetDeveloperEnrollmentAsync()).DeveloperEnrollment;
-            Profile = await ApiClient.GetCurrentUserProfileAsync();
+            SetProfile(await ApiClient.GetCurrentUserProfileAsync());
 
             if (CurrentUser is null)
             {
@@ -194,10 +321,31 @@
         }
     }
 
-    private void SyncWorkflowFromRoute()
+    private void SyncWorkflowFromRoute(string? location = null)
     {
-        var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var currentLocation = location ?? NavigationManager.Uri;
+        var relativeUri = new Uri(currentLocation);
+        var relativePath = NavigationManager.ToBaseRelativePath(currentLocation);
         var pathOnly = relativePath.Split('?', '#')[0];
+        var queryParameters = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(relativeUri.Query);
+
+        if (queryParameters.TryGetValue("workflow", out var workflowValues))
+        {
+            var workflow = workflowValues.FirstOrDefault();
+            if (string.Equals(workflow, "account-profile", StringComparison.OrdinalIgnoreCase))
+            {
+                ActiveDomain = PlayerDomain.Account;
+                ActiveWorkflow = "account-profile";
+                return;
+            }
+
+            if (string.Equals(workflow, "account-settings", StringComparison.OrdinalIgnoreCase))
+            {
+                ActiveDomain = PlayerDomain.Account;
+                ActiveWorkflow = "account-settings";
+                return;
+            }
+        }
 
         if (pathOnly.EndsWith("/wishlist", StringComparison.OrdinalIgnoreCase))
         {
@@ -212,13 +360,125 @@
 
     private void SelectDomain(PlayerDomain domain)
     {
-        ActiveDomain = domain;
-        ActiveWorkflow = GetWorkflows(domain).First().Key;
+        NavigateToWorkflow(GetWorkflows(domain).First().Key);
     }
 
     private void SelectWorkflow(string workflowKey)
     {
-        ActiveWorkflow = workflowKey;
+        NavigateToWorkflow(workflowKey);
+    }
+
+    private void NavigateToWorkflow(string workflowKey)
+    {
+        var href = GetWorkflowHref(workflowKey);
+        if (string.Equals(NavigationManager.Uri, NavigationManager.ToAbsoluteUri(href).ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            SyncWorkflowFromRoute();
+            return;
+        }
+
+        NavigationManager.NavigateTo(href);
+    }
+
+    private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        SyncWorkflowFromRoute(args.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        if (IsSavingProfile)
+        {
+            return;
+        }
+
+        IsSavingProfile = true;
+        await ExecuteProfileActionAsync(async () =>
+        {
+            var response = await ApiClient.UpdateCurrentUserProfileAsync(new UpdateUserProfileRequest(DisplayName));
+            SetProfile(response.Profile);
+            StatusMessage = "Profile details updated.";
+        });
+        IsSavingProfile = false;
+    }
+
+    private async Task SaveAvatarUrlAsync()
+    {
+        if (IsSavingAvatarUrl)
+        {
+            return;
+        }
+
+        IsSavingAvatarUrl = true;
+        await ExecuteProfileActionAsync(async () =>
+        {
+            if (string.IsNullOrWhiteSpace(AvatarUrlInput))
+            {
+                throw new InvalidOperationException("Avatar URL is required.");
+            }
+
+            var response = await ApiClient.SetCurrentUserAvatarUrlAsync(AvatarUrlInput);
+            SetProfile(response.Profile);
+            StatusMessage = "Avatar URL saved.";
+        });
+        IsSavingAvatarUrl = false;
+    }
+
+    private async Task RemoveAvatarAsync()
+    {
+        if (IsRemovingAvatar)
+        {
+            return;
+        }
+
+        IsRemovingAvatar = true;
+        await ExecuteProfileActionAsync(async () =>
+        {
+            var response = await ApiClient.RemoveCurrentUserAvatarAsync();
+            SetProfile(response.Profile);
+            AvatarUrlInput = null;
+            StatusMessage = "Avatar removed.";
+        });
+        IsRemovingAvatar = false;
+    }
+
+    private async Task UploadAvatarAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        AvatarUploadSummary = file.Name;
+        await ExecuteProfileActionAsync(async () =>
+        {
+            await using var stream = file.OpenReadStream(2L * 1024L * 1024L);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var response = await ApiClient.UploadCurrentUserAvatarAsync(new ApiUploadFile(file.Name, file.ContentType, memoryStream.ToArray()));
+            SetProfile(response.Profile);
+            AvatarUrlInput = null;
+            StatusMessage = "Avatar uploaded.";
+        });
+    }
+
+    private void SetProfile(UserProfile? profile)
+    {
+        Profile = profile;
+        DisplayName = profile?.DisplayName;
+        AvatarUrlInput = profile?.AvatarUrl;
+        UserProfileState.SetProfile(profile);
+    }
+
+    private async Task ExecuteProfileActionAsync(Func<Task> action)
+    {
+        ErrorMessage = null;
+        StatusMessage = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
     }
 
     private static string GetDomainLabel(PlayerDomain domain) => domain switch
@@ -241,6 +501,15 @@
             new("account-settings", "Account Settings")
         ],
         _ => []
+    };
+
+    private static string GetWorkflowHref(string workflowKey) => workflowKey switch
+    {
+        "library-games" => "/player",
+        "library-wishlist" => "/player/wishlist",
+        "account-profile" => "/player?workflow=account-profile",
+        "account-settings" => "/player?workflow=account-settings",
+        _ => "/player"
     };
 
     private string GetDomainButtonClass(PlayerDomain domain)

@@ -1,8 +1,8 @@
 # board_third-party-lib_frontend
 
-A frontend interface for Board Third Party Library users to browse the public catalog, use authenticated player routes, and manage developer organizations and titles once developer access is enabled.
+A frontend interface for Board Third Party Library users to browse the public catalog, use authenticated player routes, and manage developer studios and titles once developer access is enabled.
 
-Developer organization/title create and settings flows now auto-generate kebab-case slugs from display names instead of requiring manual slug entry.
+Developer studio/title create and settings flows now auto-generate kebab-case slugs from display names instead of requiring manual slug entry.
 
 Planning artifacts for the web UI live in [`planning/`](planning/README.md).
 

@@ -225,7 +225,7 @@ Recommended standards:
 MVP-specific behaviors:
 
 - public library empty state should explain why no titles are shown and suggest clearing filters
-- developer empty states should include the next obvious action, such as creating an studio or first title
+- developer empty states should include the next obvious action, such as creating a studio or first title
 - auth failures should route users to sign-in with a clear return path
 - 403 and 404 states in developer routes should be distinct so membership problems are not confused with missing resources
 

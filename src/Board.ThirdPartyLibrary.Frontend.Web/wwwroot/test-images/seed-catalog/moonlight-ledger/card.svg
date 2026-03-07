@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1280" role="img" aria-label="Moonlight Ledger card">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#111827"/><stop offset="58%" stop-color="#312e81"/><stop offset="100%" stop-color="#050816"/></linearGradient>
+    <radialGradient id="glow" cx="72%" cy="18%" r="60%"><stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.85"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="900" height="1280" rx="44" fill="url(#bg)"/>
+  <rect width="900" height="1280" fill="url(#glow)" opacity="0.85"/>
+  
+    <circle cx="216" cy="384" r="141" fill="#f8fafc" opacity="0.55"/>
+    <circle cx="522" cy="538" r="205" fill="#c4b5fd" opacity="0.35"/>
+    <path d="M108 998 C 324 768, 504 1152, 774 870" stroke="#f8fafc" stroke-width="20" fill="none" opacity="0.72"/>
+    
+  <rect x="0" y="922" width="900" height="358" fill="rgba(3,7,18,0.72)"/>
+  <text x="72" y="153" fill="#f8fafc" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">MOONLIGHT</text><text x="72" y="261" fill="#f8fafc" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">LEDGER</text><text x="72" y="452" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">Balance a hidden city&#x27;s</text><text x="72" y="503" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">books by candlelight while</text><text x="72" y="554" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">unraveling its secrets.</text>
+  <text x="72" y="1178" fill="rgba(255,255,255,0.86)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="33" font-weight="700" letter-spacing="4">GAME</text>
+</svg>

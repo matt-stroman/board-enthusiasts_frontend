@@ -30,14 +30,14 @@ public interface IBoardLibraryApiClient
     Task<CatalogTitle?> GetCatalogTitleAsync(string studioSlug, string titleSlug, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists public organizations.
+    /// Lists public studios.
     /// </summary>
-    Task<OrganizationListResponse> GetPublicOrganizationsAsync(CancellationToken cancellationToken = default);
+    Task<StudioListResponse> GetPublicStudiosAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets a public organization by slug.
+    /// Gets a public studio by slug.
     /// </summary>
-    Task<OrganizationSummary?> GetPublicOrganizationBySlugAsync(string slug, CancellationToken cancellationToken = default);
+    Task<StudioSummary?> GetPublicStudioBySlugAsync(string slug, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the current authenticated user profile.
@@ -105,29 +105,59 @@ public interface IBoardLibraryApiClient
     Task<VerifiedDeveloperRoleStateResponse> RevokeVerifiedDeveloperRoleAsync(string developerIdentifier, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists organizations the current caller can manage.
+    /// Lists studios the current caller can manage.
     /// </summary>
-    Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default);
+    Task<DeveloperStudioListResponse> GetManagedStudiosAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates a new organization for the current developer.
+    /// Creates a new studio for the current developer.
     /// </summary>
-    Task<OrganizationResponse> CreateOrganizationAsync(CreateOrganizationRequest request, CancellationToken cancellationToken = default);
+    Task<StudioResponse> CreateStudioAsync(CreateStudioRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Updates an organization the caller can manage.
+    /// Updates a studio the caller can manage.
     /// </summary>
-    Task<OrganizationResponse> UpdateOrganizationAsync(Guid organizationId, UpdateOrganizationRequest request, CancellationToken cancellationToken = default);
+    Task<StudioResponse> UpdateStudioAsync(Guid studioId, UpdateStudioRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists titles for an organization the caller can manage.
+    /// Lists public links configured for a managed studio.
     /// </summary>
-    Task<DeveloperTitleListResponse> GetOrganizationTitlesAsync(Guid organizationId, CancellationToken cancellationToken = default);
+    Task<StudioLinkListResponse> GetStudioLinksAsync(Guid studioId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates a new title within the selected organization.
+    /// Creates a new public link for a managed studio.
     /// </summary>
-    Task<DeveloperTitleResponse> CreateTitleAsync(Guid organizationId, CreateDeveloperTitleRequest request, CancellationToken cancellationToken = default);
+    Task<StudioLinkResponse> CreateStudioLinkAsync(Guid studioId, UpsertStudioLinkRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates a public link for a managed studio.
+    /// </summary>
+    Task<StudioLinkResponse> UpdateStudioLinkAsync(Guid studioId, Guid linkId, UpsertStudioLinkRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a public link from a managed studio.
+    /// </summary>
+    Task DeleteStudioLinkAsync(Guid studioId, Guid linkId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Uploads a studio logo image file.
+    /// </summary>
+    Task<StudioResponse> UploadStudioLogoAsync(Guid studioId, ApiUploadFile mediaFile, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Uploads a studio banner image file.
+    /// </summary>
+    Task<StudioResponse> UploadStudioBannerAsync(Guid studioId, ApiUploadFile mediaFile, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists titles for a studio the caller can manage.
+    /// </summary>
+    Task<DeveloperTitleListResponse> GetStudioTitlesAsync(Guid studioId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a new title within the selected studio.
+    /// </summary>
+    Task<DeveloperTitleResponse> CreateTitleAsync(Guid studioId, CreateDeveloperTitleRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a developer-visible title by identifier.
@@ -220,14 +250,14 @@ public interface IBoardLibraryApiClient
     Task DeleteReleaseArtifactAsync(Guid titleId, Guid releaseId, Guid artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists organization integration connections.
+    /// Lists studio integration connections.
     /// </summary>
-    Task<IntegrationConnectionListResponse> GetOrganizationIntegrationConnectionsAsync(Guid organizationId, CancellationToken cancellationToken = default);
+    Task<IntegrationConnectionListResponse> GetStudioIntegrationConnectionsAsync(Guid studioId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates an organization integration connection.
+    /// Creates a studio integration connection.
     /// </summary>
-    Task<IntegrationConnectionResponse> CreateOrganizationIntegrationConnectionAsync(Guid organizationId, UpsertIntegrationConnectionRequest request, CancellationToken cancellationToken = default);
+    Task<IntegrationConnectionResponse> CreateStudioIntegrationConnectionAsync(Guid studioId, UpsertIntegrationConnectionRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists acquisition bindings for a title.
@@ -275,7 +305,7 @@ internal sealed class BoardLibraryApiClient(
     {
         var query = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["studioSlug"] = request.OrganizationSlug,
+            ["studioSlug"] = request.StudioSlug,
             ["contentKind"] = request.ContentKind,
             ["genre"] = request.Genre,
             ["sort"] = request.Sort,
@@ -302,23 +332,23 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<OrganizationListResponse> GetPublicOrganizationsAsync(CancellationToken cancellationToken = default)
+    public async Task<StudioListResponse> GetPublicStudiosAsync(CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(HttpMethod.Get, "/studios", requiresAuthentication: false);
-        return await SendAsync<OrganizationListResponse>(httpRequest, cancellationToken)
-            ?? new OrganizationListResponse([]);
+        return await SendAsync<StudioListResponse>(httpRequest, cancellationToken)
+            ?? new StudioListResponse([]);
     }
 
     /// <inheritdoc />
-    public async Task<OrganizationSummary?> GetPublicOrganizationBySlugAsync(string slug, CancellationToken cancellationToken = default)
+    public async Task<StudioSummary?> GetPublicStudioBySlugAsync(string slug, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Get,
             $"/studios/{Uri.EscapeDataString(slug)}",
             requiresAuthentication: false);
 
-        return await SendOptionalAsync<OrganizationResponse>(httpRequest, cancellationToken) is { } response
-            ? response.Organization
+        return await SendOptionalAsync<StudioResponse>(httpRequest, cancellationToken) is { } response
+            ? response.Studio
             : null;
     }
 
@@ -459,57 +489,118 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<DeveloperOrganizationListResponse> GetManagedOrganizationsAsync(CancellationToken cancellationToken = default)
+    public async Task<DeveloperStudioListResponse> GetManagedStudiosAsync(CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(HttpMethod.Get, "/developer/studios", requiresAuthentication: true);
-        return await SendAsync<DeveloperOrganizationListResponse>(httpRequest, cancellationToken)
-            ?? new DeveloperOrganizationListResponse([]);
+        return await SendAsync<DeveloperStudioListResponse>(httpRequest, cancellationToken)
+            ?? new DeveloperStudioListResponse([]);
     }
 
     /// <inheritdoc />
-    public async Task<OrganizationResponse> CreateOrganizationAsync(CreateOrganizationRequest request, CancellationToken cancellationToken = default)
+    public async Task<StudioResponse> CreateStudioAsync(CreateStudioRequest request, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(HttpMethod.Post, "/studios", requiresAuthentication: true);
         httpRequest.Content = JsonContent.Create(request);
-        return await SendAsync<OrganizationResponse>(httpRequest, cancellationToken)
-            ?? new OrganizationResponse(
-                new OrganizationSummary(
+        return await SendAsync<StudioResponse>(httpRequest, cancellationToken)
+            ?? new StudioResponse(
+                new StudioSummary(
                     Guid.Empty,
                     request.Slug,
                     request.DisplayName,
                     request.Description,
                     request.LogoUrl,
+                    request.BannerUrl,
+                    [],
                     DateTime.UtcNow,
                     DateTime.UtcNow));
     }
 
     /// <inheritdoc />
-    public async Task<OrganizationResponse> UpdateOrganizationAsync(Guid organizationId, UpdateOrganizationRequest request, CancellationToken cancellationToken = default)
+    public async Task<StudioResponse> UpdateStudioAsync(Guid studioId, UpdateStudioRequest request, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Put,
-            $"/developer/studios/{organizationId:D}",
+            $"/developer/studios/{studioId:D}",
             requiresAuthentication: true);
 
         httpRequest.Content = JsonContent.Create(request);
-        return await SendAsync<OrganizationResponse>(httpRequest, cancellationToken)
-            ?? new OrganizationResponse(
-                new OrganizationSummary(
-                    organizationId,
+        return await SendAsync<StudioResponse>(httpRequest, cancellationToken)
+            ?? new StudioResponse(
+                new StudioSummary(
+                    studioId,
                     request.Slug,
                     request.DisplayName,
                     request.Description,
                     request.LogoUrl,
+                    request.BannerUrl,
+                    [],
                     DateTime.UtcNow,
                     DateTime.UtcNow));
     }
 
     /// <inheritdoc />
-    public async Task<DeveloperTitleListResponse> GetOrganizationTitlesAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    public async Task<StudioLinkListResponse> GetStudioLinksAsync(Guid studioId, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Get,
-            $"/developer/studios/{organizationId:D}/titles",
+            $"/developer/studios/{studioId:D}/links",
+            requiresAuthentication: true);
+
+        return await SendAsync<StudioLinkListResponse>(httpRequest, cancellationToken)
+            ?? new StudioLinkListResponse([]);
+    }
+
+    /// <inheritdoc />
+    public async Task<StudioLinkResponse> CreateStudioLinkAsync(Guid studioId, UpsertStudioLinkRequest request, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Post,
+            $"/developer/studios/{studioId:D}/links",
+            requiresAuthentication: true);
+
+        httpRequest.Content = JsonContent.Create(request);
+        return await SendAsync<StudioLinkResponse>(httpRequest, cancellationToken)
+            ?? new StudioLinkResponse(new StudioLink(Guid.Empty, request.Label, request.Url, DateTime.UtcNow, DateTime.UtcNow));
+    }
+
+    /// <inheritdoc />
+    public async Task<StudioLinkResponse> UpdateStudioLinkAsync(Guid studioId, Guid linkId, UpsertStudioLinkRequest request, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Put,
+            $"/developer/studios/{studioId:D}/links/{linkId:D}",
+            requiresAuthentication: true);
+
+        httpRequest.Content = JsonContent.Create(request);
+        return await SendAsync<StudioLinkResponse>(httpRequest, cancellationToken)
+            ?? new StudioLinkResponse(new StudioLink(linkId, request.Label, request.Url, DateTime.UtcNow, DateTime.UtcNow));
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteStudioLinkAsync(Guid studioId, Guid linkId, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Delete,
+            $"/developer/studios/{studioId:D}/links/{linkId:D}",
+            requiresAuthentication: true);
+
+        await SendNoContentAsync(httpRequest, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<StudioResponse> UploadStudioLogoAsync(Guid studioId, ApiUploadFile mediaFile, CancellationToken cancellationToken = default) =>
+        await UploadStudioMediaAsync(studioId, "logo-upload", mediaFile, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<StudioResponse> UploadStudioBannerAsync(Guid studioId, ApiUploadFile mediaFile, CancellationToken cancellationToken = default) =>
+        await UploadStudioMediaAsync(studioId, "banner-upload", mediaFile, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<DeveloperTitleListResponse> GetStudioTitlesAsync(Guid studioId, CancellationToken cancellationToken = default)
+    {
+        using var httpRequest = CreateRequest(
+            HttpMethod.Get,
+            $"/developer/studios/{studioId:D}/titles",
             requiresAuthentication: true);
 
         return await SendAsync<DeveloperTitleListResponse>(httpRequest, cancellationToken)
@@ -517,11 +608,11 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<DeveloperTitleResponse> CreateTitleAsync(Guid organizationId, CreateDeveloperTitleRequest request, CancellationToken cancellationToken = default)
+    public async Task<DeveloperTitleResponse> CreateTitleAsync(Guid studioId, CreateDeveloperTitleRequest request, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Post,
-            $"/developer/studios/{organizationId:D}/titles",
+            $"/developer/studios/{studioId:D}/titles",
             requiresAuthentication: true);
 
         httpRequest.Content = JsonContent.Create(request);
@@ -642,6 +733,27 @@ internal sealed class BoardLibraryApiClient(
 
         return await SendAsync<TitleMediaAssetResponse>(httpRequest, cancellationToken)
             ?? new TitleMediaAssetResponse(new TitleMediaAsset(Guid.Empty, mediaRole, string.Empty, altText, mediaFile.ContentType, null, null, DateTime.UtcNow, DateTime.UtcNow));
+    }
+
+    private async Task<StudioResponse> UploadStudioMediaAsync(Guid studioId, string routeSegment, ApiUploadFile mediaFile, CancellationToken cancellationToken)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"/developer/studios/{studioId:D}/{routeSegment}")
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher
+        };
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var content = new MultipartFormDataContent();
+        var mediaContent = new ByteArrayContent(mediaFile.Content);
+        mediaContent.Headers.ContentType = new MediaTypeHeaderValue(mediaFile.ContentType);
+        content.Add(mediaContent, "Media", mediaFile.FileName);
+        httpRequest.Content = content;
+
+        await AttachAuthorizationAsync(httpRequest);
+
+        return await SendAsync<StudioResponse>(httpRequest, cancellationToken)
+            ?? new StudioResponse(new StudioSummary(studioId, string.Empty, string.Empty, null, null, null, [], DateTime.UtcNow, DateTime.UtcNow));
     }
 
     /// <inheritdoc />
@@ -766,11 +878,11 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationConnectionListResponse> GetOrganizationIntegrationConnectionsAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    public async Task<IntegrationConnectionListResponse> GetStudioIntegrationConnectionsAsync(Guid studioId, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Get,
-            $"/developer/studios/{organizationId:D}/integration-connections",
+            $"/developer/studios/{studioId:D}/integration-connections",
             requiresAuthentication: true);
 
         return await SendAsync<IntegrationConnectionListResponse>(httpRequest, cancellationToken)
@@ -778,11 +890,11 @@ internal sealed class BoardLibraryApiClient(
     }
 
     /// <inheritdoc />
-    public async Task<IntegrationConnectionResponse> CreateOrganizationIntegrationConnectionAsync(Guid organizationId, UpsertIntegrationConnectionRequest request, CancellationToken cancellationToken = default)
+    public async Task<IntegrationConnectionResponse> CreateStudioIntegrationConnectionAsync(Guid studioId, UpsertIntegrationConnectionRequest request, CancellationToken cancellationToken = default)
     {
         using var httpRequest = CreateRequest(
             HttpMethod.Post,
-            $"/developer/studios/{organizationId:D}/integration-connections",
+            $"/developer/studios/{studioId:D}/integration-connections",
             requiresAuthentication: true);
 
         httpRequest.Content = JsonContent.Create(request);
@@ -790,7 +902,7 @@ internal sealed class BoardLibraryApiClient(
             ?? new IntegrationConnectionResponse(
                 new IntegrationConnection(
                     Guid.Empty,
-                    organizationId,
+                    studioId,
                     request.SupportedPublisherId,
                     null,
                     request.CustomPublisherDisplayName,
@@ -1163,14 +1275,14 @@ internal sealed class BoardLibraryApiClient(
 /// <summary>
 /// Catalog browse query sent by the web UI.
 /// </summary>
-/// <param name="OrganizationSlug">Optional organization filter.</param>
+/// <param name="StudioSlug">Optional studio filter.</param>
 /// <param name="ContentKind">Optional content kind filter.</param>
 /// <param name="Genre">Optional genre filter.</param>
 /// <param name="Sort">Sort mode such as <c>title</c> or <c>genre</c>.</param>
 /// <param name="PageNumber">1-based page number.</param>
 /// <param name="PageSize">Requested page size.</param>
 public sealed record CatalogBrowseRequest(
-    string? OrganizationSlug,
+    string? StudioSlug,
     string? ContentKind,
     string? Genre,
     string Sort,
@@ -1211,8 +1323,8 @@ public sealed record CatalogPaging(
 /// Public catalog title summary.
 /// </summary>
 /// <param name="Id">Title identifier.</param>
-/// <param name="OrganizationId">Owning organization identifier.</param>
-/// <param name="OrganizationSlug">Owning organization route key.</param>
+/// <param name="StudioId">Owning studio identifier.</param>
+/// <param name="StudioSlug">Owning studio route key.</param>
 /// <param name="Slug">Title route key.</param>
 /// <param name="ContentKind">Content kind.</param>
 /// <param name="LifecycleStatus">Lifecycle status.</param>
@@ -1233,9 +1345,9 @@ public sealed record CatalogPaging(
 public sealed record CatalogTitleSummary(
     Guid Id,
     [property: JsonPropertyName("studioId")]
-    Guid OrganizationId,
+    Guid StudioId,
     [property: JsonPropertyName("studioSlug")]
-    string OrganizationSlug,
+    string StudioSlug,
     string Slug,
     string ContentKind,
     string LifecycleStatus,
@@ -1258,8 +1370,8 @@ public sealed record CatalogTitleSummary(
 /// Public catalog title detail.
 /// </summary>
 /// <param name="Id">Title identifier.</param>
-/// <param name="OrganizationId">Owning organization identifier.</param>
-/// <param name="OrganizationSlug">Owning organization route key.</param>
+/// <param name="StudioId">Owning studio identifier.</param>
+/// <param name="StudioSlug">Owning studio route key.</param>
 /// <param name="Slug">Title route key.</param>
 /// <param name="ContentKind">Content kind.</param>
 /// <param name="LifecycleStatus">Lifecycle status.</param>
@@ -1286,9 +1398,9 @@ public sealed record CatalogTitleSummary(
 public sealed record CatalogTitle(
     Guid Id,
     [property: JsonPropertyName("studioId")]
-    Guid OrganizationId,
+    Guid StudioId,
     [property: JsonPropertyName("studioSlug")]
-    string OrganizationSlug,
+    string StudioSlug,
     string Slug,
     string ContentKind,
     string LifecycleStatus,
@@ -1507,89 +1619,133 @@ public sealed record BoardProfile(
     DateTime LastSyncedAt);
 
 /// <summary>
-/// Request payload for creating an organization.
+/// Request payload for creating a studio.
 /// </summary>
-/// <param name="Slug">Organization route key.</param>
-/// <param name="DisplayName">Organization display name.</param>
+/// <param name="Slug">Studio route key.</param>
+/// <param name="DisplayName">Studio display name.</param>
 /// <param name="Description">Optional public description.</param>
 /// <param name="LogoUrl">Optional public logo URL.</param>
-public sealed record CreateOrganizationRequest(
+    public sealed record CreateStudioRequest(
+        string Slug,
+        string DisplayName,
+        string? Description,
+        string? LogoUrl,
+        string? BannerUrl);
+
+/// <summary>
+/// Request payload for updating a studio.
+/// </summary>
+/// <param name="Slug">Studio route key.</param>
+/// <param name="DisplayName">Studio display name.</param>
+/// <param name="Description">Optional public description.</param>
+/// <param name="LogoUrl">Optional public logo URL.</param>
+public sealed record UpdateStudioRequest(
     string Slug,
     string DisplayName,
     string? Description,
-    string? LogoUrl);
+    string? LogoUrl,
+    string? BannerUrl);
 
 /// <summary>
-/// Request payload for updating an organization.
+/// Request payload for creating or updating a studio link.
 /// </summary>
-/// <param name="Slug">Organization route key.</param>
-/// <param name="DisplayName">Organization display name.</param>
+/// <param name="Label">Player-facing label.</param>
+/// <param name="Url">Absolute destination URL.</param>
+public sealed record UpsertStudioLinkRequest(string Label, string Url);
+
+/// <summary>
+/// Studio response wrapper.
+/// </summary>
+/// <param name="Studio">Studio details.</param>
+public sealed record StudioResponse([property: JsonPropertyName("studio")] StudioSummary Studio);
+
+/// <summary>
+/// Public studio list response wrapper.
+/// </summary>
+/// <param name="Studios">Returned studios.</param>
+public sealed record StudioListResponse([property: JsonPropertyName("studios")] IReadOnlyList<StudioSummary> Studios);
+
+/// <summary>
+/// Public studio details.
+/// </summary>
+/// <param name="Id">Studio identifier.</param>
+/// <param name="Slug">Studio route key.</param>
+/// <param name="DisplayName">Studio display name.</param>
 /// <param name="Description">Optional public description.</param>
 /// <param name="LogoUrl">Optional public logo URL.</param>
-public sealed record UpdateOrganizationRequest(
-    string Slug,
-    string DisplayName,
-    string? Description,
-    string? LogoUrl);
-
-/// <summary>
-/// Organization response wrapper.
-/// </summary>
-/// <param name="Organization">Organization details.</param>
-public sealed record OrganizationResponse([property: JsonPropertyName("studio")] OrganizationSummary Organization);
-
-/// <summary>
-/// Public organization list response wrapper.
-/// </summary>
-/// <param name="Organizations">Returned organizations.</param>
-public sealed record OrganizationListResponse([property: JsonPropertyName("studios")] IReadOnlyList<OrganizationSummary> Organizations);
-
-/// <summary>
-/// Public organization details.
-/// </summary>
-/// <param name="Id">Organization identifier.</param>
-/// <param name="Slug">Organization route key.</param>
-/// <param name="DisplayName">Organization display name.</param>
-/// <param name="Description">Optional public description.</param>
-/// <param name="LogoUrl">Optional public logo URL.</param>
+/// <param name="BannerUrl">Optional public banner URL.</param>
+/// <param name="Links">Configured public studio links.</param>
 /// <param name="CreatedAt">UTC creation timestamp.</param>
 /// <param name="UpdatedAt">UTC update timestamp.</param>
-public sealed record OrganizationSummary(
+public sealed record StudioSummary(
     Guid Id,
     string Slug,
     string DisplayName,
     string? Description,
     string? LogoUrl,
+    string? BannerUrl,
+    IReadOnlyList<StudioLink> Links,
     DateTime? CreatedAt,
     DateTime? UpdatedAt);
 
 /// <summary>
-/// Developer-visible organization list response.
+/// Developer-visible studio list response.
 /// </summary>
-/// <param name="Organizations">Organizations the caller can manage.</param>
-public sealed record DeveloperOrganizationListResponse([property: JsonPropertyName("studios")] IReadOnlyList<DeveloperOrganizationSummary> Organizations);
+/// <param name="Studios">Studios the caller can manage.</param>
+public sealed record DeveloperStudioListResponse([property: JsonPropertyName("studios")] IReadOnlyList<DeveloperStudioSummary> Studios);
 
 /// <summary>
-/// Developer-visible organization summary.
+/// Developer-visible studio summary.
 /// </summary>
-/// <param name="Id">Organization identifier.</param>
-/// <param name="Slug">Organization route key.</param>
-/// <param name="DisplayName">Organization display name.</param>
+/// <param name="Id">Studio identifier.</param>
+/// <param name="Slug">Studio route key.</param>
+/// <param name="DisplayName">Studio display name.</param>
 /// <param name="Description">Optional public description.</param>
 /// <param name="LogoUrl">Optional public logo URL.</param>
+/// <param name="BannerUrl">Optional public banner URL.</param>
+/// <param name="Links">Configured public studio links.</param>
 /// <param name="Role">Caller membership role.</param>
-public sealed record DeveloperOrganizationSummary(
+public sealed record DeveloperStudioSummary(
     Guid Id,
     string Slug,
     string DisplayName,
     string? Description,
     string? LogoUrl,
+    string? BannerUrl,
+    IReadOnlyList<StudioLink> Links,
     string Role);
+
+/// <summary>
+/// Studio link response wrapper.
+/// </summary>
+/// <param name="Link">Studio link details.</param>
+public sealed record StudioLinkResponse([property: JsonPropertyName("link")] StudioLink Link);
+
+/// <summary>
+/// Studio link list response wrapper.
+/// </summary>
+/// <param name="Links">Returned links.</param>
+public sealed record StudioLinkListResponse([property: JsonPropertyName("links")] IReadOnlyList<StudioLink> Links);
+
+/// <summary>
+/// Public studio link.
+/// </summary>
+/// <param name="Id">Studio link identifier.</param>
+/// <param name="Label">Player-facing label.</param>
+/// <param name="Url">Absolute destination URL.</param>
+/// <param name="CreatedAt">UTC creation timestamp.</param>
+/// <param name="UpdatedAt">UTC update timestamp.</param>
+public sealed record StudioLink(
+    Guid Id,
+    string Label,
+    string Url,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
 
 /// <summary>
 /// Developer-visible title list response.
 /// </summary>
-/// <param name="Titles">Titles the caller can manage in the organization.</param>
+/// <param name="Titles">Titles the caller can manage in the studio.</param>
 public sealed record DeveloperTitleListResponse(IReadOnlyList<CatalogTitleSummary> Titles);
 
 /// <summary>
@@ -1636,9 +1792,9 @@ public sealed record DeveloperTitleResponse(DeveloperTitle Title);
 public sealed record DeveloperTitle(
     Guid Id,
     [property: JsonPropertyName("studioId")]
-    Guid OrganizationId,
+    Guid StudioId,
     [property: JsonPropertyName("studioSlug")]
-    string OrganizationSlug,
+    string StudioSlug,
     string Slug,
     string ContentKind,
     string LifecycleStatus,
@@ -1792,12 +1948,12 @@ public sealed record UpsertIntegrationConnectionRequest(
     bool IsEnabled);
 
 /// <summary>
-/// Developer-visible organization integration connection.
+/// Developer-visible studio integration connection.
 /// </summary>
 public sealed record IntegrationConnection(
     Guid Id,
     [property: JsonPropertyName("studioId")]
-    Guid OrganizationId,
+    Guid StudioId,
     Guid? SupportedPublisherId,
     SupportedPublisher? SupportedPublisher,
     string? CustomPublisherDisplayName,

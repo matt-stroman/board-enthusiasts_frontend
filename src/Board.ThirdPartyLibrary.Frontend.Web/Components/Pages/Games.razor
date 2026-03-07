@@ -1,69 +1,18 @@
+
 @page "/browse"
 @using Microsoft.AspNetCore.WebUtilities
 @inject IBoardLibraryApiClient ApiClient
 @inject NavigationManager NavigationManager
-@implements IDisposable
 
 <PageTitle>Browse</PageTitle>
 
 <section class="space-y-8">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div class="space-y-3">
-            <h1 class="app-page-title">Browse</h1>
-            <p class="max-w-3xl text-base leading-8 text-slate-300">
-                Browse games and apps from the community.
-            </p>
-        </div>
-        @if (FilteredCount > 0)
-        {
-            <div class="app-panel flex flex-wrap gap-3 p-4 text-sm">
-                <span>@FilteredCount titles</span>
-                <span class="text-slate-500">•</span>
-                <span>@VisibleOrganizationEntries.Count organizations</span>
-                <span class="text-slate-500">•</span>
-                <span>Page @CurrentPageNumber of @TotalPages</span>
-            </div>
-        }
+    <div class="space-y-3">
+        <h1 class="app-page-title">Browse</h1>
+        <p class="max-w-3xl text-base leading-8 text-slate-300">
+            Browse games and apps from the community.
+        </p>
     </div>
-
-    <section class="app-panel p-5">
-        <form class="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_auto]" @onsubmit="HandleFilterFormSubmitAsync" @onsubmit:preventDefault="true">
-            <label class="text-sm text-slate-300">
-                Search
-                <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" value="@SearchInput" @oninput="HandleSearchInputAsync" placeholder="Title, organization, description" />
-            </label>
-            <label class="text-sm text-slate-300">
-                Content kind
-                <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="ContentKindInput">
-                    <option value="game">Games</option>
-                    <option value="app">Apps</option>
-                </select>
-            </label>
-            <label class="text-sm text-slate-300">
-                Sort
-                <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" @bind="SortInput">
-                    <option value="title-asc">Title (A-Z)</option>
-                    <option value="title-desc">Title (Z-A)</option>
-                    <option value="organization-asc">Organization (A-Z)</option>
-                    <option value="organization-desc">Organization (Z-A)</option>
-                    <option value="genre-asc">Genre</option>
-                    <option value="players-asc">Players (low-high)</option>
-                    <option value="players-desc">Players (high-low)</option>
-                    <option value="age-asc">Age rating (low-high)</option>
-                    <option value="age-desc">Age rating (high-low)</option>
-                </select>
-            </label>
-            <div class="flex items-end gap-2">
-                <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950" type="submit">Apply</button>
-                <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/browse">Reset</a>
-            </div>
-        </form>
-        <div class="mt-4">
-            <a class="inline-flex items-center rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-200 @(EffectiveAcquisitionOnly ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50" : string.Empty)" href="@BuildGamesHref(acquisitionOnly: !EffectiveAcquisitionOnly, pageNumber: 1)">
-                Requires acquisition link
-            </a>
-        </div>
-    </section>
 
     @if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
@@ -79,225 +28,293 @@
             <div class="mt-4 h-56 animate-pulse rounded-[1.75rem] bg-white/10"></div>
         </section>
     }
-    else if (FilteredCount == 0)
-    {
-        <section class="app-panel p-6">
-            <h2 class="text-xl font-semibold text-white">No titles match the current filters</h2>
-            <p class="mt-3 text-sm leading-7 text-slate-300">
-                Try clearing one or more filters to broaden the results.
-            </p>
-        </section>
-    }
     else
     {
-        <section class="app-panel grid gap-6 overflow-hidden p-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
-            <div class="space-y-5">
-                <div class="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100/75">
-                    <span class="rounded-full border border-white/15 px-3 py-1">@SpotlightTitle!.PlayerCountDisplay</span>
-                    @foreach (var genreTag in ParseGenreTags(SpotlightTitle.GenreDisplay))
-                    {
-                        <span class="rounded-full border border-white/15 px-3 py-1">@genreTag</span>
-                    }
-                    <span class="rounded-full border border-white/15 px-3 py-1">@SpotlightTitle.AgeDisplay</span>
-                </div>
-                <div>
-                    <div class="text-sm uppercase tracking-[0.28em] text-cyan-100/70">Spotlight</div>
-                    <h2 class="mt-2 font-['Aptos_Display','Trebuchet_MS',sans-serif] text-5xl font-black uppercase tracking-[0.08em] text-white">@SpotlightTitle.DisplayName</h2>
-                </div>
-                <p class="max-w-xl text-base leading-8 text-slate-300">@SpotlightTitle.ShortDescription</p>
-                <div class="flex flex-col gap-3 sm:flex-row">
-                    <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@($"/browse/{SpotlightTitle.OrganizationSlug}/{SpotlightTitle.Slug}")">Open details</a>
-                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@($"/studios/{SpotlightTitle.OrganizationSlug}")">Browse developer</a>
+        <section class="app-panel p-5">
+            <div class="grid gap-3 xl:grid-cols-[2fr_0.85fr_0.85fr_auto]">
+                <label class="text-sm text-slate-300">
+                    Search
+                    <input class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" value="@SearchInput" @oninput="HandleSearchInput" placeholder="Title, studio, description" />
+                </label>
+                <label class="text-sm text-slate-300">
+                    Content kind
+                    <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" value="@ContentKindInput" @onchange="HandleContentKindChanged">
+                        <option value="all">Games and apps</option>
+                        <option value="game">Games only</option>
+                        <option value="app">Apps only</option>
+                    </select>
+                </label>
+                <label class="text-sm text-slate-300">
+                    Sort
+                    <select class="mt-2 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100" value="@SortInput" @onchange="HandleSortChanged">
+                        <option value="title-asc">Title (A-Z)</option>
+                        <option value="title-desc">Title (Z-A)</option>
+                        <option value="studio-asc">Studio (A-Z)</option>
+                        <option value="studio-desc">Studio (Z-A)</option>
+                        <option value="genre-asc">Genre</option>
+                        <option value="players-asc">Players (low-high)</option>
+                        <option value="players-desc">Players (high-low)</option>
+                        <option value="age-asc">Age rating (low-high)</option>
+                        <option value="age-desc">Age rating (high-low)</option>
+                    </select>
+                </label>
+                <div class="flex items-end">
+                    <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" type="button" @onclick="ResetFilters">
+                        Reset filters
+                    </button>
                 </div>
             </div>
-            <div class="min-h-[320px] rounded-[1.75rem] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] @SpotlightFallbackGradient" style="@SpotlightBackgroundStyle"></div>
-        </section>
 
-        <section class="app-panel p-6">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Browse organizations</h2>
-                <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@BuildGamesHref(clearOrganizationFilters: true, pageNumber: 1)">Clear organization filters</a>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-                @foreach (var organization in VisibleOrganizationEntries)
-                {
-                    var selected = SelectedOrganizations.Contains(organization.Slug, StringComparer.OrdinalIgnoreCase);
-                    <a class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] @(selected ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50" : "border-white/15 text-slate-100")" href="@BuildGamesHref(toggleOrganization: organization.Slug, pageNumber: 1)">
-                        @organization.DisplayName (@organization.TitleCount)
-                    </a>
-                }
-            </div>
-        </section>
+            <div class="mt-5 space-y-3">
+                <details class="rounded-[1.5rem] border border-white/10 bg-black/10 px-4 py-3 text-slate-200" open="@(SelectedStudios.Count > 0)">
+                    <summary class="flex cursor-pointer list-none items-center gap-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/85">
+                        <span>Studios</span>
+                        <span class="h-px flex-1 bg-white/10"></span>
+                        <span class="text-[0.65rem] tracking-[0.16em] text-slate-400">@VisibleStudioEntries.Count available</span>
+                    </summary>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @foreach (var studio in VisibleStudioEntries)
+                        {
+                            var selected = SelectedStudios.Contains(studio.Slug);
+                            <button class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition @(selected ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50" : "border-white/15 text-slate-100 hover:border-cyan-300/45 hover:text-cyan-100")" type="button" aria-pressed="@selected" @onclick="() => ToggleStudioFilter(studio.Slug)">
+                                @studio.DisplayName (@studio.TitleCount)
+                            </button>
+                        }
+                    </div>
+                </details>
 
-        <section class="app-panel p-6">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Genres</h2>
-                <a class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" href="@BuildGamesHref(clearGenreFilters: true, pageNumber: 1)">Clear genre filters</a>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-                @foreach (var genreTag in AvailableGenreTags)
-                {
-                    var selected = SelectedGenres.Contains(genreTag, StringComparer.OrdinalIgnoreCase);
-                    <a class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] @(selected ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50" : "border-white/15 text-slate-100")" href="@BuildGamesHref(toggleGenre: genreTag, pageNumber: 1)">
-                        @genreTag
-                    </a>
-                }
+                <details class="rounded-[1.5rem] border border-white/10 bg-black/10 px-4 py-3 text-slate-200" open="@(SelectedGenres.Count > 0)">
+                    <summary class="flex cursor-pointer list-none items-center gap-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/85">
+                        <span>Genres</span>
+                        <span class="h-px flex-1 bg-white/10"></span>
+                        <span class="text-[0.65rem] tracking-[0.16em] text-slate-400">@AvailableGenreTags.Count available</span>
+                    </summary>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @foreach (var genreTag in AvailableGenreTags)
+                        {
+                            var selected = SelectedGenres.Contains(genreTag);
+                            <button class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition @(selected ? "border-cyan-300/45 bg-cyan-300/15 text-cyan-50" : "border-white/15 text-slate-100 hover:border-cyan-300/45 hover:text-cyan-100")" type="button" aria-pressed="@selected" @onclick="() => ToggleGenreFilter(genreTag)">
+                                @genreTag
+                            </button>
+                        }
+                    </div>
+                </details>
             </div>
         </section>
 
         <section class="space-y-4">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                    <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Title rail</h2>
+                    <h2 class="font-['Aptos_Display','Trebuchet_MS',sans-serif] text-2xl font-bold uppercase tracking-[0.08em] text-white">Search results</h2>
                     <div class="mt-1 text-sm text-slate-400">
-                        Showing @PagedTitles.Count of @FilteredCount filtered titles.
+                        Explore titles without leaving the catalog.
                     </div>
                 </div>
-            </div>
-            <div class="app-card-rail">
-                @foreach (var title in PagedTitles)
-                {
-                    <a class="app-panel min-h-52 p-4 transition hover:-translate-y-1 hover:border-cyan-300/35" href="@($"/browse/{title.OrganizationSlug}/{title.Slug}")">
-                        <div class="h-28 rounded-[1.25rem] bg-cover bg-center @GetCardFallbackGradient(title)" style="@GetCardStyle(title)"></div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            @foreach (var genreTag in ParseGenreTags(title.GenreDisplay))
-                            {
-                                <span class="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">@genreTag</span>
-                            }
+                <div class="flex flex-wrap items-center gap-3 xl:justify-end">
+                    <label class="text-sm text-slate-300">
+                        Results per page
+                        <select class="ml-3 rounded-full border border-white/15 bg-slate-950/70 px-4 py-2 text-sm text-slate-100" value="@ResultsPerPageInput" @onchange="HandleResultsPerPageChanged">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+                    @if (FilteredTitles.Count > 0)
+                    {
+                        <div class="app-panel flex flex-wrap gap-3 p-4 text-sm">
+                            <span>@FilteredTitles.Count titles</span>
+                            <span class="text-slate-500">•</span>
+                            <span>@VisibleStudioEntries.Count studios</span>
+                            <span class="text-slate-500">•</span>
+                            <span>Page @CurrentPageNumber of @TotalPages</span>
                         </div>
-                        <div class="mt-3 font-semibold text-white">@title.DisplayName</div>
-                        <div class="mt-2 text-sm text-slate-300">@title.PlayerCountDisplay</div>
-                        <div class="mt-2 text-xs uppercase tracking-[0.2em] text-cyan-100/75">@GetOrganizationDisplayName(title.OrganizationSlug)</div>
-                    </a>
-                }
+                    }
+                </div>
             </div>
 
-            <div class="flex items-center justify-between">
-                <a class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/35 @(HasPreviousPage ? string.Empty : "pointer-events-none opacity-40")" href="@BuildGamesHref(pageNumber: CurrentPageNumber - 1)">Previous</a>
-                <div class="text-sm text-slate-400">Page @CurrentPageNumber of @TotalPages</div>
-                <a class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/35 @(HasNextPage ? string.Empty : "pointer-events-none opacity-40")" href="@BuildGamesHref(pageNumber: CurrentPageNumber + 1)">Next</a>
-            </div>
+            @if (FilteredTitles.Count == 0)
+            {
+                <section class="app-panel p-6">
+                    <h3 class="text-xl font-semibold text-white">No titles match the current filters</h3>
+                    <p class="mt-3 text-sm leading-7 text-slate-300">
+                        Try clearing one or more filters to broaden the results.
+                    </p>
+                </section>
+            }
+            else
+            {
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    @foreach (var title in PagedTitles)
+                    {
+                        <button class="app-panel group min-h-[26rem] overflow-hidden p-0 text-left transition hover:-translate-y-1 hover:border-cyan-300/35" type="button" @onclick="() => OpenTitleModalAsync(title)">
+                            <div class="flex h-full flex-col justify-end bg-cover bg-center" style="@GetCardStyle(title)">
+                                <div class="bg-[linear-gradient(180deg,rgba(7,9,14,0.12),rgba(7,9,14,0.95))] p-4">
+                                    <div class="rounded-[1.25rem] border border-white/10 bg-slate-950/65 p-4 shadow-[0_10px_32px_rgba(8,8,12,0.34)] backdrop-blur-sm">
+                                        <div class="flex flex-wrap gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyan-100/85">
+                                            <span class="rounded-full border border-white/15 px-3 py-1">@FormatContentKind(title.ContentKind)</span>
+                                            <span class="rounded-full border border-white/15 px-3 py-1">@title.PlayerCountDisplay</span>
+                                            <span class="rounded-full border border-white/15 px-3 py-1">@title.AgeDisplay</span>
+                                        </div>
+                                        <div class="mt-4 text-2xl font-bold text-white">@title.DisplayName</div>
+                                        <div class="mt-2 text-xs uppercase tracking-[0.22em] text-cyan-100/75">@GetStudioDisplayName(title.StudioSlug)</div>
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @foreach (var tag in BrowseCatalogProjectionService.ParseGenreTags(title.GenreDisplay).Take(3))
+                                            {
+                                                <span class="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-100">@tag</span>
+                                            }
+                                        </div>
+                                        <p class="mt-4 text-sm leading-6 text-slate-200">
+                                            @title.ShortDescription
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    }
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <button class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 @(HasPreviousPage ? string.Empty : "pointer-events-none opacity-40")" type="button" @onclick="ShowPreviousPage" disabled="@(!HasPreviousPage)">
+                        Previous
+                    </button>
+                    <div class="text-sm text-slate-400">Showing @PagedTitles.Count of @FilteredTitles.Count results</div>
+                    <button class="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100 @(HasNextPage ? string.Empty : "pointer-events-none opacity-40")" type="button" @onclick="ShowNextPage" disabled="@(!HasNextPage)">
+                        Next
+                    </button>
+                </div>
+            }
         </section>
     }
 </section>
 
+@if (IsTitleModalOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" @onclick="CloseTitleModal">
+        <div class="app-panel max-h-[90vh] w-full max-w-5xl overflow-y-auto p-6 md:p-8" @onclick:stopPropagation="true">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/75">Quick view</div>
+                    <h2 class="mt-2 text-3xl font-black text-white">@(ModalTitleDetail?.DisplayName ?? ModalTitleSummary?.DisplayName)</h2>
+                </div>
+                <button class="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" type="button" @onclick="CloseTitleModal">
+                    Close
+                </button>
+            </div>
+
+            @if (IsTitleModalLoading)
+            {
+                <div class="mt-6 h-72 animate-pulse rounded-[1.75rem] bg-white/10"></div>
+            }
+            else if (!string.IsNullOrWhiteSpace(TitleModalError))
+            {
+                <div class="mt-6 rounded-[1.5rem] border border-rose-400/25 bg-rose-500/10 p-5 text-sm leading-7 text-rose-100">
+                    @TitleModalError
+                </div>
+            }
+            else if (ModalTitleDetail is not null)
+            {
+                <div class="mt-6 space-y-6">
+                    <div class="min-h-[20rem] rounded-[1.75rem] bg-cover bg-center" style="@GetModalHeroStyle(ModalTitleDetail)"></div>
+                    <div class="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+                        <div class="space-y-5">
+                            <div class="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100/80">
+                                <span class="rounded-full border border-white/15 px-3 py-1">@FormatContentKind(ModalTitleDetail.ContentKind)</span>
+                                <span class="rounded-full border border-white/15 px-3 py-1">@ModalTitleDetail.PlayerCountDisplay</span>
+                                <span class="rounded-full border border-white/15 px-3 py-1">@ModalTitleDetail.AgeDisplay</span>
+                                @foreach (var tag in BrowseCatalogProjectionService.ParseGenreTags(ModalTitleDetail.GenreDisplay))
+                                {
+                                    <span class="rounded-full border border-white/15 px-3 py-1">@tag</span>
+                                }
+                            </div>
+                            <p class="text-base leading-8 text-slate-200">@ModalTitleDetail.ShortDescription</p>
+                            @if (!string.IsNullOrWhiteSpace(ModalTitleDetail.Description))
+                            {
+                                <p class="text-sm leading-7 text-slate-300">@ModalTitleDetail.Description</p>
+                            }
+                        </div>
+                        <div class="space-y-4">
+                            <div class="rounded-[1.5rem] border border-white/10 bg-black/15 p-5">
+                                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/75">Studio</div>
+                                <div class="mt-2 text-lg font-semibold text-white">@GetStudioDisplayName(ModalTitleDetail.StudioSlug)</div>
+                            </div>
+                            <div class="rounded-[1.5rem] border border-white/10 bg-black/15 p-5">
+                                <div class="text-xs uppercase tracking-[0.22em] text-cyan-100/75">Release</div>
+                                <div class="mt-2 text-sm text-slate-300">@(ModalTitleDetail.CurrentRelease?.Version ?? "Not published")</div>
+                            </div>
+                            <div class="flex flex-col gap-3">
+                                <a class="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" href="@($"/browse/{ModalTitleDetail.StudioSlug}/{ModalTitleDetail.Slug}")">
+                                    Details
+                                </a>
+                                @if (!string.IsNullOrWhiteSpace(ModalTitleDetail.Acquisition?.Url ?? ModalTitleDetail.AcquisitionUrl))
+                                {
+                                    <a class="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="@(ModalTitleDetail.Acquisition?.Url ?? ModalTitleDetail.AcquisitionUrl)" target="_blank" rel="noreferrer">
+                                        @(ModalTitleDetail.Acquisition?.Label ?? "Get title")
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @code {
-    private const int SourcePageSize = 48;
-    private const int BrowsePageSize = 12;
-
-    [SupplyParameterFromQuery(Name = "q")]
-    public string? SearchQuery { get; set; }
-
-    [SupplyParameterFromQuery(Name = "genres")]
-    public string? GenresQuery { get; set; }
-
-    [SupplyParameterFromQuery(Name = "organizations")]
-    public string? OrganizationsQuery { get; set; }
-
-    [SupplyParameterFromQuery]
-    public string? ContentKind { get; set; }
-
-    [SupplyParameterFromQuery]
-    public string? Sort { get; set; }
-
-    [SupplyParameterFromQuery]
-    public int? PageNumber { get; set; }
-
-    [SupplyParameterFromQuery]
-    public bool? AcquisitionOnly { get; set; }
-
     private bool IsLoading { get; set; }
-
     private string? ErrorMessage { get; set; }
-
     private string SearchInput { get; set; } = string.Empty;
-
-    private string ContentKindInput { get; set; } = "game";
-
+    private string ContentKindInput { get; set; } = "all";
     private string SortInput { get; set; } = "title-asc";
-
-    private CancellationTokenSource? SearchDebounceTokenSource { get; set; }
-
+    private string ResultsPerPageInput { get; set; } = "10";
     private IReadOnlyList<CatalogTitleSummary> AllTitles { get; set; } = [];
-
-    private IReadOnlyList<OrganizationSummary> Organizations { get; set; } = [];
-
-    private IReadOnlyDictionary<string, string> OrganizationDisplayNameBySlug { get; set; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+    private IReadOnlyList<CatalogTitleSummary> FilteredTitles { get; set; } = [];
     private IReadOnlyList<CatalogTitleSummary> PagedTitles { get; set; } = [];
-
-    private IReadOnlyList<OrganizationBrowseEntry> VisibleOrganizationEntries { get; set; } = [];
-
+    private IReadOnlyList<StudioSummary> Studios { get; set; } = [];
+    private IReadOnlyDictionary<string, string> StudioDisplayNameBySlug { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, string?> StudioDescriptionBySlug { get; set; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<BrowseStudioEntry> VisibleStudioEntries { get; set; } = [];
     private IReadOnlyList<string> AvailableGenreTags { get; set; } = [];
-
-    private IReadOnlyList<string> SelectedGenres => ParseCsv(GenresQuery);
-
-    private IReadOnlyList<string> SelectedOrganizations => ParseCsv(OrganizationsQuery);
-
-    private CatalogTitleSummary? SpotlightTitle => PagedTitles.FirstOrDefault();
-
-    private int EffectivePageNumber => PageNumber is > 0 ? PageNumber.Value : 1;
-
-    private bool EffectiveAcquisitionOnly => AcquisitionOnly ?? false;
-
+    private HashSet<string> SelectedGenres { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> SelectedStudios { get; } = new(StringComparer.OrdinalIgnoreCase);
     private int CurrentPageNumber { get; set; } = 1;
-
-    private int FilteredCount { get; set; }
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredCount / (double)BrowsePageSize));
-
+    private CatalogTitleSummary? ModalTitleSummary { get; set; }
+    private CatalogTitle? ModalTitleDetail { get; set; }
+    private string? TitleModalError { get; set; }
+    private bool IsTitleModalLoading { get; set; }
+    private Dictionary<string, CatalogTitle> TitleDetailCache { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private int ResultsPerPage => NormalizeResultsPerPage(ResultsPerPageInput);
+    private int TotalPages => ResultsPerPage <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(FilteredTitles.Count / (double)ResultsPerPage));
     private bool HasPreviousPage => CurrentPageNumber > 1;
-
     private bool HasNextPage => CurrentPageNumber < TotalPages;
+    private bool IsTitleModalOpen => ModalTitleSummary is not null;
 
-    private string EffectiveContentKind =>
-        string.Equals(ContentKind, "app", StringComparison.OrdinalIgnoreCase) ? "app" : "game";
-
-    private string EffectiveSort => (Sort ?? "title-asc").Trim().ToLowerInvariant() switch
-    {
-        "title-desc" => "title-desc",
-        "organization-asc" => "organization-asc",
-        "organization-desc" => "organization-desc",
-        "genre-asc" => "genre-asc",
-        "players-asc" => "players-asc",
-        "players-desc" => "players-desc",
-        "age-asc" => "age-asc",
-        "age-desc" => "age-desc",
-        _ => "title-asc"
-    };
-
-    private string SpotlightBackgroundStyle => string.IsNullOrWhiteSpace(SpotlightTitle?.CardImageUrl)
-        ? string.Empty
-        : $"background-image:linear-gradient(135deg, rgba(4,19,29,0.18), rgba(4,19,29,0.48)), url('{SpotlightTitle.CardImageUrl}');";
-
-    private string SpotlightFallbackGradient => GetCardFallbackGradient(SpotlightTitle);
-
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
         ErrorMessage = null;
         IsLoading = true;
-        InitializeInteractiveInputsFromQuery();
+        InitializeInteractiveInputsFromCurrentUri();
 
         try
         {
-            AllTitles = await LoadAllPublicTitlesAsync(EffectiveContentKind);
-            Organizations = (await ApiClient.GetPublicOrganizationsAsync()).Organizations;
-            OrganizationDisplayNameBySlug = Organizations
-                .GroupBy(candidate => candidate.Slug, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First().DisplayName, StringComparer.OrdinalIgnoreCase);
-            ApplyBrowseProjection();
+            AllTitles = await LoadAllPublicTitlesAsync();
+            Studios = (await ApiClient.GetPublicStudiosAsync()).Studios;
+            StudioDisplayNameBySlug = Studios.GroupBy(candidate => candidate.Slug, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.First().DisplayName, StringComparer.OrdinalIgnoreCase);
+            StudioDescriptionBySlug = Studios.GroupBy(candidate => candidate.Slug, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.First().Description, StringComparer.OrdinalIgnoreCase);
+            ApplyBrowseProjection(resetPage: true);
         }
         catch (Exception exception)
         {
             ErrorMessage = exception.Message;
             AllTitles = [];
-            Organizations = [];
-            OrganizationDisplayNameBySlug = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            FilteredTitles = [];
             PagedTitles = [];
-            VisibleOrganizationEntries = [];
+            Studios = [];
+            VisibleStudioEntries = [];
             AvailableGenreTags = [];
-            FilteredCount = 0;
+            StudioDisplayNameBySlug = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            StudioDescriptionBySlug = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         }
         finally
         {
@@ -305,287 +322,207 @@
         }
     }
 
-    private async Task<IReadOnlyList<CatalogTitleSummary>> LoadAllPublicTitlesAsync(string contentKind)
+    private async Task<IReadOnlyList<CatalogTitleSummary>> LoadAllPublicTitlesAsync()
     {
         var titles = new List<CatalogTitleSummary>();
         var pageNumber = 1;
-
         while (true)
         {
-            var response = await ApiClient.GetCatalogTitlesAsync(
-                new CatalogBrowseRequest(
-                    OrganizationSlug: null,
-                    ContentKind: contentKind,
-                    Genre: null,
-                    Sort: "title",
-                    PageNumber: pageNumber,
-                    PageSize: SourcePageSize));
-
-            titles.AddRange(
-                response.Titles.Where(candidate =>
-                    string.Equals(candidate.Visibility, "listed", StringComparison.OrdinalIgnoreCase) &&
-                    (string.Equals(candidate.LifecycleStatus, "testing", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(candidate.LifecycleStatus, "published", StringComparison.OrdinalIgnoreCase))));
-
+            var response = await ApiClient.GetCatalogTitlesAsync(new CatalogBrowseRequest(StudioSlug: null, ContentKind: null, Genre: null, Sort: "title", PageNumber: pageNumber, PageSize: 48));
+            titles.AddRange(response.Titles.Where(candidate => string.Equals(candidate.Visibility, "listed", StringComparison.OrdinalIgnoreCase) && (string.Equals(candidate.LifecycleStatus, "testing", StringComparison.OrdinalIgnoreCase) || string.Equals(candidate.LifecycleStatus, "published", StringComparison.OrdinalIgnoreCase))));
             if (response.Paging.TotalPages <= pageNumber || response.Titles.Count == 0)
             {
                 break;
             }
-
             pageNumber++;
         }
-
         return titles;
     }
 
-    private void ApplyBrowseProjection()
+    private void InitializeInteractiveInputsFromCurrentUri()
     {
-        var filteredBase = AllTitles.AsEnumerable();
-
-        if (SelectedOrganizations.Count > 0)
+        var query = QueryHelpers.ParseQuery(new Uri(NavigationManager.Uri).Query);
+        SearchInput = query.TryGetValue("q", out var searchQuery) ? searchQuery.ToString() : string.Empty;
+        ContentKindInput = BrowseCatalogProjectionService.NormalizeContentKind(query.TryGetValue("contentKind", out var contentKind) ? contentKind.ToString() : null);
+        SortInput = BrowseCatalogProjectionService.NormalizeSort(query.TryGetValue("sort", out var sort) ? sort.ToString() : null);
+        SelectedGenres.Clear();
+        foreach (var genre in ParseCsv(query.TryGetValue("genres", out var genres) ? genres.ToString() : null))
         {
-            filteredBase = filteredBase.Where(candidate => SelectedOrganizations.Contains(candidate.OrganizationSlug, StringComparer.OrdinalIgnoreCase));
+            SelectedGenres.Add(genre);
         }
-
-        if (SelectedGenres.Count > 0)
+        SelectedStudios.Clear();
+        foreach (var studio in ParseCsv(query.TryGetValue("studios", out var studios) ? studios.ToString() : null))
         {
-            filteredBase = filteredBase.Where(candidate =>
-            {
-                var tags = ParseGenreTags(candidate.GenreDisplay);
-                return SelectedGenres.Any(selected => tags.Contains(selected, StringComparer.OrdinalIgnoreCase));
-            });
+            SelectedStudios.Add(studio);
         }
-
-        if (EffectiveAcquisitionOnly)
-        {
-            filteredBase = filteredBase.Where(candidate => !string.IsNullOrWhiteSpace(candidate.AcquisitionUrl));
-        }
-
-        var sorted = ApplySort(filteredBase).ToArray();
-
-        IEnumerable<CatalogTitleSummary> query = sorted;
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            var normalizedSearch = SearchQuery.Trim();
-            var threshold = FuzzySearchService.GetMinimumScoreThreshold(normalizedSearch);
-            query = sorted
-                .Select((title, index) => new
-                {
-                    Title = title,
-                    Index = index,
-                    Score = FuzzySearchService.BestScore(
-                        normalizedSearch,
-                        title.DisplayName,
-                        title.ShortDescription,
-                        title.GenreDisplay,
-                        title.OrganizationSlug,
-                        GetOrganizationDisplayName(title.OrganizationSlug))
-                })
-                .Where(candidate => candidate.Score >= threshold)
-                .OrderByDescending(candidate => candidate.Score)
-                .ThenBy(candidate => candidate.Index)
-                .Select(candidate => candidate.Title);
-        }
-
-        var filtered = query.ToArray();
-        FilteredCount = filtered.Length;
-
-        var safePageNumber = Math.Min(Math.Max(1, EffectivePageNumber), TotalPages);
-        CurrentPageNumber = safePageNumber;
-        var skip = (safePageNumber - 1) * BrowsePageSize;
-        PagedTitles = filtered.Skip(skip).Take(BrowsePageSize).ToArray();
-
-        VisibleOrganizationEntries = filtered
-            .GroupBy(candidate => candidate.OrganizationSlug, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new OrganizationBrowseEntry(
-                group.Key,
-                OrganizationDisplayNameBySlug.TryGetValue(group.Key, out var displayName) ? displayName : group.Key,
-                group.Count()))
-            .OrderBy(candidate => candidate.DisplayName)
-            .ToArray();
-
-        AvailableGenreTags = filtered
-            .SelectMany(candidate => ParseGenreTags(candidate.GenreDisplay))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
     }
 
-    private void InitializeInteractiveInputsFromQuery()
+    private void ApplyBrowseProjection(bool resetPage)
     {
-        SearchInput = SearchQuery ?? string.Empty;
-        ContentKindInput = EffectiveContentKind;
-        SortInput = EffectiveSort;
+        var projection = BrowseCatalogProjectionService.Project(AllTitles, StudioDisplayNameBySlug, StudioDescriptionBySlug, new BrowseCatalogFilterState(string.IsNullOrWhiteSpace(SearchInput) ? null : SearchInput.Trim(), ContentKindInput, SortInput, SelectedGenres.ToArray(), SelectedStudios.ToArray()));
+        FilteredTitles = projection.FilteredTitles;
+        VisibleStudioEntries = projection.VisibleStudios;
+        AvailableGenreTags = projection.AvailableGenres;
+        CurrentPageNumber = resetPage ? 1 : Math.Clamp(CurrentPageNumber, 1, TotalPages);
+        ApplyPaging();
     }
 
-    private async Task HandleSearchInputAsync(ChangeEventArgs eventArgs)
+    private void ApplyPaging()
+    {
+        if (FilteredTitles.Count == 0)
+        {
+            PagedTitles = [];
+            CurrentPageNumber = 1;
+            return;
+        }
+        if (ResultsPerPage <= 0)
+        {
+            CurrentPageNumber = 1;
+            PagedTitles = FilteredTitles;
+            return;
+        }
+        CurrentPageNumber = Math.Clamp(CurrentPageNumber, 1, TotalPages);
+        var skip = (CurrentPageNumber - 1) * ResultsPerPage;
+        PagedTitles = FilteredTitles.Skip(skip).Take(ResultsPerPage).ToArray();
+    }
+
+    private void HandleSearchInput(ChangeEventArgs eventArgs)
     {
         SearchInput = eventArgs.Value?.ToString() ?? string.Empty;
+        ApplyBrowseProjection(resetPage: true);
+    }
 
-        SearchDebounceTokenSource?.Cancel();
-        SearchDebounceTokenSource?.Dispose();
-        SearchDebounceTokenSource = new CancellationTokenSource();
-        var cancellationToken = SearchDebounceTokenSource.Token;
+    private void HandleContentKindChanged(ChangeEventArgs eventArgs)
+    {
+        ContentKindInput = BrowseCatalogProjectionService.NormalizeContentKind(eventArgs.Value?.ToString());
+        ApplyBrowseProjection(resetPage: true);
+    }
 
-        try
+    private void HandleSortChanged(ChangeEventArgs eventArgs)
+    {
+        SortInput = BrowseCatalogProjectionService.NormalizeSort(eventArgs.Value?.ToString());
+        ApplyBrowseProjection(resetPage: true);
+    }
+
+    private void HandleResultsPerPageChanged(ChangeEventArgs eventArgs)
+    {
+        ResultsPerPageInput = NormalizeResultsPerPageInput(eventArgs.Value?.ToString());
+        ApplyBrowseProjection(resetPage: true);
+    }
+
+    private void ResetFilters()
+    {
+        SearchInput = string.Empty;
+        ContentKindInput = "all";
+        SortInput = "title-asc";
+        ResultsPerPageInput = "10";
+        SelectedGenres.Clear();
+        SelectedStudios.Clear();
+        ApplyBrowseProjection(resetPage: true);
+    }
+
+    private void ToggleStudioFilter(string studioSlug)
+    {
+        if (!SelectedStudios.Add(studioSlug))
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(90), cancellationToken);
+            SelectedStudios.Remove(studioSlug);
         }
-        catch (TaskCanceledException)
+        ApplyBrowseProjection(resetPage: true);
+    }
+
+    private void ToggleGenreFilter(string genreTag)
+    {
+        if (!SelectedGenres.Add(genreTag))
+        {
+            SelectedGenres.Remove(genreTag);
+        }
+        ApplyBrowseProjection(resetPage: true);
+    }
+
+    private void ShowPreviousPage()
+    {
+        if (!HasPreviousPage)
         {
             return;
         }
-
-        SearchQuery = string.IsNullOrWhiteSpace(SearchInput) ? null : SearchInput.Trim();
-        PageNumber = 1;
-        CurrentPageNumber = 1;
-        ApplyBrowseProjection();
-        await InvokeAsync(StateHasChanged);
+        CurrentPageNumber--;
+        ApplyPaging();
     }
 
-    private Task HandleFilterFormSubmitAsync()
+    private void ShowNextPage()
     {
-        var targetUri = BuildGamesHref(
-            contentKind: NormalizeContentKindInput(ContentKindInput),
-            sort: NormalizeSortInput(SortInput),
-            searchQuery: string.IsNullOrWhiteSpace(SearchInput) ? null : SearchInput.Trim(),
-            pageNumber: 1);
-
-        NavigationManager.NavigateTo(targetUri);
-        return Task.CompletedTask;
-    }
-
-    private IEnumerable<CatalogTitleSummary> ApplySort(IEnumerable<CatalogTitleSummary> query) =>
-        EffectiveSort switch
+        if (!HasNextPage)
         {
-            "title-desc" => query.OrderByDescending(candidate => candidate.DisplayName).ThenBy(candidate => candidate.OrganizationSlug),
-            "organization-asc" => query.OrderBy(candidate => GetOrganizationDisplayName(candidate.OrganizationSlug)).ThenBy(candidate => candidate.DisplayName),
-            "organization-desc" => query.OrderByDescending(candidate => GetOrganizationDisplayName(candidate.OrganizationSlug)).ThenBy(candidate => candidate.DisplayName),
-            "genre-asc" => query.OrderBy(candidate => candidate.GenreDisplay).ThenBy(candidate => candidate.DisplayName),
-            "players-asc" => query.OrderBy(candidate => candidate.MinPlayers).ThenBy(candidate => candidate.MaxPlayers).ThenBy(candidate => candidate.DisplayName),
-            "players-desc" => query.OrderByDescending(candidate => candidate.MaxPlayers).ThenByDescending(candidate => candidate.MinPlayers).ThenBy(candidate => candidate.DisplayName),
-            "age-asc" => query.OrderBy(candidate => candidate.MinAgeYears).ThenBy(candidate => candidate.DisplayName),
-            "age-desc" => query.OrderByDescending(candidate => candidate.MinAgeYears).ThenBy(candidate => candidate.DisplayName),
-            _ => query.OrderBy(candidate => candidate.DisplayName).ThenBy(candidate => candidate.OrganizationSlug)
-        };
-
-    private static string NormalizeContentKindInput(string? value) =>
-        string.Equals(value, "app", StringComparison.OrdinalIgnoreCase) ? "app" : "game";
-
-    private static string NormalizeSortInput(string? value) =>
-        (value ?? "title-asc").Trim().ToLowerInvariant() switch
-        {
-            "title-desc" => "title-desc",
-            "organization-asc" => "organization-asc",
-            "organization-desc" => "organization-desc",
-            "genre-asc" => "genre-asc",
-            "players-asc" => "players-asc",
-            "players-desc" => "players-desc",
-            "age-asc" => "age-asc",
-            "age-desc" => "age-desc",
-            _ => "title-asc"
-        };
-
-    private string BuildGamesHref(
-        int? pageNumber = null,
-        bool? acquisitionOnly = null,
-        string? toggleOrganization = null,
-        string? toggleGenre = null,
-        string? contentKind = null,
-        string? sort = null,
-        string? searchQuery = null,
-        bool clearGenreFilters = false,
-        bool clearOrganizationFilters = false)
-    {
-        var organizations = SelectedOrganizations.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var genres = SelectedGenres.ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        if (clearOrganizationFilters)
-        {
-            organizations.Clear();
+            return;
         }
-        else if (!string.IsNullOrWhiteSpace(toggleOrganization))
+        CurrentPageNumber++;
+        ApplyPaging();
+    }
+
+    private async Task OpenTitleModalAsync(CatalogTitleSummary title)
+    {
+        ModalTitleSummary = title;
+        ModalTitleDetail = null;
+        TitleModalError = null;
+        IsTitleModalLoading = true;
+        var cacheKey = BuildTitleCacheKey(title.StudioSlug, title.Slug);
+        if (TitleDetailCache.TryGetValue(cacheKey, out var cachedTitle))
         {
-            if (!organizations.Add(toggleOrganization))
+            ModalTitleDetail = cachedTitle;
+            IsTitleModalLoading = false;
+            return;
+        }
+        try
+        {
+            ModalTitleDetail = await ApiClient.GetCatalogTitleAsync(title.StudioSlug, title.Slug);
+            if (ModalTitleDetail is not null)
             {
-                organizations.Remove(toggleOrganization);
+                TitleDetailCache[cacheKey] = ModalTitleDetail;
             }
         }
-
-        if (clearGenreFilters)
+        catch (Exception exception)
         {
-            genres.Clear();
+            TitleModalError = exception.Message;
         }
-        else if (!string.IsNullOrWhiteSpace(toggleGenre))
+        finally
         {
-            if (!genres.Add(toggleGenre))
-            {
-                genres.Remove(toggleGenre);
-            }
+            IsTitleModalLoading = false;
         }
-
-        var effectivePage = Math.Max(1, pageNumber ?? CurrentPageNumber);
-        var effectiveContentKind = NormalizeContentKindInput(contentKind ?? EffectiveContentKind);
-        var effectiveSort = NormalizeSortInput(sort ?? EffectiveSort);
-        var effectiveSearchQuery = searchQuery ?? SearchQuery;
-        var query = new Dictionary<string, string?>(StringComparer.Ordinal)
-        {
-            ["q"] = string.IsNullOrWhiteSpace(effectiveSearchQuery) ? null : effectiveSearchQuery.Trim(),
-            ["contentKind"] = effectiveContentKind,
-            ["sort"] = effectiveSort,
-            ["pageNumber"] = effectivePage == 1 ? null : effectivePage.ToString(),
-            ["organizations"] = organizations.Count == 0 ? null : string.Join(',', organizations.OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)),
-            ["genres"] = genres.Count == 0 ? null : string.Join(',', genres.OrderBy(candidate => candidate, StringComparer.OrdinalIgnoreCase)),
-            ["acquisitionOnly"] = acquisitionOnly ?? EffectiveAcquisitionOnly ? "true" : null
-        };
-
-        return QueryHelpers.AddQueryString("/browse", query);
     }
 
-    private string GetOrganizationDisplayName(string organizationSlug) =>
-        OrganizationDisplayNameBySlug.TryGetValue(organizationSlug, out var displayName)
-            ? displayName
-            : organizationSlug;
-
-    private static IReadOnlyList<string> ParseCsv(string? input) =>
-        string.IsNullOrWhiteSpace(input)
-            ? []
-            : input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-    private static IReadOnlyList<string> ParseGenreTags(string? genreDisplay) =>
-        string.IsNullOrWhiteSpace(genreDisplay)
-            ? []
-            : genreDisplay.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-    private static string GetCardStyle(CatalogTitleSummary? title) =>
-        string.IsNullOrWhiteSpace(title?.CardImageUrl)
-            ? string.Empty
-            : $"background-image:linear-gradient(135deg, rgba(4,19,29,0.1), rgba(4,19,29,0.4)), url('{title.CardImageUrl}');";
-
-    private static string GetCardFallbackGradient(CatalogTitleSummary? title)
+    private void CloseTitleModal()
     {
-        var primaryGenre = ParseGenreTags(title?.GenreDisplay).FirstOrDefault();
+        ModalTitleSummary = null;
+        ModalTitleDetail = null;
+        TitleModalError = null;
+        IsTitleModalLoading = false;
+    }
+
+    private string GetStudioDisplayName(string studioSlug) => StudioDisplayNameBySlug.TryGetValue(studioSlug, out var displayName) ? displayName : studioSlug;
+
+    private static IReadOnlyList<string> ParseCsv(string? input) => string.IsNullOrWhiteSpace(input) ? [] : input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(candidate => !string.IsNullOrWhiteSpace(candidate)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    private static string FormatContentKind(string? contentKind) => string.Equals(contentKind, "app", StringComparison.OrdinalIgnoreCase) ? "App" : "Game";
+    private static string BuildTitleCacheKey(string studioSlug, string titleSlug) => $"{studioSlug}/{titleSlug}";
+    private static string NormalizeResultsPerPageInput(string? value) => string.Equals(value, "all", StringComparison.OrdinalIgnoreCase) ? "all" : NormalizeResultsPerPage(value).ToString();
+    private static int NormalizeResultsPerPage(string? value) => (value ?? "10").Trim().ToLowerInvariant() switch { "25" => 25, "50" => 50, "all" => 0, _ => 10 };
+
+    private static string GetCardStyle(CatalogTitleSummary? title) => string.IsNullOrWhiteSpace(title?.CardImageUrl) ? $"background-image:{GetFallbackGradient(title?.GenreDisplay)};" : $"background-image:linear-gradient(180deg, rgba(7,9,14,0.02), rgba(7,9,14,0.30)), url('{title.CardImageUrl}');";
+
+    private static string GetModalHeroStyle(CatalogTitle? title)
+    {
+        var heroUrl = title?.MediaAssets.FirstOrDefault(asset => string.Equals(asset.MediaRole, "hero", StringComparison.OrdinalIgnoreCase))?.SourceUrl ?? title?.CardImageUrl;
+        return string.IsNullOrWhiteSpace(heroUrl) ? $"background-image:{GetFallbackGradient(title?.GenreDisplay)};" : $"background-image:linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('{heroUrl}');";
+    }
+
+    private static string GetFallbackGradient(string? genreDisplay)
+    {
+        var primaryGenre = BrowseCatalogProjectionService.ParseGenreTags(genreDisplay).FirstOrDefault();
         return primaryGenre switch
         {
-            "Shooter" => "bg-[linear-gradient(135deg,_#f8fafc,_#7dd3fc,_#1d4ed8)]",
-            "Adventure" => "bg-[linear-gradient(135deg,_#fde68a,_#fb7185,_#7c3aed)]",
-            "Puzzle" => "bg-[linear-gradient(135deg,_#d8f3dc,_#60a5fa,_#1e293b)]",
-            _ => "bg-[linear-gradient(135deg,_#fef3c7,_#f97316,_#334155)]"
+            "Shooter" => "linear-gradient(135deg, #f8fafc, #7dd3fc, #1d4ed8)",
+            "Adventure" => "linear-gradient(135deg, #fde68a, #fb7185, #7c3aed)",
+            "Puzzle" => "linear-gradient(135deg, #d8f3dc, #60a5fa, #1e293b)",
+            _ => "linear-gradient(135deg, #fef3c7, #f97316, #334155)"
         };
     }
-
-    public void Dispose()
-    {
-        SearchDebounceTokenSource?.Cancel();
-        SearchDebounceTokenSource?.Dispose();
-    }
-
-    private sealed record OrganizationBrowseEntry(string Slug, string DisplayName, int TitleCount);
 }
-

@@ -64,7 +64,7 @@
 
                     <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Studio</div>
                     <div class="mt-2 flex items-center gap-2">
-                        @if (Organizations.Count == 0)
+                        @if (Studios.Count == 0)
                         {
                             <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
                                     disabled>
@@ -74,10 +74,10 @@
                         else
                         {
                             <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-                                    @onchange="OnActiveOrganizationChanged">
-                                @foreach (var organization in Organizations)
+                                    @onchange="OnActiveStudioChanged">
+                                @foreach (var studio in Studios)
                                 {
-                                    <option value="@organization.Id" selected="@(organization.Id == ActiveOrganizationId)">@organization.DisplayName</option>
+                                    <option value="@studio.Id" selected="@(studio.Id == ActiveStudioId)">@studio.DisplayName</option>
                                 }
                             </select>
                         }
@@ -95,7 +95,7 @@
                     {
                         <div class="mt-3 text-xs uppercase tracking-[0.2em] text-cyan-100/70">Title</div>
 
-                        @if (ActiveOrganization is null)
+                        @if (ActiveStudio is null)
                         {
                             <div class="mt-2 flex items-center gap-2">
                                 <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
@@ -112,7 +112,7 @@
                                 </button>
                             </div>
                         }
-                        else if (ActiveOrganizationTitles.Count == 0)
+                        else if (ActiveStudioTitles.Count == 0)
                         {
                             <div class="mt-2 flex items-center gap-2">
                                 <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400"
@@ -134,7 +134,7 @@
                             <div class="mt-2 flex items-center gap-2">
                                 <select class="w-full rounded-[0.9rem] border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
                                         @onchange="OnActiveTitleChanged">
-                                    @foreach (var title in ActiveOrganizationTitles)
+                                    @foreach (var title in ActiveStudioTitles)
                                     {
                                         <option value="@title.Id" selected="@(title.Id == ActiveTitleId)">@title.DisplayName</option>
                                     }
@@ -176,27 +176,35 @@
                         {
                             <h2 class="text-2xl font-semibold text-white">Studios</h2>
 
-                            @if (Organizations.Count == 0)
+                            @if (Studios.Count == 0)
                             {
                                 <p class="mt-6 text-sm text-slate-300">No managed studios yet.</p>
                             }
                             else
                             {
                                 <div class="mt-6 grid gap-3 lg:grid-cols-2">
-                                    @foreach (var organization in Organizations)
+                                    @foreach (var studio in Studios)
                                     {
                                         <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
-                                            <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">@FormatMembershipRole(organization.Role)</div>
-                                            <div class="mt-2 text-lg font-semibold text-white">@organization.DisplayName</div>
-                                            <div class="mt-2 text-sm text-cyan-100/70">@organization.Slug</div>
-                                            @if (!string.IsNullOrWhiteSpace(organization.Description))
+                                            <div class="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">@FormatMembershipRole(studio.Role)</div>
+                                                    <div class="mt-2 text-lg font-semibold text-white">@studio.DisplayName</div>
+                                                    <div class="mt-2 text-sm text-cyan-100/70">@studio.Slug</div>
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(studio.LogoUrl))
+                                                {
+                                                    <img class="h-16 w-16 rounded-[1rem] border border-white/10 object-cover" src="@studio.LogoUrl" alt="@($"{studio.DisplayName} logo")" />
+                                                }
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(studio.Description))
                                             {
-                                                <p class="mt-2 text-sm text-slate-300">@organization.Description</p>
+                                                <p class="mt-2 text-sm text-slate-300">@studio.Description</p>
                                             }
                                             <div class="mt-4 flex flex-wrap gap-3 text-sm">
                                                 <button class="text-cyan-200 transition hover:text-cyan-100"
                                                         type="button"
-                                                        @onclick="() => SelectStudioForSettings(organization.Id)">
+                                                        @onclick="() => SelectStudioForSettings(studio.Id)">
                                                     Edit in console
                                                 </button>
                                             </div>
@@ -229,10 +237,9 @@
                                 </label>
                                 <label class="block">
                                     <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Slug</span>
-                                    <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                    <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/55 px-4 py-3 text-slate-300"
                                            value="@NewStudioSlug"
-                                           @oninput="OnNewStudioSlugInput"
-                                           placeholder="stellar-forge" />
+                                           readonly />
                                 </label>
                             </div>
                             <label class="mt-4 block">
@@ -242,13 +249,52 @@
                                           @oninput="OnNewStudioDescriptionInput"
                                           placeholder="Family co-op studio focused on couch multiplayer."></textarea>
                             </label>
-                            <label class="mt-4 block">
-                                <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo URL</span>
-                                <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
-                                       value="@NewStudioLogoUrl"
-                                       @oninput="OnNewStudioLogoUrlInput"
-                                       placeholder="https://cdn.example.com/studios/stellar-forge.png" />
-                            </label>
+                            <div class="mt-6 grid gap-5 xl:grid-cols-2">
+                                <section class="rounded-[1.1rem] border border-white/10 bg-black/10 p-4">
+                                    <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Studio Logo</div>
+                                    @if (GetPreferredStudioMediaPreview(PendingNewStudioLogoPreviewUrl, NewStudioLogoUrl) is { } newStudioLogoPreview)
+                                    {
+                                        <img class="mt-3 h-24 w-24 rounded-[1rem] border border-white/10 object-cover" src="@newStudioLogoPreview" alt="Studio logo preview" />
+                                    }
+                                    <label class="mt-4 block">
+                                        <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo URL</span>
+                                        <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                               value="@NewStudioLogoUrl"
+                                               @oninput="OnNewStudioLogoUrlInput"
+                                               placeholder="https://cdn.example.com/studios/stellar-forge.png" />
+                                    </label>
+                                    <div class="mt-3 flex flex-wrap items-center gap-3">
+                                        <label class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" for="new-studio-logo-upload">Upload image</label>
+                                        <InputFile id="new-studio-logo-upload" class="sr-only" OnChange="HandleNewStudioLogoUploadAsync" accept="image/svg+xml,image/jpeg,image/png,image/webp,image/gif" />
+                                        @if (PendingNewStudioLogoFile is not null)
+                                        {
+                                            <span class="text-xs text-slate-400">@PendingNewStudioLogoFile.FileName</span>
+                                        }
+                                    </div>
+                                </section>
+                                <section class="rounded-[1.1rem] border border-white/10 bg-black/10 p-4">
+                                    <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Studio Banner</div>
+                                    @if (GetPreferredStudioMediaPreview(PendingNewStudioBannerPreviewUrl, NewStudioBannerUrl) is { } newStudioBannerPreview)
+                                    {
+                                        <img class="mt-3 h-28 w-full rounded-[1rem] border border-white/10 object-cover" src="@newStudioBannerPreview" alt="Studio banner preview" />
+                                    }
+                                    <label class="mt-4 block">
+                                        <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Banner URL</span>
+                                        <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                               value="@NewStudioBannerUrl"
+                                               @oninput="OnNewStudioBannerUrlInput"
+                                               placeholder="https://cdn.example.com/studios/stellar-forge-banner.png" />
+                                    </label>
+                                    <div class="mt-3 flex flex-wrap items-center gap-3">
+                                        <label class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" for="new-studio-banner-upload">Upload image</label>
+                                        <InputFile id="new-studio-banner-upload" class="sr-only" OnChange="HandleNewStudioBannerUploadAsync" accept="image/svg+xml,image/jpeg,image/png,image/webp,image/gif" />
+                                        @if (PendingNewStudioBannerFile is not null)
+                                        {
+                                            <span class="text-xs text-slate-400">@PendingNewStudioBannerFile.FileName</span>
+                                        }
+                                    </div>
+                                </section>
+                            </div>
                             <div class="mt-6">
                                 <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                                         type="button"
@@ -261,7 +307,7 @@
                         else
                         {
                             <h2 class="text-2xl font-semibold text-white">Studio Settings</h2>
-                            @if (ActiveOrganization is null)
+                            @if (ActiveStudio is null)
                             {
                                 <p class="mt-3 text-sm text-slate-300">Select a studio context first, or create a new studio.</p>
                             }
@@ -269,7 +315,7 @@
                             {
                                 <p class="mt-3 text-sm leading-7 text-slate-300">
                                     Active studio:
-                                    <strong class="text-white">@ActiveOrganization.DisplayName</strong>
+                                    <strong class="text-white">@ActiveStudio.DisplayName</strong>
                                 </p>
 
                                 @if (!string.IsNullOrWhiteSpace(StudioStatusMessage))
@@ -288,9 +334,9 @@
                                     </label>
                                     <label class="block">
                                         <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Slug</span>
-                                        <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                        <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/55 px-4 py-3 text-slate-300"
                                                value="@StudioSettingsSlug"
-                                               @oninput="OnStudioSettingsSlugInput" />
+                                               readonly />
                                     </label>
                                 </div>
                                 <label class="mt-4 block">
@@ -299,13 +345,105 @@
                                               value="@StudioSettingsDescription"
                                               @oninput="OnStudioSettingsDescriptionInput"></textarea>
                                 </label>
-                                <label class="mt-4 block">
-                                    <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo URL</span>
-                                    <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
-                                           value="@StudioSettingsLogoUrl"
-                                           @oninput="OnStudioSettingsLogoUrlInput"
-                                           placeholder="https://cdn.example.com/studios/stellar-forge.png" />
-                                </label>
+                                <div class="mt-6 grid gap-5 xl:grid-cols-2">
+                                    <section class="rounded-[1.1rem] border border-white/10 bg-black/10 p-4">
+                                        <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Studio Logo</div>
+                                        @if (GetPreferredStudioMediaPreview(PendingStudioSettingsLogoPreviewUrl, StudioSettingsLogoUrl) is { } studioSettingsLogoPreview)
+                                        {
+                                            <img class="mt-3 h-24 w-24 rounded-[1rem] border border-white/10 object-cover" src="@studioSettingsLogoPreview" alt="Studio logo preview" />
+                                        }
+                                        <label class="mt-4 block">
+                                            <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo URL</span>
+                                            <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                                   value="@StudioSettingsLogoUrl"
+                                                   @oninput="OnStudioSettingsLogoUrlInput"
+                                                   placeholder="https://cdn.example.com/studios/stellar-forge.png" />
+                                        </label>
+                                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                                            <label class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" for="studio-settings-logo-upload">Upload image</label>
+                                            <InputFile id="studio-settings-logo-upload" class="sr-only" OnChange="HandleStudioSettingsLogoUploadAsync" accept="image/svg+xml,image/jpeg,image/png,image/webp,image/gif" />
+                                            @if (PendingStudioSettingsLogoFile is not null)
+                                            {
+                                                <span class="text-xs text-slate-400">@PendingStudioSettingsLogoFile.FileName</span>
+                                            }
+                                        </div>
+                                    </section>
+                                    <section class="rounded-[1.1rem] border border-white/10 bg-black/10 p-4">
+                                        <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Studio Banner</div>
+                                        @if (GetPreferredStudioMediaPreview(PendingStudioSettingsBannerPreviewUrl, StudioSettingsBannerUrl) is { } studioSettingsBannerPreview)
+                                        {
+                                            <img class="mt-3 h-28 w-full rounded-[1rem] border border-white/10 object-cover" src="@studioSettingsBannerPreview" alt="Studio banner preview" />
+                                        }
+                                        <label class="mt-4 block">
+                                            <span class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Banner URL</span>
+                                            <input class="mt-2 w-full rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
+                                                   value="@StudioSettingsBannerUrl"
+                                                   @oninput="OnStudioSettingsBannerUrlInput"
+                                                   placeholder="https://cdn.example.com/studios/stellar-forge-banner.png" />
+                                        </label>
+                                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                                            <label class="cursor-pointer rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" for="studio-settings-banner-upload">Upload image</label>
+                                            <InputFile id="studio-settings-banner-upload" class="sr-only" OnChange="HandleStudioSettingsBannerUploadAsync" accept="image/svg+xml,image/jpeg,image/png,image/webp,image/gif" />
+                                            @if (PendingStudioSettingsBannerFile is not null)
+                                            {
+                                                <span class="text-xs text-slate-400">@PendingStudioSettingsBannerFile.FileName</span>
+                                            }
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <section class="mt-6 rounded-[1.1rem] border border-white/10 bg-black/10 p-4">
+                                    <div class="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Studio Links</div>
+                                    <div class="mt-4 space-y-3">
+                                        @if (StudioSettingsLinks.Count == 0)
+                                        {
+                                            <p class="text-sm text-slate-400">No studio links configured yet.</p>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var link in StudioSettingsLinks)
+                                            {
+                                                <div class="grid gap-3 rounded-[1rem] border border-white/10 bg-slate-950/45 p-4 xl:grid-cols-[0.8fr_1.4fr_auto_auto]">
+                                                    <input class="rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100"
+                                                           @bind="link.Label"
+                                                           placeholder="Discord" />
+                                                    <input class="rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100"
+                                                           @bind="link.Url"
+                                                           placeholder="https://discord.gg/example" />
+                                                    <button class="rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            type="button"
+                                                            @onclick="() => SaveStudioLinkAsync(link)"
+                                                            disabled="@(BusyStudioLinkId == link.Id || IsStudioMutationInFlight)">
+                                                        Save
+                                                    </button>
+                                                    <button class="rounded-full border border-rose-300/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            type="button"
+                                                            @onclick="() => DeleteStudioLinkAsync(link)"
+                                                            disabled="@(BusyStudioLinkId == link.Id || IsStudioMutationInFlight)">
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+
+                                    <div class="mt-4 grid gap-3 rounded-[1rem] border border-dashed border-white/10 bg-black/10 p-4 xl:grid-cols-[0.8fr_1.4fr_auto]">
+                                        <input class="rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100"
+                                               value="@NewStudioLinkLabel"
+                                               @oninput="args => NewStudioLinkLabel = args.Value?.ToString() ?? string.Empty"
+                                               placeholder="LinkedIn" />
+                                        <input class="rounded-[0.95rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100"
+                                               value="@NewStudioLinkUrl"
+                                               @oninput="args => NewStudioLinkUrl = args.Value?.ToString() ?? string.Empty"
+                                               placeholder="https://www.linkedin.com/company/example" />
+                                        <button class="rounded-full bg-cyan-300 px-4 py-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                                                type="button"
+                                                @onclick="AddStudioLinkAsync"
+                                                disabled="@(IsAddingStudioLink || IsStudioMutationInFlight)">
+                                            Add link
+                                        </button>
+                                    </div>
+                                </section>
 
                                 <div class="mt-6 flex flex-wrap gap-3">
                                     <button class="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
@@ -320,7 +458,7 @@
                     }
                     else if (ActiveDomain == DevelopDomain.Titles)
                     {
-                        @if (ActiveOrganization is null)
+                        @if (ActiveStudio is null)
                         {
                             <h2 class="text-2xl font-semibold text-white">Titles</h2>
                             <p class="mt-3 text-sm text-slate-300">Select or create a studio first.</p>
@@ -329,17 +467,17 @@
                         {
                             <h2 class="text-2xl font-semibold text-white">Titles</h2>
                             <p class="mt-3 text-sm leading-7 text-slate-300">
-                                Active studio: <strong class="text-white">@ActiveOrganization.DisplayName</strong>
+                                Active studio: <strong class="text-white">@ActiveStudio.DisplayName</strong>
                             </p>
 
-                            @if (ActiveOrganizationTitles.Count == 0)
+                            @if (ActiveStudioTitles.Count == 0)
                             {
                                 <p class="mt-6 text-sm text-slate-300">No titles found for this studio.</p>
                             }
                             else
                             {
                                 <div class="mt-6 space-y-3">
-                                    @foreach (var title in ActiveOrganizationTitles)
+                                    @foreach (var title in ActiveStudioTitles)
                                     {
                                         <section class="rounded-[1.1rem] border border-white/10 bg-black/15 p-4">
                                             <div class="text-xs uppercase tracking-[0.2em] text-cyan-100/70">@title.ContentKind</div>
@@ -360,10 +498,10 @@
                         {
                             <h2 class="text-2xl font-semibold text-white">Create Title</h2>
                             <p class="mt-3 text-sm leading-7 text-slate-300">
-                                Create a new title under <strong class="text-white">@ActiveOrganization.DisplayName</strong>.
+                                Create a new title under <strong class="text-white">@ActiveStudio.DisplayName</strong>.
                             </p>
                             <a class="mt-6 inline-flex rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950"
-                               href="/develop/studios/@ActiveOrganization.Id/titles/new"
+                               href="/develop/studios/@ActiveStudio.Id/titles/new"
                                data-enhance-nav="false">
                                 Open title creation form
                             </a>
@@ -414,24 +552,24 @@
                         {
                             <h2 class="text-2xl font-semibold text-white">Publishing Connections</h2>
 
-                            @if (ActiveOrganization is null)
+                            @if (ActiveStudio is null)
                             {
                                 <p class="mt-3 text-sm text-slate-300">Choose a studio to view publisher connections.</p>
                             }
                             else
                             {
                                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                                    Studio: <strong class="text-white">@ActiveOrganization.DisplayName</strong>
+                                    Studio: <strong class="text-white">@ActiveStudio.DisplayName</strong>
                                 </p>
 
-                                @if (ActiveOrganizationConnections.Count == 0)
+                                @if (ActiveStudioConnections.Count == 0)
                                 {
                                     <p class="mt-6 text-sm text-slate-300">No integration connections configured yet.</p>
                                 }
                                 else
                                 {
                                     <div class="mt-6 space-y-3">
-                                        @foreach (var connection in ActiveOrganizationConnections)
+                                        @foreach (var connection in ActiveStudioConnections)
                                         {
                                             var connectionName = connection.SupportedPublisher?.DisplayName
                                                 ?? connection.CustomPublisherDisplayName
@@ -517,17 +655,17 @@
 
     private DeveloperEnrollment? EnrollmentState { get; set; }
 
-    private List<DeveloperOrganizationSummary> Organizations { get; } = [];
+    private List<DeveloperStudioSummary> Studios { get; } = [];
 
-    private readonly Dictionary<Guid, IReadOnlyList<CatalogTitleSummary>> organizationTitles = [];
+    private readonly Dictionary<Guid, IReadOnlyList<CatalogTitleSummary>> studioTitles = [];
 
     private readonly Dictionary<Guid, IReadOnlyList<TitleRelease>> titleReleases = [];
 
-    private readonly Dictionary<Guid, IReadOnlyList<IntegrationConnection>> organizationConnections = [];
+    private readonly Dictionary<Guid, IReadOnlyList<IntegrationConnection>> studioConnections = [];
 
     private readonly Dictionary<Guid, IReadOnlyList<TitleIntegrationBinding>> titleBindings = [];
 
-    private Guid? ActiveOrganizationId { get; set; }
+    private Guid? ActiveStudioId { get; set; }
 
     private Guid? ActiveTitleId { get; set; }
 
@@ -549,15 +687,18 @@
 
     private string NewStudioDisplayName { get; set; } = string.Empty;
 
-    private string NewStudioSlug { get; set; } = "organization";
+    private string NewStudioSlug { get; set; } = "studio";
 
     private string NewStudioDescription { get; set; } = string.Empty;
 
     private string NewStudioLogoUrl { get; set; } = string.Empty;
+    private string NewStudioBannerUrl { get; set; } = string.Empty;
+    private ApiUploadFile? PendingNewStudioLogoFile { get; set; }
+    private string? PendingNewStudioLogoPreviewUrl { get; set; }
+    private ApiUploadFile? PendingNewStudioBannerFile { get; set; }
+    private string? PendingNewStudioBannerPreviewUrl { get; set; }
 
-    private bool IsNewStudioSlugCustomized { get; set; }
-
-    private Guid? StudioSettingsOrganizationId { get; set; }
+    private Guid? StudioSettingsStudioId { get; set; }
 
     private string StudioSettingsDisplayName { get; set; } = string.Empty;
 
@@ -566,8 +707,16 @@
     private string StudioSettingsDescription { get; set; } = string.Empty;
 
     private string StudioSettingsLogoUrl { get; set; } = string.Empty;
-
-    private bool IsStudioSettingsSlugCustomized { get; set; }
+    private string StudioSettingsBannerUrl { get; set; } = string.Empty;
+    private ApiUploadFile? PendingStudioSettingsLogoFile { get; set; }
+    private string? PendingStudioSettingsLogoPreviewUrl { get; set; }
+    private ApiUploadFile? PendingStudioSettingsBannerFile { get; set; }
+    private string? PendingStudioSettingsBannerPreviewUrl { get; set; }
+    private List<StudioLinkDraft> StudioSettingsLinks { get; } = [];
+    private string NewStudioLinkLabel { get; set; } = string.Empty;
+    private string NewStudioLinkUrl { get; set; } = string.Empty;
+    private Guid? BusyStudioLinkId { get; set; }
+    private bool IsAddingStudioLink { get; set; }
 
     private bool HasDeveloperAccess => EnrollmentState.HasDeveloperAccess();
 
@@ -580,26 +729,26 @@
 
     private bool IsSaveStudioDisabled =>
         IsStudioMutationInFlight
-        || ActiveOrganization is null
+        || ActiveStudio is null
         || string.IsNullOrWhiteSpace(StudioSettingsDisplayName)
         || string.IsNullOrWhiteSpace(StudioSettingsSlug);
 
-    private DeveloperOrganizationSummary? ActiveOrganization =>
-        ActiveOrganizationId is null
-            ? Organizations.FirstOrDefault()
-            : Organizations.FirstOrDefault(candidate => candidate.Id == ActiveOrganizationId);
+    private DeveloperStudioSummary? ActiveStudio =>
+        ActiveStudioId is null
+            ? Studios.FirstOrDefault()
+            : Studios.FirstOrDefault(candidate => candidate.Id == ActiveStudioId);
 
-    private IReadOnlyList<CatalogTitleSummary> ActiveOrganizationTitles =>
-        ActiveOrganizationId is null
+    private IReadOnlyList<CatalogTitleSummary> ActiveStudioTitles =>
+        ActiveStudioId is null
             ? []
-            : organizationTitles.TryGetValue(ActiveOrganizationId.Value, out var titles)
+            : studioTitles.TryGetValue(ActiveStudioId.Value, out var titles)
                 ? titles
                 : [];
 
     private CatalogTitleSummary? ActiveTitle =>
         ActiveTitleId is null
-            ? ActiveOrganizationTitles.FirstOrDefault()
-            : ActiveOrganizationTitles.FirstOrDefault(candidate => candidate.Id == ActiveTitleId);
+            ? ActiveStudioTitles.FirstOrDefault()
+            : ActiveStudioTitles.FirstOrDefault(candidate => candidate.Id == ActiveTitleId);
 
     private IReadOnlyList<TitleRelease> ActiveTitleReleases =>
         ActiveTitleId is null
@@ -608,10 +757,10 @@
                 ? releases
                 : [];
 
-    private IReadOnlyList<IntegrationConnection> ActiveOrganizationConnections =>
-        ActiveOrganizationId is null
+    private IReadOnlyList<IntegrationConnection> ActiveStudioConnections =>
+        ActiveStudioId is null
             ? []
-            : organizationConnections.TryGetValue(ActiveOrganizationId.Value, out var connections)
+            : studioConnections.TryGetValue(ActiveStudioId.Value, out var connections)
                 ? connections
                 : [];
 
@@ -704,7 +853,7 @@
 
     private async Task OpenCreateTitleWorkflowAsync()
     {
-        if (ActiveOrganization is null)
+        if (ActiveStudio is null)
         {
             return;
         }
@@ -727,7 +876,7 @@
 
         try
         {
-            await EnsureOrganizationsAsync(forceRefresh);
+            await EnsureStudiosAsync(forceRefresh);
 
             if (domain is DevelopDomain.Titles or DevelopDomain.Releases or DevelopDomain.Publishing)
             {
@@ -755,24 +904,24 @@
         }
     }
 
-    private async Task EnsureOrganizationsAsync(bool forceRefresh)
+    private async Task EnsureStudiosAsync(bool forceRefresh)
     {
-        if (!forceRefresh && Organizations.Count > 0)
+        if (!forceRefresh && Studios.Count > 0)
         {
             return;
         }
 
-        var response = await ApiClient.GetManagedOrganizationsAsync();
-        Organizations.Clear();
-        Organizations.AddRange(response.Organizations.OrderBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase));
+        var response = await ApiClient.GetManagedStudiosAsync();
+        Studios.Clear();
+        Studios.AddRange(response.Studios.OrderBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase));
 
-        ActiveOrganizationId = ActiveOrganizationId is not null && Organizations.Any(candidate => candidate.Id == ActiveOrganizationId)
-            ? ActiveOrganizationId
-            : Organizations.FirstOrDefault()?.Id;
+        ActiveStudioId = ActiveStudioId is not null && Studios.Any(candidate => candidate.Id == ActiveStudioId)
+            ? ActiveStudioId
+            : Studios.FirstOrDefault()?.Id;
 
-        StudioSettingsOrganizationId = null;
+        StudioSettingsStudioId = null;
 
-        if (ActiveOrganizationId is null)
+        if (ActiveStudioId is null)
         {
             ActiveTitleId = null;
         }
@@ -780,18 +929,18 @@
 
     private async Task EnsureTitlesAsync(bool forceRefresh)
     {
-        if (ActiveOrganizationId is null)
+        if (ActiveStudioId is null)
         {
             return;
         }
 
-        if (!forceRefresh && organizationTitles.ContainsKey(ActiveOrganizationId.Value))
+        if (!forceRefresh && studioTitles.ContainsKey(ActiveStudioId.Value))
         {
             return;
         }
 
-        var response = await ApiClient.GetOrganizationTitlesAsync(ActiveOrganizationId.Value);
-        organizationTitles[ActiveOrganizationId.Value] = response.Titles;
+        var response = await ApiClient.GetStudioTitlesAsync(ActiveStudioId.Value);
+        studioTitles[ActiveStudioId.Value] = response.Titles;
 
         ActiveTitleId = ActiveTitleId is not null && response.Titles.Any(candidate => candidate.Id == ActiveTitleId)
             ? ActiveTitleId
@@ -816,18 +965,18 @@
 
     private async Task EnsureConnectionsAsync(bool forceRefresh)
     {
-        if (ActiveOrganizationId is null)
+        if (ActiveStudioId is null)
         {
             return;
         }
 
-        if (!forceRefresh && organizationConnections.ContainsKey(ActiveOrganizationId.Value))
+        if (!forceRefresh && studioConnections.ContainsKey(ActiveStudioId.Value))
         {
             return;
         }
 
-        var response = await ApiClient.GetOrganizationIntegrationConnectionsAsync(ActiveOrganizationId.Value);
-        organizationConnections[ActiveOrganizationId.Value] = response.IntegrationConnections;
+        var response = await ApiClient.GetStudioIntegrationConnectionsAsync(ActiveStudioId.Value);
+        studioConnections[ActiveStudioId.Value] = response.IntegrationConnections;
     }
 
     private async Task EnsureBindingsAsync(bool forceRefresh)
@@ -846,16 +995,16 @@
         titleBindings[ActiveTitleId.Value] = response.IntegrationBindings;
     }
 
-    private async Task OnActiveOrganizationChanged(ChangeEventArgs args)
+    private async Task OnActiveStudioChanged(ChangeEventArgs args)
     {
-        if (!Guid.TryParse(args.Value?.ToString(), out var organizationId))
+        if (!Guid.TryParse(args.Value?.ToString(), out var studioId))
         {
             return;
         }
 
-        ActiveOrganizationId = organizationId;
+        ActiveStudioId = studioId;
         ActiveTitleId = null;
-        StudioSettingsOrganizationId = null;
+        StudioSettingsStudioId = null;
         await EnsureDomainDataAsync(ActiveDomain);
 
         if (ActiveWorkflow == "studios-settings")
@@ -875,11 +1024,11 @@
         await EnsureDomainDataAsync(ActiveDomain);
     }
 
-    private void SelectStudioForSettings(Guid organizationId)
+    private void SelectStudioForSettings(Guid studioId)
     {
-        ActiveOrganizationId = organizationId;
+        ActiveStudioId = studioId;
         ActiveWorkflow = "studios-settings";
-        StudioSettingsOrganizationId = null;
+        StudioSettingsStudioId = null;
         StudioStatusMessage = null;
         EnsureStudioSettingsDraftInitialized();
     }
@@ -887,21 +1036,14 @@
     private void OnNewStudioDisplayNameInput(ChangeEventArgs args)
     {
         NewStudioDisplayName = args.Value?.ToString() ?? string.Empty;
-        if (!IsNewStudioSlugCustomized)
-        {
-            NewStudioSlug = SlugGenerator.ToKebabCase(NewStudioDisplayName, "organization");
-        }
-    }
-
-    private void OnNewStudioSlugInput(ChangeEventArgs args)
-    {
-        IsNewStudioSlugCustomized = true;
-        NewStudioSlug = SlugGenerator.ToKebabCase(args.Value?.ToString(), "organization");
+        NewStudioSlug = SlugGenerator.ToKebabCase(NewStudioDisplayName, "studio");
     }
 
     private void OnNewStudioDescriptionInput(ChangeEventArgs args) => NewStudioDescription = args.Value?.ToString() ?? string.Empty;
 
     private void OnNewStudioLogoUrlInput(ChangeEventArgs args) => NewStudioLogoUrl = args.Value?.ToString() ?? string.Empty;
+
+    private void OnNewStudioBannerUrlInput(ChangeEventArgs args) => NewStudioBannerUrl = args.Value?.ToString() ?? string.Empty;
 
     private async Task CreateStudioAsync()
     {
@@ -915,27 +1057,40 @@
 
         try
         {
-            var response = await ApiClient.CreateOrganizationAsync(
-                new CreateOrganizationRequest(
-                    SlugGenerator.ToKebabCase(NewStudioSlug, "organization"),
+            var response = await ApiClient.CreateStudioAsync(
+                new CreateStudioRequest(
+                    SlugGenerator.ToKebabCase(NewStudioSlug, "studio"),
                     NewStudioDisplayName.Trim(),
                     NormalizeOptionalText(NewStudioDescription),
-                    NormalizeOptionalText(NewStudioLogoUrl)));
+                    NormalizeOptionalText(NewStudioLogoUrl),
+                    NormalizeOptionalText(NewStudioBannerUrl)));
 
-            var createdStudio = new DeveloperOrganizationSummary(
-                response.Organization.Id,
-                response.Organization.Slug,
-                response.Organization.DisplayName,
-                response.Organization.Description,
-                response.Organization.LogoUrl,
+            if (PendingNewStudioLogoFile is not null)
+            {
+                response = await ApiClient.UploadStudioLogoAsync(response.Studio.Id, PendingNewStudioLogoFile);
+            }
+
+            if (PendingNewStudioBannerFile is not null)
+            {
+                response = await ApiClient.UploadStudioBannerAsync(response.Studio.Id, PendingNewStudioBannerFile);
+            }
+
+            var createdStudio = new DeveloperStudioSummary(
+                response.Studio.Id,
+                response.Studio.Slug,
+                response.Studio.DisplayName,
+                response.Studio.Description,
+                response.Studio.LogoUrl,
+                response.Studio.BannerUrl,
+                response.Studio.Links,
                 "owner");
 
-            UpsertManagedOrganization(createdStudio);
-            ActiveOrganizationId = createdStudio.Id;
+            UpsertManagedStudio(createdStudio);
+            ActiveStudioId = createdStudio.Id;
             ActiveTitleId = null;
-            organizationTitles.Remove(createdStudio.Id);
-            organizationConnections.Remove(createdStudio.Id);
-            StudioSettingsOrganizationId = null;
+            studioTitles.Remove(createdStudio.Id);
+            studioConnections.Remove(createdStudio.Id);
+            StudioSettingsStudioId = null;
             ActiveWorkflow = "studios-settings";
             SetStudioStatus("Studio created. Continue in Studio Settings.", isError: false);
             ResetNewStudioDraft();
@@ -953,42 +1108,50 @@
 
     private void EnsureStudioSettingsDraftInitialized()
     {
-        if (ActiveOrganization is null || StudioSettingsOrganizationId == ActiveOrganization.Id)
+        if (ActiveStudio is null || StudioSettingsStudioId == ActiveStudio.Id)
         {
             return;
         }
 
-        StudioSettingsOrganizationId = ActiveOrganization.Id;
-        StudioSettingsDisplayName = ActiveOrganization.DisplayName;
-        StudioSettingsSlug = ActiveOrganization.Slug;
-        StudioSettingsDescription = ActiveOrganization.Description ?? string.Empty;
-        StudioSettingsLogoUrl = ActiveOrganization.LogoUrl ?? string.Empty;
-        IsStudioSettingsSlugCustomized = false;
+        StudioSettingsStudioId = ActiveStudio.Id;
+        StudioSettingsDisplayName = ActiveStudio.DisplayName;
+        StudioSettingsSlug = ActiveStudio.Slug;
+        StudioSettingsDescription = ActiveStudio.Description ?? string.Empty;
+        StudioSettingsLogoUrl = ActiveStudio.LogoUrl ?? string.Empty;
+        StudioSettingsBannerUrl = ActiveStudio.BannerUrl ?? string.Empty;
+        PendingStudioSettingsLogoFile = null;
+        PendingStudioSettingsLogoPreviewUrl = null;
+        PendingStudioSettingsBannerFile = null;
+        PendingStudioSettingsBannerPreviewUrl = null;
+        StudioSettingsLinks.Clear();
+        StudioSettingsLinks.AddRange(
+            ActiveStudio.Links
+                .OrderBy(candidate => candidate.Label, StringComparer.OrdinalIgnoreCase)
+                .Select(candidate => new StudioLinkDraft
+                {
+                    Id = candidate.Id,
+                    Label = candidate.Label,
+                    Url = candidate.Url
+                }));
+        NewStudioLinkLabel = string.Empty;
+        NewStudioLinkUrl = string.Empty;
     }
 
     private void OnStudioSettingsDisplayNameInput(ChangeEventArgs args)
     {
         StudioSettingsDisplayName = args.Value?.ToString() ?? string.Empty;
-        if (!IsStudioSettingsSlugCustomized)
-        {
-            StudioSettingsSlug = SlugGenerator.ToKebabCase(StudioSettingsDisplayName, "organization");
-        }
-    }
-
-    private void OnStudioSettingsSlugInput(ChangeEventArgs args)
-    {
-        IsStudioSettingsSlugCustomized = true;
-        StudioSettingsSlug = SlugGenerator.ToKebabCase(args.Value?.ToString(), "organization");
     }
 
     private void OnStudioSettingsDescriptionInput(ChangeEventArgs args) => StudioSettingsDescription = args.Value?.ToString() ?? string.Empty;
 
     private void OnStudioSettingsLogoUrlInput(ChangeEventArgs args) => StudioSettingsLogoUrl = args.Value?.ToString() ?? string.Empty;
 
+    private void OnStudioSettingsBannerUrlInput(ChangeEventArgs args) => StudioSettingsBannerUrl = args.Value?.ToString() ?? string.Empty;
+
     private async Task SaveStudioSettingsAsync()
     {
-        var activeOrganization = ActiveOrganization;
-        if (IsSaveStudioDisabled || activeOrganization is null)
+        var activeStudio = ActiveStudio;
+        if (IsSaveStudioDisabled || activeStudio is null)
         {
             return;
         }
@@ -998,25 +1161,38 @@
 
         try
         {
-            var response = await ApiClient.UpdateOrganizationAsync(
-                activeOrganization.Id,
-                new UpdateOrganizationRequest(
-                    SlugGenerator.ToKebabCase(StudioSettingsSlug, "organization"),
+            var response = await ApiClient.UpdateStudioAsync(
+                activeStudio.Id,
+                new UpdateStudioRequest(
+                    activeStudio.Slug,
                     StudioSettingsDisplayName.Trim(),
                     NormalizeOptionalText(StudioSettingsDescription),
-                    NormalizeOptionalText(StudioSettingsLogoUrl)));
+                    NormalizeOptionalText(StudioSettingsLogoUrl),
+                    NormalizeOptionalText(StudioSettingsBannerUrl)));
 
-            var updatedStudio = new DeveloperOrganizationSummary(
-                response.Organization.Id,
-                response.Organization.Slug,
-                response.Organization.DisplayName,
-                response.Organization.Description,
-                response.Organization.LogoUrl,
-                activeOrganization.Role);
+            if (PendingStudioSettingsLogoFile is not null)
+            {
+                response = await ApiClient.UploadStudioLogoAsync(activeStudio.Id, PendingStudioSettingsLogoFile);
+            }
 
-            UpsertManagedOrganization(updatedStudio);
-            ActiveOrganizationId = updatedStudio.Id;
-            StudioSettingsOrganizationId = null;
+            if (PendingStudioSettingsBannerFile is not null)
+            {
+                response = await ApiClient.UploadStudioBannerAsync(activeStudio.Id, PendingStudioSettingsBannerFile);
+            }
+
+            var updatedStudio = new DeveloperStudioSummary(
+                response.Studio.Id,
+                response.Studio.Slug,
+                response.Studio.DisplayName,
+                response.Studio.Description,
+                response.Studio.LogoUrl,
+                response.Studio.BannerUrl,
+                response.Studio.Links,
+                activeStudio.Role);
+
+            UpsertManagedStudio(updatedStudio);
+            ActiveStudioId = updatedStudio.Id;
+            StudioSettingsStudioId = null;
             EnsureStudioSettingsDraftInitialized();
             SetStudioStatus("Studio settings saved.", isError: false);
         }
@@ -1030,29 +1206,231 @@
         }
     }
 
-    private void UpsertManagedOrganization(DeveloperOrganizationSummary organization)
+    private void UpsertManagedStudio(DeveloperStudioSummary studio)
     {
-        var existingIndex = Organizations.FindIndex(candidate => candidate.Id == organization.Id);
+        var existingIndex = Studios.FindIndex(candidate => candidate.Id == studio.Id);
         if (existingIndex >= 0)
         {
-            Organizations[existingIndex] = organization;
+            Studios[existingIndex] = studio;
         }
         else
         {
-            Organizations.Add(organization);
+            Studios.Add(studio);
         }
 
-        Organizations.Sort((left, right) => string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase));
+        Studios.Sort((left, right) => string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ResetNewStudioDraft()
     {
         NewStudioDisplayName = string.Empty;
-        NewStudioSlug = "organization";
+        NewStudioSlug = "studio";
         NewStudioDescription = string.Empty;
         NewStudioLogoUrl = string.Empty;
-        IsNewStudioSlugCustomized = false;
+        NewStudioBannerUrl = string.Empty;
+        PendingNewStudioLogoFile = null;
+        PendingNewStudioLogoPreviewUrl = null;
+        PendingNewStudioBannerFile = null;
+        PendingNewStudioBannerPreviewUrl = null;
     }
+
+    private async Task HandleNewStudioLogoUploadAsync(InputFileChangeEventArgs args)
+    {
+        var upload = await CreateUploadFileAsync(args);
+        PendingNewStudioLogoFile = upload;
+        PendingNewStudioLogoPreviewUrl = upload is null ? null : CreateDataUrl(upload);
+    }
+
+    private async Task HandleNewStudioBannerUploadAsync(InputFileChangeEventArgs args)
+    {
+        var upload = await CreateUploadFileAsync(args);
+        PendingNewStudioBannerFile = upload;
+        PendingNewStudioBannerPreviewUrl = upload is null ? null : CreateDataUrl(upload);
+    }
+
+    private async Task HandleStudioSettingsLogoUploadAsync(InputFileChangeEventArgs args)
+    {
+        var upload = await CreateUploadFileAsync(args);
+        PendingStudioSettingsLogoFile = upload;
+        PendingStudioSettingsLogoPreviewUrl = upload is null ? null : CreateDataUrl(upload);
+    }
+
+    private async Task HandleStudioSettingsBannerUploadAsync(InputFileChangeEventArgs args)
+    {
+        var upload = await CreateUploadFileAsync(args);
+        PendingStudioSettingsBannerFile = upload;
+        PendingStudioSettingsBannerPreviewUrl = upload is null ? null : CreateDataUrl(upload);
+    }
+
+    private async Task AddStudioLinkAsync()
+    {
+        if (ActiveStudio is null || IsAddingStudioLink)
+        {
+            return;
+        }
+
+        var validationMessage = ValidateStudioLinkDraft(NewStudioLinkLabel, NewStudioLinkUrl);
+        if (validationMessage is not null)
+        {
+            SetStudioStatus(validationMessage, isError: true);
+            return;
+        }
+
+        IsAddingStudioLink = true;
+        StudioStatusMessage = null;
+
+        try
+        {
+            var response = await ApiClient.CreateStudioLinkAsync(
+                ActiveStudio.Id,
+                new UpsertStudioLinkRequest(NewStudioLinkLabel.Trim(), NewStudioLinkUrl.Trim()));
+
+            StudioSettingsLinks.Add(new StudioLinkDraft
+            {
+                Id = response.Link.Id,
+                Label = response.Link.Label,
+                Url = response.Link.Url
+            });
+            SyncActiveStudioLinks();
+            NewStudioLinkLabel = string.Empty;
+            NewStudioLinkUrl = string.Empty;
+            SetStudioStatus("Studio link added.", isError: false);
+        }
+        catch (Exception exception)
+        {
+            SetStudioStatus($"Add studio link failed: {exception.Message}", isError: true);
+        }
+        finally
+        {
+            IsAddingStudioLink = false;
+        }
+    }
+
+    private async Task SaveStudioLinkAsync(StudioLinkDraft draft)
+    {
+        if (ActiveStudio is null || draft.Id is null || BusyStudioLinkId == draft.Id)
+        {
+            return;
+        }
+
+        var validationMessage = ValidateStudioLinkDraft(draft.Label, draft.Url);
+        if (validationMessage is not null)
+        {
+            SetStudioStatus(validationMessage, isError: true);
+            return;
+        }
+
+        BusyStudioLinkId = draft.Id;
+        StudioStatusMessage = null;
+
+        try
+        {
+            var response = await ApiClient.UpdateStudioLinkAsync(
+                ActiveStudio.Id,
+                draft.Id.Value,
+                new UpsertStudioLinkRequest(draft.Label.Trim(), draft.Url.Trim()));
+
+            draft.Label = response.Link.Label;
+            draft.Url = response.Link.Url;
+            SyncActiveStudioLinks();
+            SetStudioStatus("Studio link saved.", isError: false);
+        }
+        catch (Exception exception)
+        {
+            SetStudioStatus($"Save studio link failed: {exception.Message}", isError: true);
+        }
+        finally
+        {
+            BusyStudioLinkId = null;
+        }
+    }
+
+    private async Task DeleteStudioLinkAsync(StudioLinkDraft draft)
+    {
+        if (ActiveStudio is null || draft.Id is null || BusyStudioLinkId == draft.Id)
+        {
+            return;
+        }
+
+        BusyStudioLinkId = draft.Id;
+        StudioStatusMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteStudioLinkAsync(ActiveStudio.Id, draft.Id.Value);
+            StudioSettingsLinks.Remove(draft);
+            SyncActiveStudioLinks();
+            SetStudioStatus("Studio link removed.", isError: false);
+        }
+        catch (Exception exception)
+        {
+            SetStudioStatus($"Delete studio link failed: {exception.Message}", isError: true);
+        }
+        finally
+        {
+            BusyStudioLinkId = null;
+        }
+    }
+
+    private void SyncActiveStudioLinks()
+    {
+        var activeStudio = ActiveStudio;
+        if (activeStudio is null)
+        {
+            return;
+        }
+
+        var updatedStudio = activeStudio with
+        {
+            Links = StudioSettingsLinks
+                .Where(candidate => candidate.Id is not null)
+                .Select(candidate => new StudioLink(
+                    candidate.Id!.Value,
+                    candidate.Label.Trim(),
+                    candidate.Url.Trim(),
+                    DateTime.UtcNow,
+                    DateTime.UtcNow))
+                .ToList()
+        };
+
+        UpsertManagedStudio(updatedStudio);
+    }
+
+    private static string? ValidateStudioLinkDraft(string? label, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return "Studio link label is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out _))
+        {
+            return "Studio link URL must be an absolute URI.";
+        }
+
+        return null;
+    }
+
+    private static async Task<ApiUploadFile?> CreateUploadFileAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file is null)
+        {
+            return null;
+        }
+
+        await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+        return new ApiUploadFile(file.Name, file.ContentType, memoryStream.ToArray());
+    }
+
+    private static string CreateDataUrl(ApiUploadFile file) => $"data:{file.ContentType};base64,{Convert.ToBase64String(file.Content)}";
+
+    private static string? GetPreferredStudioMediaPreview(string? uploadedPreviewUrl, string? configuredUrl) =>
+        !string.IsNullOrWhiteSpace(uploadedPreviewUrl)
+            ? uploadedPreviewUrl
+            : NormalizeOptionalText(configuredUrl);
 
     private void SetStudioStatus(string message, bool isError)
     {
@@ -1092,10 +1470,10 @@
     private bool HasActiveDomainData() =>
         ActiveDomain switch
         {
-            DevelopDomain.Studios => Organizations.Count > 0,
-            DevelopDomain.Titles => ActiveOrganizationTitles.Count > 0,
+            DevelopDomain.Studios => Studios.Count > 0,
+            DevelopDomain.Titles => ActiveStudioTitles.Count > 0,
             DevelopDomain.Releases => ActiveTitleReleases.Count > 0,
-            DevelopDomain.Publishing => ActiveOrganizationConnections.Count > 0 || ActiveTitleBindings.Count > 0,
+            DevelopDomain.Publishing => ActiveStudioConnections.Count > 0 || ActiveTitleBindings.Count > 0,
             _ => false
         };
 
@@ -1145,6 +1523,15 @@
         return ActiveWorkflow == workflowKey
             ? $"{baseClass} border-cyan-300/45 bg-cyan-300/15 text-cyan-50"
             : $"{baseClass} border-white/10 bg-black/15 text-slate-200 hover:border-cyan-300/45 hover:text-cyan-100";
+    }
+
+    private sealed class StudioLinkDraft
+    {
+        public Guid? Id { get; set; }
+
+        public string Label { get; set; } = string.Empty;
+
+        public string Url { get; set; } = string.Empty;
     }
 
     private readonly record struct DevelopWorkflow(string Key, string Label);

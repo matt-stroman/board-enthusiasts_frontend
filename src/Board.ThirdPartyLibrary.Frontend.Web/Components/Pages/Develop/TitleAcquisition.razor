@@ -42,7 +42,7 @@
             @if (Connections.Count == 0)
             {
                 <div class="mt-6 rounded-[1rem] border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-                    No integration connections exist for this organization. Create one from organization integrations first.
+                    No integration connections exist for this studio. Create one from studio integrations first.
                 </div>
 
                 <div class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -224,8 +224,8 @@
 
         await MutateBindingsAsync(async () =>
         {
-            await ApiClient.CreateOrganizationIntegrationConnectionAsync(
-                Title.OrganizationId,
+            await ApiClient.CreateStudioIntegrationConnectionAsync(
+                Title.StudioId,
                 new UpsertIntegrationConnectionRequest(
                     null,
                     NewConnectionDisplayName.Trim(),
@@ -233,7 +233,7 @@
                     null,
                     true));
 
-            Connections = (await ApiClient.GetOrganizationIntegrationConnectionsAsync(Title.OrganizationId)).IntegrationConnections;
+            Connections = (await ApiClient.GetStudioIntegrationConnectionsAsync(Title.StudioId)).IntegrationConnections;
             NewBindingConnectionId = Connections.FirstOrDefault()?.Id.ToString("D");
             NewConnectionDisplayName = null;
             NewConnectionHomepageUrl = null;
@@ -318,7 +318,7 @@
                 return;
             }
 
-            Connections = (await ApiClient.GetOrganizationIntegrationConnectionsAsync(Title.OrganizationId)).IntegrationConnections;
+            Connections = (await ApiClient.GetStudioIntegrationConnectionsAsync(Title.StudioId)).IntegrationConnections;
             NewBindingConnectionId = Connections.FirstOrDefault()?.Id.ToString("D");
             await RefreshBindingsAsync();
         }

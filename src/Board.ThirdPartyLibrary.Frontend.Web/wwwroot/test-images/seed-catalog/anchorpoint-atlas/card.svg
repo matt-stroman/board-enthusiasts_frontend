@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1280" role="img" aria-label="Anchorpoint Atlas card">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#102034"/><stop offset="58%" stop-color="#fb7185"/><stop offset="100%" stop-color="#050816"/></linearGradient>
+    <radialGradient id="glow" cx="72%" cy="18%" r="60%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.85"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="900" height="1280" rx="44" fill="url(#bg)"/>
+  <rect width="900" height="1280" fill="url(#glow)" opacity="0.85"/>
+  
+        <circle cx="702" cy="230" r="102" fill="#38bdf8" opacity="0.75"/>
+        <rect x="0" y="922" width="900" height="358" fill="#0a4f68"/>
+        <path d="M72 922 L198 589 L198 1178 L72 1178 Z" fill="#fff7ed" opacity="0.85"/>
+        <path d="M270 1178 L450 742 L648 1178" fill="#fff7ed" opacity="0.72"/>
+        
+  <rect x="0" y="922" width="900" height="358" fill="rgba(3,7,18,0.72)"/>
+  <text x="72" y="153" fill="#fff7ed" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">ANCHORPOINT</text><text x="72" y="261" fill="#fff7ed" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="90" font-weight="900" letter-spacing="6">ATLAS</text><text x="72" y="452" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">Globe-hop through glamorous</text><text x="72" y="503" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">seaside cities in search of</text><text x="72" y="554" fill="rgba(255,255,255,0.8)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="36" font-weight="600">a vanished mapmaker.</text>
+  <text x="72" y="1178" fill="rgba(255,255,255,0.86)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="33" font-weight="700" letter-spacing="4">GAME</text>
+</svg>

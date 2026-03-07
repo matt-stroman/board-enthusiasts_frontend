@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="North Maple Interactive banner">
+  <defs><linearGradient id="bannerBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c2d12"/><stop offset="100%" stop-color="#fb923c"/></linearGradient></defs>
+  <rect width="1600" height="900" fill="url(#bannerBg)"/>
+  <circle cx="1250" cy="190" r="150" fill="rgba(255,255,255,0.12)"/>
+  <path d="M0 760 C260 620 520 860 820 700 S1320 800 1600 620 L1600 900 L0 900 Z" fill="rgba(0,0,0,0.22)"/>
+  <text x="96" y="192" fill="#f8fafc" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="120" font-weight="900" letter-spacing="8">NORTH MAPLE INTERACTIVE</text>
+  <text x="96" y="274" fill="rgba(255,255,255,0.82)" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="34" font-weight="600">Strategic board-inspired designs for quick sessions and tournaments.</text>
+</svg>

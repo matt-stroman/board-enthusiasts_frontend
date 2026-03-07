@@ -1,4 +1,4 @@
-@page "/develop/studios/{OrganizationId:guid}/titles/new"
+@page "/develop/studios/{StudioId:guid}/titles/new"
 @attribute [Authorize]
 @using System.Net
 @using Microsoft.AspNetCore.Components.Forms
@@ -140,7 +140,7 @@
             <button class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" type="button" @onclick="TogglePreviewPanel">
                 @(IsPreviewVisible ? "Hide preview" : "Preview title")
             </button>
-            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/studios/@OrganizationId/titles">Back to titles</a>
+            <a class="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href="/develop/studios/@StudioId/titles">Back to titles</a>
         </div>
 
         @if (IsPreviewVisible)
@@ -200,7 +200,7 @@
 </section>
 
 @code {
-    [Parameter] public Guid OrganizationId { get; set; }
+    [Parameter] public Guid StudioId { get; set; }
 
     private const string CreateLifecycleStatus = "draft";
 
@@ -293,7 +293,7 @@
         try
         {
             var response = await ApiClient.CreateTitleAsync(
-                OrganizationId,
+                StudioId,
                 new CreateDeveloperTitleRequest(
                     GeneratedSlug,
                     ContentKind,
@@ -663,7 +663,7 @@
         }
     }
 
-    private string DraftStorageKey => $"{LocalDraftStorageKeyPrefix}:{OrganizationId:D}";
+    private string DraftStorageKey => $"{LocalDraftStorageKeyPrefix}:{StudioId:D}";
 
     private sealed class NewTitleMediaRoleState
     {

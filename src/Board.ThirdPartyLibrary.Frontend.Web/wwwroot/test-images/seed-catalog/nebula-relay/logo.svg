@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" role="img" aria-label="Nebula Relay logo">
+  <defs><linearGradient id="logoBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#090d24"/><stop offset="100%" stop-color="#4338ca"/></linearGradient></defs>
+  <rect x="24" y="24" width="1152" height="352" rx="42" fill="url(#logoBg)" opacity="0.24"/>
+  <circle cx="120" cy="200" r="88" fill="#22d3ee" opacity="0.6"/>
+  <text x="192" y="232" fill="#eef2ff" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="136" font-weight="900" letter-spacing="8">NEBULA RELAY</text>
+</svg>
