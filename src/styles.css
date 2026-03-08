@@ -1,0 +1,398 @@
+:root {
+  font-family: "Bahnschrift", "Aptos", "Segoe UI", sans-serif;
+  color: #f4f6f8;
+  background:
+    radial-gradient(circle at top, rgba(28, 140, 151, 0.42), transparent 32%),
+    linear-gradient(180deg, #0d1e29 0%, #112f3d 48%, #0b1318 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  width: min(1240px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 3rem;
+}
+
+.masthead,
+.panel,
+.hero-panel,
+.primary-nav {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 21, 29, 0.76);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.22);
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 1.75rem;
+}
+
+.brand-mark {
+  display: inline-block;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.brand-block p,
+.session-block span,
+.panel-description,
+.card-body p,
+.empty-state p,
+.list-item p {
+  color: #bfd2db;
+}
+
+.session-block {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  justify-items: end;
+  text-align: right;
+}
+
+.session-label,
+.eyebrow {
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #72d2d8;
+}
+
+.session-actions,
+.hero-actions,
+.button-row,
+.card-actions,
+.meta-row,
+.detail-grid,
+.workspace-selector {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primary-nav {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem;
+  margin-top: 1rem;
+  border-radius: 999px;
+}
+
+.primary-nav a,
+.pill-button,
+.selector-chip,
+.primary-button,
+.secondary-button,
+.danger-button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 0.72rem 1rem;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.primary-nav a.active,
+.primary-button,
+.selector-chip.active {
+  background: linear-gradient(135deg, #f2b540, #eb7b2d);
+  color: #10151a;
+  font-weight: 700;
+}
+
+.primary-nav a:hover,
+.pill-button:hover,
+.selector-chip:hover,
+.primary-button:hover,
+.secondary-button:hover,
+.danger-button:hover {
+  transform: translateY(-1px);
+}
+
+.secondary-button,
+.pill-button,
+.selector-chip {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.danger-button {
+  background: rgba(166, 52, 52, 0.2);
+  color: #ffd1d1;
+}
+
+.page-shell {
+  margin-top: 1.25rem;
+}
+
+.page-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.page-grid.narrow {
+  max-width: 780px;
+}
+
+.hero-panel,
+.panel {
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+}
+
+.hero-panel h1,
+.panel h2 {
+  margin: 0.35rem 0 0.75rem;
+  letter-spacing: -0.03em;
+}
+
+.hero-panel h1 {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.hero-panel.compact h1 {
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+.hero-panel.media-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 22rem;
+}
+
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+}
+
+.hero-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 42rem;
+}
+
+.card-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.card {
+  overflow: hidden;
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.card-media {
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, rgba(114, 210, 216, 0.2), rgba(242, 181, 64, 0.18));
+}
+
+.card-media img,
+.detail-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-logo {
+  max-width: 20rem;
+  height: auto;
+  margin-top: 1rem;
+}
+
+.card-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(114, 210, 216, 0.25), rgba(242, 181, 64, 0.2));
+}
+
+.card-body {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.card-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: rgba(114, 210, 216, 0.14);
+  color: #9ce9ec;
+  font-size: 0.82rem;
+}
+
+.field,
+.stack-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.form-grid,
+.detail-grid,
+.workspace-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.workspace-grid {
+  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  background: rgba(4, 12, 18, 0.76);
+  color: #f4f6f8;
+  padding: 0.8rem 0.95rem;
+}
+
+.field small {
+  color: #9fb3bd;
+}
+
+.inset-panel {
+  margin: 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.list-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.button-row.compact {
+  justify-content: flex-end;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.success-text {
+  color: #9ce9b0;
+}
+
+.error-text {
+  color: #ffb4b4;
+}
+
+.empty-state {
+  padding: 1rem 0;
+}
+
+.bullet-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    width: min(100% - 1rem, 1240px);
+  }
+
+  .masthead {
+    grid-template-columns: 1fr;
+  }
+
+  .session-block {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-panel,
+  .panel,
+  .masthead {
+    padding: 1.1rem;
+    border-radius: 1.2rem;
+  }
+
+  .primary-nav {
+    border-radius: 1.1rem;
+  }
+
+  .list-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
