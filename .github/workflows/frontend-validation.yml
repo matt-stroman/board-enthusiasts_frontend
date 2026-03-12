@@ -65,9 +65,13 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Run SPA tests
+      - name: Install workspace dependencies
         working-directory: root-workspace
-        run: npm ci && npm --workspace @board-enthusiasts/spa test
+        run: npm ci
+
+      - name: Run SPA tests
+        working-directory: root-workspace/frontend
+        run: npm test
 
       - name: Run maintained workspace typecheck
         working-directory: root-workspace
