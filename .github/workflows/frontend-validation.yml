@@ -1,0 +1,82 @@
+name: Frontend Validation
+
+on:
+  push:
+    branches:
+      - main
+      - feat/cloudflare-supabase-workers-frontend-cutover
+      - feat/cloudflare-supabase-workers-frontend-cutover-wave-wrapup
+  pull_request:
+    branches:
+      - main
+      - feat/cloudflare-supabase-workers-frontend-cutover
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Frontend In Root Workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout frontend PR branch
+        uses: actions/checkout@v4
+
+      - name: Determine root repo ref
+        id: root_ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ github.base_ref }}" = "main" ]; then
+              echo "root_ref=main" >> "$GITHUB_OUTPUT"
+            else
+              echo "root_ref=feat/cloudflare-supabase-workers-conversion-wave-3-frontend-cutover" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              echo "root_ref=main" >> "$GITHUB_OUTPUT"
+            else
+              echo "root_ref=feat/cloudflare-supabase-workers-conversion-wave-3-frontend-cutover" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Clone root workspace
+        run: |
+          git clone --depth 1 --branch "${{ steps.root_ref.outputs.root_ref }}" --recurse-submodules https://github.com/matt-stroman/board-enthusiasts.git root-workspace
+
+      - name: Overlay frontend PR contents into root workspace
+        run: |
+          rm -rf root-workspace/frontend
+          mkdir -p root-workspace/frontend
+          rsync -a --delete --exclude '.git/' ./ root-workspace/frontend/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install workspace dependencies
+        working-directory: root-workspace
+        run: npm ci
+
+      - name: Run SPA tests
+        working-directory: root-workspace/frontend
+        run: npm test
+
+      - name: Run maintained workspace typecheck
+        working-directory: root-workspace
+        run: npm run typecheck:migration
+
+      - name: Run Pages staging dry run
+        working-directory: root-workspace
+        run: python ./scripts/dev.py deploy-staging --dry-run --pages-only
