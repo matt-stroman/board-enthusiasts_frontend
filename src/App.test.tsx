@@ -539,6 +539,8 @@ describe("App", () => {
         email: "matt@example.com",
         firstName: "Matt",
         status: "subscribed",
+        lifecycleStatus: "waitlisted",
+        roleInterests: ["player", "developer"],
         source: "landing_page",
         consentedAt: "2026-03-12T18:00:00Z",
         updatedAt: "2026-03-12T18:00:00Z",
@@ -549,7 +551,9 @@ describe("App", () => {
 
     await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Matt");
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "matt@example.com");
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want to discover and follow new Board games and apps/i }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want to create third-party content for Board/i }));
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
     await waitFor(() => {
@@ -559,9 +563,68 @@ describe("App", () => {
         source: "landing_page",
         consentTextVersion: "landing-page-v1",
         turnstileToken: null,
+        roleInterests: ["player", "developer"],
       });
     });
     expect(await screen.findByText(/You are on the list/i)).toBeVisible();
+  });
+
+  it.each([
+    {
+      name: "submits with no explicit role interests",
+      toggleLabels: [] as string[],
+      expectedRoleInterests: [] as string[],
+    },
+    {
+      name: "submits with only the player role interest",
+      toggleLabels: ["I want to discover and follow new Board games and apps."],
+      expectedRoleInterests: ["player"],
+    },
+    {
+      name: "submits with only the developer role interest",
+      toggleLabels: ["I want to create third-party content for Board."],
+      expectedRoleInterests: ["developer"],
+    },
+  ])("$name", async ({ toggleLabels, expectedRoleInterests }) => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+    apiMocks.createMarketingSignup.mockResolvedValue({
+      accepted: true,
+      duplicate: false,
+      signup: {
+        email: "alex@example.com",
+        firstName: "Alex",
+        status: "subscribed",
+        lifecycleStatus: "waitlisted",
+        roleInterests: expectedRoleInterests,
+        source: "landing_page",
+        consentedAt: "2026-03-12T18:00:00Z",
+        updatedAt: "2026-03-12T18:00:00Z",
+      },
+    });
+
+    renderApp("/");
+
+    await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Alex");
+    await userEvent.type(screen.getByPlaceholderText("you@example.com"), "alex@example.com");
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    for (const label of toggleLabels) {
+      await userEvent.click(screen.getByRole("checkbox", { name: label }));
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createMarketingSignup).toHaveBeenCalledWith("http://127.0.0.1:8787", {
+        email: "alex@example.com",
+        firstName: "Alex",
+        source: "landing_page",
+        consentTextVersion: "landing-page-v1",
+        turnstileToken: null,
+        roleInterests: expectedRoleInterests,
+      });
+    });
   });
 
   it("lets the user one-click report a landing signup issue through the internal support endpoint", async () => {
@@ -576,7 +639,7 @@ describe("App", () => {
 
     await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
     expect(await screen.findByText(/We couldn't submit your signup right now/i)).toBeVisible();
@@ -611,7 +674,7 @@ describe("App", () => {
 
     await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
     await screen.findByText(/We couldn't submit your signup right now/i);
 

@@ -1528,6 +1528,8 @@ function LandingPage() {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [consented, setConsented] = useState(false);
+  const [playerInterestSelected, setPlayerInterestSelected] = useState(false);
+  const [developerInterestSelected, setDeveloperInterestSelected] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -1552,12 +1554,17 @@ function LandingPage() {
     setIssueReportStatusMessage(null);
     setShowManualIssueFallback(false);
     try {
+      const roleInterests = [
+        ...(playerInterestSelected ? ["player" as const] : []),
+        ...(developerInterestSelected ? ["developer" as const] : []),
+      ];
       const response = await createMarketingSignup(appConfig.apiBaseUrl, {
         email,
         firstName: firstName.trim() || null,
         source: landingSignupSource,
         consentTextVersion: landingConsentTextVersion,
         turnstileToken,
+        roleInterests,
       });
       setStatusMessage(
         response.duplicate
@@ -1567,6 +1574,8 @@ function LandingPage() {
       setEmail("");
       setFirstName("");
       setConsented(false);
+      setPlayerInterestSelected(false);
+      setDeveloperInterestSelected(false);
       setTurnstileToken(null);
     } catch (error) {
       setErrorMessage("We couldn't submit your signup right now. Please try again, or report the issue and we'll help you out.");
@@ -1704,6 +1713,28 @@ function LandingPage() {
                 <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} disabled={submitting} />
                 <span>I want email updates from Board Enthusiasts about launch progress, new BE resources, community announcements, and future invites.</span>
               </label>
+
+              <fieldset className="landing-role-interest-group">
+                <legend className="eyebrow">Interested in</legend>
+                <label className="landing-consent">
+                  <input
+                    type="checkbox"
+                    checked={playerInterestSelected}
+                    onChange={(event) => setPlayerInterestSelected(event.currentTarget.checked)}
+                    disabled={submitting}
+                  />
+                  <span>I want to discover and follow new Board games and apps.</span>
+                </label>
+                <label className="landing-consent">
+                  <input
+                    type="checkbox"
+                    checked={developerInterestSelected}
+                    onChange={(event) => setDeveloperInterestSelected(event.currentTarget.checked)}
+                    disabled={submitting}
+                  />
+                  <span>I want to create third-party content for Board.</span>
+                </label>
+              </fieldset>
 
               {appConfig.turnstileSiteKey ? <TurnstileWidget siteKey={appConfig.turnstileSiteKey} onTokenChange={setTurnstileToken} /> : null}
 

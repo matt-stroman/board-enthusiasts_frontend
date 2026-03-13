@@ -100,6 +100,8 @@ describe("catalog API helpers", () => {
           email: "hello@example.com",
           firstName: "Matt",
           status: "subscribed",
+          lifecycleStatus: "waitlisted",
+          roleInterests: ["player"],
           source: "landing_page",
           consentedAt: "2026-03-12T19:00:00Z",
           updatedAt: "2026-03-12T19:00:00Z",
@@ -114,6 +116,7 @@ describe("catalog API helpers", () => {
       source: "landing_page",
       consentTextVersion: "landing-v1",
       turnstileToken: "token-123",
+      roleInterests: ["player"],
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -127,6 +130,7 @@ describe("catalog API helpers", () => {
           source: "landing_page",
           consentTextVersion: "landing-v1",
           turnstileToken: "token-123",
+          roleInterests: ["player"],
         }),
       }),
     );
