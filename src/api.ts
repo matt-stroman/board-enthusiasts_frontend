@@ -69,6 +69,7 @@ export interface StudioMutationRequest {
   slug: string;
   displayName: string;
   description?: string | null;
+  avatarUrl?: string | null;
   logoUrl?: string | null;
   bannerUrl?: string | null;
 }
@@ -399,7 +400,7 @@ export function uploadStudioMedia(
   apiBaseUrl: string,
   accessToken: string,
   studioId: string,
-  kind: "logo" | "banner",
+  kind: "avatar" | "logo" | "banner",
   file: File
 ): Promise<StudioResponse> {
   const formData = new FormData();

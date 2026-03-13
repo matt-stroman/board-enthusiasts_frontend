@@ -551,6 +551,10 @@ function getTitleLogoAsset(title: CatalogTitleResponse["title"]): TitleMediaAsse
   return title.mediaAssets.find((asset) => asset.mediaRole === "logo") ?? null;
 }
 
+function getStudioAvatarImageUrl(studio: { avatarUrl: string | null; logoUrl: string | null }): string | null {
+  return studio.avatarUrl ?? studio.logoUrl ?? null;
+}
+
 function createAvatarEditorState(profile: UserProfile | null): AvatarEditorState {
   const avatarUrl = profile?.avatarUrl ?? "";
   if (avatarUrl.startsWith("data:")) {
@@ -862,6 +866,7 @@ function TitleNameHeading({
 }
 
 function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudioSummary }) {
+  const avatarUrl = getStudioAvatarImageUrl(studio);
   return (
     <article className="app-panel overflow-hidden p-0">
       <div
@@ -875,8 +880,8 @@ function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudioSummary
               <h3 className="font-display text-2xl font-bold text-white">{studio.displayName}</h3>
               <p className="max-w-xl text-sm leading-7 text-slate-300">{studio.description ?? "No studio summary yet."}</p>
             </div>
-            {studio.logoUrl ? (
-              <img className="h-16 w-16 rounded-[1rem] border border-white/10 object-cover" src={studio.logoUrl} alt={`${studio.displayName} logo`} />
+            {avatarUrl ? (
+              <img className="h-16 w-16 rounded-[1rem] border border-white/10 object-cover" src={avatarUrl} alt={`${studio.displayName} avatar`} />
             ) : null}
           </div>
           <div className="mt-5">
@@ -3135,6 +3140,7 @@ function StudioDetailPage() {
   }
 
   const additionalStudioLinks = studio.links.filter((link) => !isKnownStudioLink(link.url));
+  const studioAvatarUrl = getStudioAvatarImageUrl(studio);
 
   return (
     <section className="space-y-8">
@@ -3162,7 +3168,7 @@ function StudioDetailPage() {
                   </div>
                 ) : null}
               </div>
-              {studio.logoUrl ? <img className="surface-panel-strong h-24 w-24 rounded-[1.5rem] object-cover shadow-[0_12px_32px_rgba(0,0,0,0.35)] md:h-32 md:w-32" src={studio.logoUrl} alt={`${studio.displayName} logo`} /> : null}
+              {studioAvatarUrl ? <img className="surface-panel-strong h-24 w-24 rounded-[1.5rem] object-cover shadow-[0_12px_32px_rgba(0,0,0,0.35)] md:h-32 md:w-32" src={studioAvatarUrl} alt={`${studio.displayName} avatar`} /> : null}
             </div>
           </div>
         </div>

@@ -318,6 +318,7 @@ describe("App", () => {
           slug: "blue-harbor-games",
           displayName: "Blue Harbor Games",
           description: studioDescription,
+          avatarUrl: "/seed-catalog/studios/blue-harbor-games/avatar.svg",
           logoUrl: "/seed-catalog/studios/blue-harbor-games/logo.svg",
           bannerUrl: "/seed-catalog/studios/blue-harbor-games/banner.svg",
           role: "owner",
@@ -794,6 +795,7 @@ describe("App", () => {
         slug: "harborlight-mechanics",
         displayName: "Harborlight Mechanics",
         description: "Utility-driven support apps and polished tabletop helpers.",
+        avatarUrl: null,
         logoUrl: null,
         bannerUrl: null,
         links: [],
@@ -1643,7 +1645,7 @@ describe("App", () => {
     });
   });
 
-  it("supports studio media previews from url and upload in the create studio flow", async () => {
+  it("supports studio avatar and media previews from url and upload in the create studio flow", async () => {
     seedDeveloperWorkspace();
     apiMocks.createStudio.mockResolvedValue({
       studio: {
@@ -1651,6 +1653,7 @@ describe("App", () => {
         slug: "signal-harbor-studio",
         displayName: "Signal Harbor Studio",
         description: "A coastal co-op studio profile.",
+        avatarUrl: null,
         logoUrl: null,
         bannerUrl: null,
         role: "owner",
@@ -1663,6 +1666,7 @@ describe("App", () => {
         slug: "signal-harbor-studio",
         displayName: "Signal Harbor Studio",
         description: "A coastal co-op studio profile.",
+        avatarUrl: "/uploads/avatar.png",
         logoUrl: "/uploads/logo.png",
         bannerUrl: null,
         role: "owner",
@@ -1678,23 +1682,31 @@ describe("App", () => {
     const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
     expect(createStudioForm).not.toBeNull();
 
+    const avatarPanel = within(createStudioForm as HTMLElement).getByText("Avatar").closest("section");
     const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+    expect(avatarPanel).not.toBeNull();
     expect(logoPanel).not.toBeNull();
 
     await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /studio display name/i }), "Signal Harbor Studio");
     await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /description/i }), "A coastal co-op studio profile.");
+    await userEvent.type(within(avatarPanel as HTMLElement).getByLabelText("URL"), "https://example.com/avatar.png");
     await userEvent.type(within(logoPanel as HTMLElement).getByLabelText("URL"), "https://example.com/logo.png");
 
     await waitFor(() => {
+      expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview")).toHaveAttribute("src", "https://example.com/avatar.png");
       expect(within(logoPanel as HTMLElement).getByAltText("Logo preview")).toHaveAttribute("src", "https://example.com/logo.png");
     });
 
-    const [logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
+    const [avatarUploadInput, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
+    expect(avatarUploadInput).not.toBeUndefined();
     expect(logoUploadInput).not.toBeUndefined();
 
+    await userEvent.upload(avatarUploadInput as HTMLInputElement, new File(["avatar-bytes"], "studio-avatar.png", { type: "image/png" }));
     await userEvent.upload(logoUploadInput as HTMLInputElement, new File(["logo-bytes"], "studio-logo.png", { type: "image/png" }));
 
     await waitFor(() => {
+      expect(within(avatarPanel as HTMLElement).getByText("studio-avatar.png")).toBeVisible();
+      expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview").getAttribute("src")).toMatch(/^data:image\/png/);
       expect(within(logoPanel as HTMLElement).getByText("studio-logo.png")).toBeVisible();
       expect(within(logoPanel as HTMLElement).getByAltText("Logo preview").getAttribute("src")).toMatch(/^data:image\/png/);
     });
@@ -1702,7 +1714,8 @@ describe("App", () => {
     await userEvent.click(within(createStudioForm as HTMLElement).getByRole("button", { name: "Create studio" }));
 
     await waitFor(() => {
-      expect(apiMocks.createStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", expect.objectContaining({ logoUrl: null }));
+      expect(apiMocks.createStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", expect.objectContaining({ avatarUrl: null, logoUrl: null }));
+      expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "avatar", expect.any(File));
       expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "logo", expect.any(File));
     });
   });
@@ -2019,9 +2032,9 @@ describe("App", () => {
     });
     apiMocks.listManagedStudios.mockResolvedValue({
       studios: [
-        { id: "studio-1", slug: "pine-labs", displayName: "Pine Labs", description: "Pine Labs profile.", logoUrl: null, bannerUrl: null, role: "owner", links: [] },
-        { id: "studio-2", slug: "blue-fairy-games", displayName: "Blue Fairy Games", description: "Blue Fairy Games profile.", logoUrl: null, bannerUrl: null, role: "owner", links: [] },
-        { id: "studio-3", slug: "great-gobs", displayName: "Great Gobs", description: "Great Gobs profile.", logoUrl: null, bannerUrl: null, role: "owner", links: [] },
+        { id: "studio-1", slug: "pine-labs", displayName: "Pine Labs", description: "Pine Labs profile.", avatarUrl: null, logoUrl: null, bannerUrl: null, role: "owner", links: [] },
+        { id: "studio-2", slug: "blue-fairy-games", displayName: "Blue Fairy Games", description: "Blue Fairy Games profile.", avatarUrl: null, logoUrl: null, bannerUrl: null, role: "owner", links: [] },
+        { id: "studio-3", slug: "great-gobs", displayName: "Great Gobs", description: "Great Gobs profile.", avatarUrl: null, logoUrl: null, bannerUrl: null, role: "owner", links: [] },
       ],
     });
     apiMocks.listStudioLinks.mockImplementation(async (_baseUrl: string, _token: string, studioId: string) => {

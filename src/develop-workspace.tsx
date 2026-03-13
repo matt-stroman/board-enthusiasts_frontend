@@ -69,6 +69,7 @@ import {
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";
 const STUDIO_MEDIA_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const STUDIO_AVATAR_UPLOAD_MAX_BYTES = 256 * 1024;
 
 type Domain = "studios" | "titles" | "releases";
 type Workflow =
@@ -101,6 +102,7 @@ type StudioDraft = {
   displayName: string;
   slug: string;
   description: string;
+  avatar: StudioMediaDraft;
   logo: StudioMediaDraft;
   banner: StudioMediaDraft;
   links: Array<{ id?: string; label: string; url: string }>;
@@ -138,7 +140,8 @@ type ReleaseDraft = {
   acquisitionUrl: string;
 };
 
-type PersistedStudioDraft = Omit<StudioDraft, "logo" | "banner"> & {
+type PersistedStudioDraft = Omit<StudioDraft, "avatar" | "logo" | "banner"> & {
+  avatar: Omit<StudioMediaDraft, "file">;
   logo: Omit<StudioMediaDraft, "file">;
   banner: Omit<StudioMediaDraft, "file">;
 };
@@ -187,18 +190,22 @@ function getStudioMediaPreview(media: StudioMediaDraft): string {
   return media.previewUrl || media.url;
 }
 
-async function readStudioMediaUpload(file: File): Promise<{ dataUrl: string; fileName: string }> {
+async function readStudioMediaUpload(file: File, uploadLimitBytes: number, label: string): Promise<{ dataUrl: string; fileName: string }> {
   if (!file.type.startsWith("image/")) {
-    throw new Error("Uploaded studio media must be an image.");
+    throw new Error(`Uploaded ${label.toLowerCase()} must be an image.`);
   }
-  if (file.size > STUDIO_MEDIA_UPLOAD_MAX_BYTES) {
-    throw new Error(`Uploaded studio media must be ${Math.round(STUDIO_MEDIA_UPLOAD_MAX_BYTES / (1024 * 1024))} MB or smaller.`);
+  if (file.size > uploadLimitBytes) {
+    throw new Error(
+      uploadLimitBytes === STUDIO_AVATAR_UPLOAD_MAX_BYTES
+        ? "Uploaded avatar must be 256 KB or smaller."
+        : `Uploaded ${label.toLowerCase()} must be ${Math.round(uploadLimitBytes / (1024 * 1024))} MB or smaller.`
+    );
   }
 
   const reader = new FileReader();
   const result = await new Promise<string>((resolve, reject) => {
     reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error("Studio media upload could not be read."));
+    reader.onerror = () => reject(new Error(`${label} upload could not be read.`));
     reader.readAsDataURL(file);
   });
 
@@ -278,6 +285,7 @@ function createStudioDraft(studio?: DeveloperStudioSummary | null, links: Studio
     displayName: studio?.displayName ?? "",
     slug: studio?.slug ?? "",
     description: studio?.description ?? "",
+    avatar: createStudioMediaDraft(studio?.avatarUrl),
     logo: createStudioMediaDraft(studio?.logoUrl),
     banner: createStudioMediaDraft(studio?.bannerUrl),
     links: links.length > 0 ? links.map((link) => ({ id: link.id, label: link.label, url: link.url })) : [{ label: "", url: "" }],
@@ -330,6 +338,11 @@ function createReleaseDraft(release?: TitleRelease | null, revision = 1): Releas
 function toPersistedStudioDraft(draft: StudioDraft): PersistedStudioDraft {
   return {
     ...draft,
+    avatar: {
+      url: draft.avatar.url,
+      previewUrl: draft.avatar.previewUrl,
+      fileName: draft.avatar.fileName,
+    },
     logo: {
       url: draft.logo.url,
       previewUrl: draft.logo.previewUrl,
@@ -346,6 +359,12 @@ function toPersistedStudioDraft(draft: StudioDraft): PersistedStudioDraft {
 function fromPersistedStudioDraft(draft: PersistedStudioDraft): StudioDraft {
   return {
     ...draft,
+    avatar: {
+      url: draft.avatar?.url ?? "",
+      previewUrl: draft.avatar?.previewUrl ?? draft.avatar?.url ?? "",
+      fileName: draft.avatar?.fileName ?? null,
+      file: null,
+    },
     logo: {
       url: draft.logo.url,
       previewUrl: draft.logo.previewUrl,
@@ -770,6 +789,7 @@ function StudioImageField({
 
 function StudioPreviewModal({ studio, onClose }: { studio: StudioDraft; onClose: () => void }) {
   const bannerPreview = getStudioMediaPreview(studio.banner);
+  const avatarPreview = getStudioMediaPreview(studio.avatar);
   const logoPreview = getStudioMediaPreview(studio.logo);
 
   return (
@@ -780,7 +800,13 @@ function StudioPreviewModal({ studio, onClose }: { studio: StudioDraft; onClose:
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/45 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <div className="flex items-end gap-4">
-              {logoPreview ? <img className="h-20 w-20 rounded-[1.25rem] border border-white/10 object-cover" src={logoPreview} alt={`${studio.displayName || "Studio"} logo`} /> : null}
+              {avatarPreview || logoPreview ? (
+                <img
+                  className="h-20 w-20 rounded-[1.25rem] border border-white/10 object-cover"
+                  src={avatarPreview || logoPreview}
+                  alt={`${studio.displayName || "Studio"} avatar`}
+                />
+              ) : null}
               <div>
                 <h2 id="studio-preview-title" className="text-3xl font-semibold text-white">
                   {studio.displayName || "Untitled studio"}
@@ -1282,7 +1308,7 @@ export function DevelopWorkspacePage() {
     setStudioOverviewDraft(updater);
   }
 
-  function updateStudioMedia(target: "create" | "overview", mediaRole: "logo" | "banner", patch: Partial<StudioMediaDraft>): void {
+  function updateStudioMedia(target: "create" | "overview", mediaRole: "avatar" | "logo" | "banner", patch: Partial<StudioMediaDraft>): void {
     const updater = (current: StudioDraft): StudioDraft => ({
       ...current,
       [mediaRole]: {
@@ -1298,13 +1324,17 @@ export function DevelopWorkspacePage() {
     setStudioOverviewDraft(updater);
   }
 
-  async function handleStudioMediaUpload(target: "create" | "overview", mediaRole: "logo" | "banner", file: File | null): Promise<void> {
+  async function handleStudioMediaUpload(target: "create" | "overview", mediaRole: "avatar" | "logo" | "banner", file: File | null): Promise<void> {
     if (!file) {
       return;
     }
 
     try {
-      const upload = await readStudioMediaUpload(file);
+      const upload = await readStudioMediaUpload(
+        file,
+        mediaRole === "avatar" ? STUDIO_AVATAR_UPLOAD_MAX_BYTES : STUDIO_MEDIA_UPLOAD_MAX_BYTES,
+        mediaRole === "avatar" ? "Avatar" : mediaRole === "logo" ? "Logo" : "Banner"
+      );
       updateStudioMedia(target, mediaRole, {
         url: "",
         previewUrl: upload.dataUrl,
@@ -1502,7 +1532,7 @@ export function DevelopWorkspacePage() {
   }
 
   async function applyStudioMedia(studioId: string, draft: StudioDraft): Promise<void> {
-    for (const mediaRole of ["logo", "banner"] as const) {
+    for (const mediaRole of ["avatar", "logo", "banner"] as const) {
       const media = draft[mediaRole];
       if (media.file) {
         await uploadStudioMedia(appConfig.apiBaseUrl, accessToken, studioId, mediaRole, media.file);
@@ -1569,6 +1599,7 @@ export function DevelopWorkspacePage() {
         slug: studioCreateDraft.slug,
         displayName: studioCreateDraft.displayName.trim(),
         description: studioCreateDraft.description.trim(),
+        avatarUrl: studioCreateDraft.avatar.file ? null : studioCreateDraft.avatar.url.trim() || null,
         logoUrl: studioCreateDraft.logo.file ? null : studioCreateDraft.logo.url.trim() || null,
         bannerUrl: studioCreateDraft.banner.file ? null : studioCreateDraft.banner.url.trim() || null,
       });
@@ -1611,6 +1642,7 @@ export function DevelopWorkspacePage() {
         slug: studioOverviewDraft.slug,
         displayName: studioOverviewDraft.displayName.trim(),
         description: studioOverviewDraft.description.trim(),
+        avatarUrl: studioOverviewDraft.avatar.file ? null : studioOverviewDraft.avatar.url.trim() || null,
         logoUrl: studioOverviewDraft.logo.file ? null : studioOverviewDraft.logo.url.trim() || null,
         bannerUrl: studioOverviewDraft.banner.file ? null : studioOverviewDraft.banner.url.trim() || null,
       });
@@ -2064,6 +2096,7 @@ export function DevelopWorkspacePage() {
     const touched = mode === "create" ? studioCreateTouched : studioOverviewTouched;
     const validation = mode === "create" ? studioCreateValidation : studioOverviewValidation;
     const editing = mode === "create" ? true : studioOverviewEditing;
+    const avatarPreview = getStudioMediaPreview(draft.avatar);
     const logoPreview = getStudioMediaPreview(draft.logo);
     const bannerPreview = getStudioMediaPreview(draft.banner);
 
@@ -2083,7 +2116,13 @@ export function DevelopWorkspacePage() {
             <ReadOnlyField label="Description" value={<p className="max-w-4xl text-base leading-8 text-slate-200">{draft.description || "No description yet."}</p>} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <section className="surface-panel-strong rounded-[1rem] p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Avatar</div>
+              <div className="mt-3 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/40">
+                {avatarPreview ? <img className="h-40 w-full object-cover" src={avatarPreview} alt={`${draft.displayName || "Studio"} avatar`} /> : <div className="grid h-40 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No avatar</div>}
+              </div>
+            </section>
             <section className="surface-panel-strong rounded-[1rem] p-4">
               <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo</div>
               <div className="mt-3 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/40">
@@ -2159,7 +2198,15 @@ export function DevelopWorkspacePage() {
           />
         </Field>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <StudioImageField
+            label="Avatar"
+            state={draft.avatar}
+            disabled={!editing}
+            onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", { url: value, previewUrl: value, file: null, fileName: null })}
+            onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "avatar", file)}
+            onRemove={() => updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", createStudioMediaDraft(""))}
+          />
           <StudioImageField
             label="Logo"
             state={draft.logo}
