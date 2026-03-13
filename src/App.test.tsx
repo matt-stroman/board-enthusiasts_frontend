@@ -98,7 +98,7 @@ const configState = vi.hoisted(() => ({
   value: {
     apiBaseUrl: "http://127.0.0.1:8787",
     supabaseUrl: "http://127.0.0.1:55421",
-    supabaseAnonKey: "anon-key",
+    supabasePublishableKey: "publishable-key",
     turnstileSiteKey: null as string | null,
     landingMode: false,
   },
@@ -172,7 +172,7 @@ describe("App", () => {
     configState.value = {
       apiBaseUrl: "http://127.0.0.1:8787",
       supabaseUrl: "http://127.0.0.1:55421",
-      supabaseAnonKey: "anon-key",
+      supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
       landingMode: false,
     };

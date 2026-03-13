@@ -1,7 +1,7 @@
 export interface AppConfig {
   apiBaseUrl: string;
   supabaseUrl: string;
-  supabaseAnonKey: string;
+  supabasePublishableKey: string;
   turnstileSiteKey: string | null;
   landingMode: boolean;
 }
@@ -9,7 +9,7 @@ export interface AppConfig {
 export interface FrontendRuntimeEnv {
   VITE_API_BASE_URL?: string;
   VITE_SUPABASE_URL?: string;
-  VITE_SUPABASE_ANON_KEY?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
   VITE_TURNSTILE_SITE_KEY?: string;
   VITE_LANDING_MODE?: string;
 }
@@ -47,7 +47,7 @@ export function readAppConfigFromEnv(env: FrontendRuntimeEnv): AppConfig {
   return {
     apiBaseUrl: requireRuntimeUrl("VITE_API_BASE_URL", env.VITE_API_BASE_URL),
     supabaseUrl: requireRuntimeUrl("VITE_SUPABASE_URL", env.VITE_SUPABASE_URL),
-    supabaseAnonKey: requireValue("VITE_SUPABASE_ANON_KEY", env.VITE_SUPABASE_ANON_KEY),
+    supabasePublishableKey: requireValue("VITE_SUPABASE_PUBLISHABLE_KEY", env.VITE_SUPABASE_PUBLISHABLE_KEY),
     turnstileSiteKey: (env.VITE_TURNSTILE_SITE_KEY ?? "").trim() || null,
     landingMode: (env.VITE_LANDING_MODE ?? "").trim().toLowerCase() === "true",
   };

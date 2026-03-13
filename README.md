@@ -39,3 +39,28 @@ python ./scripts/dev.py web --hot-reload
 ```
 
 That path starts local Supabase, the Workers API, and this SPA together.
+
+## Environment Files
+
+This submodule does not own the maintained `.env` files for the stack.
+
+The supported environment files are root-managed under [`../config`](../config):
+
+- [`../config/.env.local.example`](../config/.env.local.example)
+- [`../config/.env.staging.example`](../config/.env.staging.example)
+- [`../config/.env.example`](../config/.env.example)
+
+For hosted frontend builds, the important public runtime values are:
+
+- `VITE_API_BASE_URL`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_TURNSTILE_SITE_KEY`
+- `VITE_LANDING_MODE`
+
+Use the root CLI to inspect or bootstrap the root-managed files:
+
+```bash
+python ./scripts/dev.py env local --copy-example
+python ./scripts/dev.py env local --open
+```

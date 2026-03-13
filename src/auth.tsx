@@ -33,7 +33,7 @@ interface AuthContextValue {
 }
 
 const appConfig = readAppConfig();
-const supabase = createClient(appConfig.supabaseUrl, appConfig.supabaseAnonKey);
+const supabase = createClient(appConfig.supabaseUrl, appConfig.supabasePublishableKey);
 const AuthContext = createContext<AuthContextValue | null>(null);
 const developerOrAboveRoles: readonly PlatformRole[] = ["developer", "verified_developer", "moderator", "admin", "super_admin"];
 const moderatorOrAboveRoles: readonly PlatformRole[] = ["moderator", "admin", "super_admin"];
