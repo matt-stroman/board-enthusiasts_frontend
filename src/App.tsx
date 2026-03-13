@@ -17,6 +17,7 @@ import type {
   UserNotification,
   UserProfile,
 } from "@board-enthusiasts/migration-contract";
+import { migrationMediaUploadPolicies } from "@board-enthusiasts/migration-contract";
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   Link,
@@ -119,7 +120,9 @@ const supportedPublisherOptions = [
 ] as const;
 const PLAYER_FILTER_MIN = 1;
 const PLAYER_FILTER_MAX = 8;
-const AVATAR_UPLOAD_MAX_BYTES = 256 * 1024;
+const avatarUploadPolicy = migrationMediaUploadPolicies.avatars;
+const AVATAR_UPLOAD_MAX_BYTES = avatarUploadPolicy.maxUploadBytes;
+const AVATAR_UPLOAD_ACCEPT = avatarUploadPolicy.acceptedMimeTypes.join(",");
 const USER_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -579,8 +582,8 @@ async function readAvatarUpload(event: ChangeEvent<HTMLInputElement>): Promise<{
   if (!file) {
     throw new Error("No avatar file was selected.");
   }
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Uploaded avatar must be an image.");
+  if (!avatarUploadPolicy.acceptedMimeTypes.some((mimeType) => mimeType === file.type)) {
+    throw new Error("Uploaded avatar must be a WEBP, JPEG, or PNG image.");
   }
   if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
     throw new Error(`Uploaded avatar must be ${formatBinaryFileSize(AVATAR_UPLOAD_MAX_BYTES)} or smaller.`);
@@ -817,7 +820,7 @@ function AvatarEditor({
         <div className="mt-4">
           <Field label="Upload image">
             <FilePicker
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept={AVATAR_UPLOAD_ACCEPT}
               selectedFileName={state.fileName}
               onChange={onUpload}
               disabled={disabled}

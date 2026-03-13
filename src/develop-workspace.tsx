@@ -12,6 +12,7 @@ import {
   TitleRelease,
   TitleReportDetail,
   TitleReportSummary,
+  migrationMediaUploadPolicies,
   normalizeGenreSlug,
 } from "@board-enthusiasts/migration-contract";
 import { useEffect, useId, useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
@@ -68,8 +69,16 @@ import {
 
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";
-const STUDIO_MEDIA_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
-const STUDIO_AVATAR_UPLOAD_MAX_BYTES = 256 * 1024;
+const studioMediaUploadPolicies = {
+  avatar: migrationMediaUploadPolicies.avatars,
+  logo: migrationMediaUploadPolicies.logoImages,
+  banner: migrationMediaUploadPolicies.heroImages,
+} as const;
+const titleMediaUploadPolicies = {
+  card: migrationMediaUploadPolicies.cardImages,
+  hero: migrationMediaUploadPolicies.heroImages,
+  logo: migrationMediaUploadPolicies.logoImages,
+} as const;
 
 type Domain = "studios" | "titles" | "releases";
 type Workflow =
@@ -190,22 +199,43 @@ function getStudioMediaPreview(media: StudioMediaDraft): string {
   return media.previewUrl || media.url;
 }
 
-async function readStudioMediaUpload(file: File, uploadLimitBytes: number, label: string): Promise<{ dataUrl: string; fileName: string }> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error(`Uploaded ${label.toLowerCase()} must be an image.`);
-  }
-  if (file.size > uploadLimitBytes) {
-    throw new Error(
-      uploadLimitBytes === STUDIO_AVATAR_UPLOAD_MAX_BYTES
-        ? "Uploaded avatar must be 256 KB or smaller."
-        : `Uploaded ${label.toLowerCase()} must be ${Math.round(uploadLimitBytes / (1024 * 1024))} MB or smaller.`
-    );
-  }
+function formatAcceptedMimeTypes(mimeTypes: readonly string[]): string {
+  return mimeTypes
+    .map((mimeType) => {
+      switch (mimeType) {
+        case "image/jpeg":
+          return "JPEG";
+        case "image/png":
+          return "PNG";
+        case "image/webp":
+          return "WEBP";
+        case "image/svg+xml":
+          return "SVG";
+        default:
+          return mimeType;
+      }
+    })
+    .join(", ");
+}
 
+function assertSelectedMediaFile(
+  file: File,
+  policy: { acceptedMimeTypes: readonly string[]; maxUploadBytes: number },
+  label: string,
+): void {
+  if (!policy.acceptedMimeTypes.some((mimeType) => mimeType === file.type)) {
+    throw new Error(`Uploaded ${label} must be ${formatAcceptedMimeTypes(policy.acceptedMimeTypes)}.`);
+  }
+  if (file.size > policy.maxUploadBytes) {
+    throw new Error(`Uploaded ${label} must be ${Math.round(policy.maxUploadBytes / 1024)} KB or smaller.`);
+  }
+}
+
+async function readImageDataUrl(file: File, readErrorMessage: string): Promise<{ dataUrl: string; fileName: string }> {
   const reader = new FileReader();
   const result = await new Promise<string>((resolve, reject) => {
     reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error(`${label} upload could not be read.`));
+    reader.onerror = () => reject(new Error(readErrorMessage));
     reader.readAsDataURL(file);
   });
 
@@ -213,6 +243,11 @@ async function readStudioMediaUpload(file: File, uploadLimitBytes: number, label
     dataUrl: result,
     fileName: file.name,
   };
+}
+
+async function readStudioMediaUpload(file: File, mediaRole: "avatar" | "logo" | "banner"): Promise<{ dataUrl: string; fileName: string }> {
+  assertSelectedMediaFile(file, studioMediaUploadPolicies[mediaRole], mediaRole === "avatar" ? "avatar" : `studio ${mediaRole} image`);
+  return readImageDataUrl(file, "Studio media upload could not be read.");
 }
 
 function parseGenreTags(value: string | null | undefined): string[] {
@@ -702,6 +737,7 @@ function ImageField({
   label,
   state,
   previewUrl,
+  accept,
   disabled,
   onUrlChange,
   onAltTextChange,
@@ -711,6 +747,7 @@ function ImageField({
   label: string;
   state: { url: string; altText: string; file: File | null };
   previewUrl: string;
+  accept: string;
   disabled: boolean;
   onUrlChange: (value: string) => void;
   onAltTextChange: (value: string) => void;
@@ -733,7 +770,7 @@ function ImageField({
       </label>
       <label className={`secondary-button mt-3 inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
         Upload image
-        <input className="sr-only" type="file" accept="image/*" disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
+        <input className="sr-only" type="file" accept={accept} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
       </label>
       {previewUrl ? (
         <button className="secondary-button mt-3" type="button" onClick={onRemove} disabled={disabled}>
@@ -747,6 +784,7 @@ function ImageField({
 function StudioImageField({
   label,
   state,
+  accept,
   disabled,
   onUrlChange,
   onFileChange,
@@ -754,6 +792,7 @@ function StudioImageField({
 }: {
   label: string;
   state: StudioMediaDraft;
+  accept: string;
   disabled: boolean;
   onUrlChange: (value: string) => void;
   onFileChange: (file: File | null) => void;
@@ -774,7 +813,7 @@ function StudioImageField({
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <label className={`secondary-button inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
           Upload image
-          <input className="sr-only" type="file" accept="image/*" disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
+          <input className="sr-only" type="file" accept={accept} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
         </label>
         <span className="text-sm text-slate-400">{state.fileName ?? "No upload selected"}</span>
         {previewUrl ? (
@@ -1330,17 +1369,27 @@ export function DevelopWorkspacePage() {
     }
 
     try {
-      const upload = await readStudioMediaUpload(
-        file,
-        mediaRole === "avatar" ? STUDIO_AVATAR_UPLOAD_MAX_BYTES : STUDIO_MEDIA_UPLOAD_MAX_BYTES,
-        mediaRole === "avatar" ? "Avatar" : mediaRole === "logo" ? "Logo" : "Banner"
-      );
+      const upload = await readStudioMediaUpload(file, mediaRole);
       updateStudioMedia(target, mediaRole, {
         url: "",
         previewUrl: upload.dataUrl,
         fileName: upload.fileName,
         file,
       });
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  function handleTitleMediaUpload(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", file: File | null): void {
+    if (!file) {
+      return;
+    }
+
+    try {
+      assertSelectedMediaFile(file, titleMediaUploadPolicies[mediaRole], `${mediaRole} image`);
+      updateTitleMedia(target, mediaRole, { file, url: "" });
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -2202,6 +2251,7 @@ export function DevelopWorkspacePage() {
           <StudioImageField
             label="Avatar"
             state={draft.avatar}
+            accept={studioMediaUploadPolicies.avatar.acceptedMimeTypes.join(",")}
             disabled={!editing}
             onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", { url: value, previewUrl: value, file: null, fileName: null })}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "avatar", file)}
@@ -2210,6 +2260,7 @@ export function DevelopWorkspacePage() {
           <StudioImageField
             label="Logo"
             state={draft.logo}
+            accept={studioMediaUploadPolicies.logo.acceptedMimeTypes.join(",")}
             disabled={!editing}
             onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "logo", { url: value, previewUrl: value, file: null, fileName: null })}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "logo", file)}
@@ -2218,6 +2269,7 @@ export function DevelopWorkspacePage() {
           <StudioImageField
             label="Banner"
             state={draft.banner}
+            accept={studioMediaUploadPolicies.banner.acceptedMimeTypes.join(",")}
             disabled={!editing}
             onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "banner", { url: value, previewUrl: value, file: null, fileName: null })}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "banner", file)}
@@ -2443,10 +2495,11 @@ export function DevelopWorkspacePage() {
               label={mediaRole}
               state={draft.media[mediaRole]}
               previewUrl={previewMediaUrl(draft.media[mediaRole])}
+              accept={titleMediaUploadPolicies[mediaRole].acceptedMimeTypes.join(",")}
               disabled={!editable}
               onUrlChange={(value) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: value, file: null })}
               onAltTextChange={(value) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { altText: value })}
-              onFileChange={(file) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { file, url: file ? "" : draft.media[mediaRole].url })}
+              onFileChange={(file) => handleTitleMediaUpload(mode === "create" ? "create" : "metadata", mediaRole, file)}
               onRemove={() => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: "", altText: "", file: null })}
             />
           ))}

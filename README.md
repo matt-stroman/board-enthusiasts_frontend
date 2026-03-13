@@ -58,6 +58,8 @@ For hosted frontend builds, the important public runtime values are:
 - `VITE_TURNSTILE_SITE_KEY`
 - `VITE_LANDING_MODE`
 
+The root CLI derives `VITE_SUPABASE_URL` from the resolved root `SUPABASE_URL`. For the default hosted Supabase domain, the root env can omit `SUPABASE_URL` when `SUPABASE_PROJECT_REF` is set. Keep `SUPABASE_URL` explicit for local development and custom-domain setups.
+
 Use the root CLI to inspect or bootstrap the root-managed files:
 
 ```bash
