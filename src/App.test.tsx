@@ -1707,6 +1707,49 @@ describe("App", () => {
     });
   });
 
+  it("rejects oversized studio logo uploads before submission", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/develop");
+
+    await screen.findByRole("button", { name: "Studios" });
+    await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
+
+    const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
+    expect(createStudioForm).not.toBeNull();
+
+    const [logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
+    expect(logoUploadInput).not.toBeUndefined();
+
+    await userEvent.upload(
+      logoUploadInput as HTMLInputElement,
+      new File([new Uint8Array(256 * 1024 + 1)], "studio-logo.png", { type: "image/png" }),
+    );
+
+    expect(await screen.findByText("Uploaded studio logo image must be 256 KB or smaller.")).toBeVisible();
+    expect(apiMocks.uploadStudioMedia).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized title card uploads before submission", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
+    expect(cardUploadInput).not.toBeUndefined();
+
+    await userEvent.upload(
+      cardUploadInput as HTMLInputElement,
+      new File([new Uint8Array(1536 * 1024 + 1)], "card.png", { type: "image/png" }),
+    );
+
+    expect(await screen.findByText("Uploaded card image must be 1536 KB or smaller.")).toBeVisible();
+    expect(apiMocks.uploadTitleMediaAsset).not.toHaveBeenCalled();
+  });
+
   it("lets developers add multiple genres and remove only the selected chip in title create", async () => {
     seedDeveloperWorkspace();
 
