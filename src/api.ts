@@ -16,6 +16,8 @@ import type {
   ModerateTitleReportDecisionRequest,
   ModerationDeveloperListResponse,
   GenreListResponse,
+  MarketingSignupRequest,
+  MarketingSignupResponse,
   PlayerCollectionMutationResponse,
   PlayerTitleListResponse,
   PlayerTitleReportListResponse,
@@ -76,6 +78,28 @@ export interface StudioLinkMutationRequest {
   url: string;
 }
 
+export interface SupportIssueReportRequest {
+  category: "email_signup";
+  firstName: string | null;
+  email: string | null;
+  pageUrl: string;
+  apiBaseUrl: string;
+  occurredAt: string;
+  errorMessage: string;
+  technicalDetails: string | null;
+  userAgent: string | null;
+  language: string | null;
+  timeZone: string | null;
+  viewportWidth: number | null;
+  viewportHeight: number | null;
+  screenWidth: number | null;
+  screenHeight: number | null;
+}
+
+export interface SupportIssueReportResponse {
+  accepted: true;
+}
+
 export async function apiFetch<T>(
   apiBaseUrl: string,
   path: string,
@@ -95,10 +119,18 @@ export async function apiFetch<T>(
     headers.set("authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${path}`, {
-    ...init,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${path}`, {
+      ...init,
+      headers
+    });
+  } catch (error) {
+    throw new Error(
+      "Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct.",
+      { cause: error },
+    );
+  }
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
@@ -168,6 +200,14 @@ export function listGenres(apiBaseUrl: string): Promise<GenreListResponse> {
 
 export function listAgeRatingAuthorities(apiBaseUrl: string): Promise<AgeRatingAuthorityListResponse> {
   return apiFetch<AgeRatingAuthorityListResponse>(apiBaseUrl, "/age-rating-authorities");
+}
+
+export function createMarketingSignup(apiBaseUrl: string, request: MarketingSignupRequest): Promise<MarketingSignupResponse> {
+  return apiFetch<MarketingSignupResponse>(apiBaseUrl, "/marketing/signups", { method: "POST", body: JSON.stringify(request) });
+}
+
+export function createSupportIssueReport(apiBaseUrl: string, request: SupportIssueReportRequest): Promise<SupportIssueReportResponse> {
+  return apiFetch<SupportIssueReportResponse>(apiBaseUrl, "/support/issues", { method: "POST", body: JSON.stringify(request) });
 }
 
 export function listPublicStudios(apiBaseUrl: string): Promise<StudioListResponse> {

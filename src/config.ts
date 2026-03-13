@@ -3,6 +3,7 @@ export interface AppConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   turnstileSiteKey: string | null;
+  landingMode: boolean;
 }
 
 export interface FrontendRuntimeEnv {
@@ -10,6 +11,7 @@ export interface FrontendRuntimeEnv {
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_ANON_KEY?: string;
   VITE_TURNSTILE_SITE_KEY?: string;
+  VITE_LANDING_MODE?: string;
 }
 
 function requireValue(name: string, value: string | undefined): string {
@@ -47,6 +49,7 @@ export function readAppConfigFromEnv(env: FrontendRuntimeEnv): AppConfig {
     supabaseUrl: requireRuntimeUrl("VITE_SUPABASE_URL", env.VITE_SUPABASE_URL),
     supabaseAnonKey: requireValue("VITE_SUPABASE_ANON_KEY", env.VITE_SUPABASE_ANON_KEY),
     turnstileSiteKey: (env.VITE_TURNSTILE_SITE_KEY ?? "").trim() || null,
+    landingMode: (env.VITE_LANDING_MODE ?? "").trim().toLowerCase() === "true",
   };
 }
 

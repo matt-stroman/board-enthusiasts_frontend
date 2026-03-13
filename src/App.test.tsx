@@ -23,6 +23,8 @@ const authState = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
+  createMarketingSignup: vi.fn(),
+  createSupportIssueReport: vi.fn(),
   getBoardProfile: vi.fn(),
   listPublicStudios: vi.fn(),
   listCatalogTitles: vi.fn(),
@@ -92,13 +94,18 @@ const apiMocks = vi.hoisted(() => ({
   invalidateModerationTitleReport: vi.fn(),
 }));
 
-vi.mock("./config", () => ({
-  readAppConfig: () => ({
+const configState = vi.hoisted(() => ({
+  value: {
     apiBaseUrl: "http://127.0.0.1:8787",
-    supabaseUrl: "http://127.0.0.1:54321",
+    supabaseUrl: "http://127.0.0.1:55421",
     supabaseAnonKey: "anon-key",
-    turnstileSiteKey: null,
-  }),
+    turnstileSiteKey: null as string | null,
+    landingMode: false,
+  },
+}));
+
+vi.mock("./config", () => ({
+  readAppConfig: () => configState.value,
 }));
 
 vi.mock("./auth", () => ({
@@ -161,6 +168,13 @@ describe("App", () => {
       updatePassword: vi.fn(),
       signOut: vi.fn(),
       refreshCurrentUser: vi.fn(),
+    };
+    configState.value = {
+      apiBaseUrl: "http://127.0.0.1:8787",
+      supabaseUrl: "http://127.0.0.1:55421",
+      supabaseAnonKey: "anon-key",
+      turnstileSiteKey: null,
+      landingMode: false,
     };
 
     Object.values(apiMocks).forEach((mockFn) => mockFn.mockReset());
@@ -496,6 +510,131 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Install" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Developer access" })).toBeVisible();
+  });
+
+  it("renders the production landing mode surface when enabled", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+
+    renderApp("/");
+
+    expect(await screen.findByRole("heading", { name: "The community hub for Board players and builders." })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Get Updates" }).every((link) => link.getAttribute("href") === "#signup")).toBe(true);
+    expect(screen.getByRole("button", { name: "Join the list" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Browse" })).not.toBeInTheDocument();
+  });
+
+  it("submits the landing-page signup form", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+    apiMocks.createMarketingSignup.mockResolvedValue({
+      accepted: true,
+      duplicate: false,
+      signup: {
+        email: "matt@example.com",
+        firstName: "Matt",
+        status: "subscribed",
+        source: "landing_page",
+        consentedAt: "2026-03-12T18:00:00Z",
+        updatedAt: "2026-03-12T18:00:00Z",
+      },
+    });
+
+    renderApp("/");
+
+    await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Matt");
+    await userEvent.type(screen.getByPlaceholderText("you@example.com"), "matt@example.com");
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createMarketingSignup).toHaveBeenCalledWith("http://127.0.0.1:8787", {
+        email: "matt@example.com",
+        firstName: "Matt",
+        source: "landing_page",
+        consentTextVersion: "landing-page-v1",
+        turnstileToken: null,
+      });
+    });
+    expect(await screen.findByText(/You are on the list/i)).toBeVisible();
+  });
+
+  it("lets the user one-click report a landing signup issue through the internal support endpoint", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+    apiMocks.createMarketingSignup.mockRejectedValue(new Error("Could not reach the Board Enthusiasts API."));
+    apiMocks.createSupportIssueReport.mockResolvedValue({ accepted: true });
+
+    renderApp("/");
+
+    await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
+    await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
+
+    expect(await screen.findByText(/We couldn't submit your signup right now/i)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Report the issue" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createSupportIssueReport).toHaveBeenCalledWith(
+        "http://127.0.0.1:8787",
+        expect.objectContaining({
+          category: "email_signup",
+          firstName: "Taylor",
+          email: "taylor@example.com",
+          apiBaseUrl: "http://127.0.0.1:8787",
+          errorMessage: "We couldn't submit your signup right now. Please try again, or report the issue and we'll help you out.",
+          technicalDetails: expect.stringContaining("Could not reach the Board Enthusiasts API."),
+        }),
+      );
+    });
+    expect(await screen.findByText("Issue report sent. We'll take a look.")).toBeVisible();
+    expect(screen.queryByText(/We couldn't submit your signup right now/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to a manual support email link when automatic issue reporting fails", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+    apiMocks.createMarketingSignup.mockRejectedValue(new Error("Could not reach the Board Enthusiasts API."));
+    apiMocks.createSupportIssueReport.mockRejectedValue(new Error("Support report delivery failed."));
+
+    renderApp("/");
+
+    await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
+    await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
+    await screen.findByText(/We couldn't submit your signup right now/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Report the issue" }));
+
+    expect(await screen.findByText("We couldn't send the issue report automatically right now.")).toBeVisible();
+    expect(screen.queryByText(/We couldn't submit your signup right now/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Email support instead" })).toHaveAttribute(
+      "href",
+      "mailto:support@boardenthusiasts.com?subject=%5BBug%20Report%5D%20Email%20signup%20issue",
+    );
+  });
+
+  it("routes the landing shell updates link back to the signup section from privacy", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+
+    renderApp("/privacy");
+
+    expect(await screen.findByRole("heading", { name: "Board Enthusiasts Privacy Snapshot" })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Get Updates" }).every((link) => link.getAttribute("href") === "/#signup")).toBe(true);
   });
 
   it("opens title quick view from browse results without leaving the results page", async () => {

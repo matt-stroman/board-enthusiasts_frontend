@@ -7,14 +7,15 @@ describe("readAppConfigFromEnv", () => {
     expect(
       readAppConfigFromEnv({
         VITE_API_BASE_URL: "http://127.0.0.1:8787",
-        VITE_SUPABASE_URL: "http://127.0.0.1:54321",
+        VITE_SUPABASE_URL: "http://127.0.0.1:55421",
         VITE_SUPABASE_ANON_KEY: "anon-key",
       }),
     ).toEqual({
       apiBaseUrl: "http://127.0.0.1:8787",
-      supabaseUrl: "http://127.0.0.1:54321",
+      supabaseUrl: "http://127.0.0.1:55421",
       supabaseAnonKey: "anon-key",
       turnstileSiteKey: null,
+      landingMode: false,
     });
   });
 
@@ -34,5 +35,22 @@ describe("readAppConfigFromEnv", () => {
         VITE_SUPABASE_ANON_KEY: "anon-key",
       }),
     ).toThrow("VITE_SUPABASE_URL must use HTTPS outside local loopback development.");
+  });
+
+  it("enables landing mode when explicitly requested", () => {
+    expect(
+      readAppConfigFromEnv({
+        VITE_API_BASE_URL: "https://api.boardenthusiasts.com",
+        VITE_SUPABASE_URL: "https://project.supabase.co",
+        VITE_SUPABASE_ANON_KEY: "anon-key",
+        VITE_LANDING_MODE: "true",
+      }),
+    ).toEqual({
+      apiBaseUrl: "https://api.boardenthusiasts.com",
+      supabaseUrl: "https://project.supabase.co",
+      supabaseAnonKey: "anon-key",
+      turnstileSiteKey: null,
+      landingMode: true,
+    });
   });
 });

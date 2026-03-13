@@ -38,6 +38,8 @@ import {
   addTitleToPlayerWishlist,
   activateTitleMetadataVersion,
   activateTitleRelease,
+  createMarketingSignup,
+  createSupportIssueReport,
   createTitle,
   createTitleRelease,
   createStudio,
@@ -94,10 +96,22 @@ import {
   type StudioMutationRequest,
 } from "./api";
 import { hasPlatformRole, useAuth, type SignUpInput } from "./auth";
-import { readAppConfig } from "./config";
+import { readAppConfig, type AppConfig } from "./config";
 import { DevelopWorkspacePage } from "./develop-workspace";
 
-const appConfig = readAppConfig();
+const appConfig = new Proxy({} as AppConfig, {
+  get(_target, property) {
+    return readAppConfig()[property as keyof AppConfig];
+  },
+});
+const landingConsentTextVersion = "landing-page-v1";
+const landingSignupSource = "landing_page";
+const landingPrivacyRoute = "/privacy";
+const landingSignupRoute = "/#signup";
+const landingDiscordUrl = "https://discord.gg/cz2zReWqcA";
+const landingGptUrl = "https://chatgpt.com/g/g-69b033db223c81919edf748c33b08b3f-board-enthusiast";
+const landingBoardUrl = "https://board.fun/";
+const landingSupportMailtoHref = "mailto:support@boardenthusiasts.com?subject=%5BBug%20Report%5D%20Email%20signup%20issue";
 const supportedPublisherOptions = [
   { id: "", label: "Custom publisher", homepageUrl: "" },
   { id: "11111111-1111-1111-1111-111111111111", label: "itch.io", homepageUrl: "https://itch.io" },
@@ -1357,6 +1371,509 @@ function TitleReportConversation({ detail }: { detail: TitleReportDetail }) {
       ) : (
         <EmptyState title="No conversation yet" detail="Messages from players, developers, and moderators will appear here." />
       )}
+    </div>
+  );
+}
+
+function LandingShell({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    if (!location.hash) {
+      return;
+    }
+
+    const targetId = decodeURIComponent(location.hash.slice(1));
+    const target = document.getElementById(targetId);
+    if (!target) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }, [location.hash, location.pathname]);
+
+  return (
+    <div className="app-root landing-root">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <Link to="/" className="app-brand">
+            <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
+            <div>
+              <div className="app-brand-title">Board Enthusiasts</div>
+              <div className="app-brand-subtitle">For Board Players And Builders</div>
+            </div>
+          </Link>
+
+          <nav className="app-nav" aria-label="Landing">
+            <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Get Board</a>
+            <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
+          </nav>
+
+          <div className="app-header-actions">
+            <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">
+              Join Discord
+            </a>
+          </div>
+        </div>
+
+        <nav className="app-mobile-nav" aria-label="Landing mobile">
+          <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Board</a>
+          <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
+        </nav>
+      </header>
+
+      <main className="app-main landing-main">
+        <div className="page-shell">{children}</div>
+      </main>
+
+      <footer className="app-footer">
+        <div className="app-footer-inner">
+          <div className="landing-footer-copy-block">
+            <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Independent and community-built.</div>
+            <div>Board Enthusiasts is a community project supporting Board players and builders.</div>
+          </div>
+          <div className="app-footer-links">
+            <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
+            <a href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+            <Link to={landingPrivacyRoute}>Privacy</Link>
+          </div>
+          <div className="landing-footer-copyright">© {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a></div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function LandingUpdatesLink({ className, children }: { className?: string; children: React.ReactNode }) {
+  const location = useLocation();
+  const href = location.pathname === "/" ? "#signup" : landingSignupRoute;
+
+  return (
+    <a className={className} href={href}>
+      {children}
+    </a>
+  );
+}
+
+function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" | "toolkit" }) {
+  if (kind === "discord") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M18.2 6.9a14.2 14.2 0 0 0-3.6-1.1l-.2.4-.3.8a13.4 13.4 0 0 0-4.2 0 13.4 13.4 0 0 0-.5-1.2A14.1 14.1 0 0 0 5.8 6.9c-2.2 3.3-2.8 6.5-2.5 9.6a14.3 14.3 0 0 0 4.4 2.2l.9-1.4a9.2 9.2 0 0 1-1.5-.7l.4-.3a10.4 10.4 0 0 0 9 0l.4.3c-.5.3-1 .5-1.5.7l.9 1.4a14.2 14.2 0 0 0 4.4-2.2c.4-3.6-.7-6.8-2.5-9.6ZM9.5 14.3c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8c.9 0 1.6.8 1.6 1.8 0 1-.7 1.8-1.6 1.8Zm5 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8c.9 0 1.6.8 1.6 1.8 0 1-.7 1.8-1.6 1.8Z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  }
+
+  if (kind === "library") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M4 6.5A2.5 2.5 0 0 1 6.5 4H18a2 2 0 0 1 2 2v11.5a2.5 2.5 0 0 1-2.5 2.5H7a3 3 0 0 1-3-3V6.5Zm3 1.25A1.25 1.25 0 0 0 5.75 9v8A1.75 1.75 0 0 0 7.5 18.75H17a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1H6.5A1.5 1.5 0 0 0 5 7v.2c.46-.29 1-.45 1.59-.45H17v1.5H7Z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  }
+
+  if (kind === "spark") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m12 2 1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2Z" fill="currentColor" />
+        <path d="m18.5 13 1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1 1-2.8Z" fill="currentColor" />
+        <path d="m5.5 13 1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1 1-2.8Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M6 4h3v3H6V4Zm9 0h3v3h-3V4ZM6 17h3v3H6v-3Zm9 0h3v3h-3v-3ZM10.5 6.5h3v3h-3v-3Zm0 8h3v3h-3v-3Zm-4-4h11v3h-11v-3Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function buildLandingSupportIssuePayload(firstName: string, email: string, errorMessage: string) {
+  const globalNavigator = typeof navigator === "undefined" ? null : navigator;
+  const globalScreen = typeof window !== "undefined" ? window.screen : null;
+
+  return {
+    category: "email_signup" as const,
+    firstName: firstName.trim() || null,
+    email: email.trim() || null,
+    pageUrl: window.location.href,
+    apiBaseUrl: appConfig.apiBaseUrl,
+    occurredAt: new Date().toISOString(),
+    errorMessage,
+    technicalDetails: null,
+    userAgent: globalNavigator?.userAgent || null,
+    language: globalNavigator?.language || null,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+    viewportWidth: typeof window.innerWidth === "number" ? window.innerWidth : null,
+    viewportHeight: typeof window.innerHeight === "number" ? window.innerHeight : null,
+    screenWidth: typeof globalScreen?.width === "number" ? globalScreen.width : null,
+    screenHeight: typeof globalScreen?.height === "number" ? globalScreen.height : null,
+  };
+}
+
+function LandingPage() {
+  const [firstName, setFirstName] = useState("");
+  const [email, setEmail] = useState("");
+  const [consented, setConsented] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [technicalErrorDetails, setTechnicalErrorDetails] = useState<string | null>(null);
+  const [reportingIssue, setReportingIssue] = useState(false);
+  const [issueReportStatusMessage, setIssueReportStatusMessage] = useState<string | null>(null);
+  const [showManualIssueFallback, setShowManualIssueFallback] = useState(false);
+  const emailError = validateEmailInput(email);
+  const requiresTurnstile = Boolean(appConfig.turnstileSiteKey);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (emailError || !consented || submitting || (requiresTurnstile && !turnstileToken)) {
+      return;
+    }
+
+    setSubmitting(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setTechnicalErrorDetails(null);
+    setIssueReportStatusMessage(null);
+    setShowManualIssueFallback(false);
+    try {
+      const response = await createMarketingSignup(appConfig.apiBaseUrl, {
+        email,
+        firstName: firstName.trim() || null,
+        source: landingSignupSource,
+        consentTextVersion: landingConsentTextVersion,
+        turnstileToken,
+      });
+      setStatusMessage(
+        response.duplicate
+          ? "You are already on the list. We will keep you posted as new BE resources and early access invites roll out."
+          : "You are on the list. We will send updates when early access and new BE resources are ready.",
+      );
+      setEmail("");
+      setFirstName("");
+      setConsented(false);
+      setTurnstileToken(null);
+    } catch (error) {
+      setErrorMessage("We couldn't submit your signup right now. Please try again, or report the issue and we'll help you out.");
+      setTechnicalErrorDetails(error instanceof Error ? `${error.message}${error.stack ? `\n${error.stack}` : ""}` : String(error));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReportIssue(): Promise<void> {
+    if (reportingIssue) {
+      return;
+    }
+
+    setReportingIssue(true);
+    setIssueReportStatusMessage(null);
+    setShowManualIssueFallback(false);
+    try {
+      await createSupportIssueReport(
+        appConfig.apiBaseUrl,
+        {
+          ...buildLandingSupportIssuePayload(
+          firstName,
+          email,
+          errorMessage ?? "Landing page signup submission failed.",
+          ),
+          technicalDetails: technicalErrorDetails,
+        },
+      );
+      setErrorMessage(null);
+      setIssueReportStatusMessage("Issue report sent. We'll take a look.");
+    } catch {
+      setErrorMessage(null);
+      setIssueReportStatusMessage("We couldn't send the issue report automatically right now.");
+      setShowManualIssueFallback(true);
+    } finally {
+      setReportingIssue(false);
+    }
+  }
+
+  return (
+    <div className="landing-shell page-grid">
+      <section className="landing-hero">
+        <div className="landing-hero-column">
+          <div className="hero-panel landing-hero-panel">
+            <div className="landing-hero-copy">
+              <div className="eyebrow">Community for the Board ecosystem</div>
+              <h1><i>The</i> community hub for Board players and builders.</h1>
+              <p>
+                Join the community forming around Board, explore useful BE resources, and get early access to the upcoming third-party library.
+              </p>
+            </div>
+            <div className="landing-hero-footer">
+              <div className="hero-actions">
+                <a className="primary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
+                <LandingUpdatesLink className="secondary-button">Get Updates</LandingUpdatesLink>
+                <a className="landing-text-link" href={landingBoardUrl} target="_blank" rel="noreferrer">Visit Board</a>
+              </div>
+              <p className="landing-hero-note">
+                For official Board news, hardware, and platform information, visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
+              </p>
+            </div>
+          </div>
+
+          <article className="app-panel landing-about-card">
+            <div className="eyebrow">About BE</div>
+            <h2>Built to support the Board community.</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Board Enthusiasts is a community project supporting Board players and builders. It is not officially affiliated with nor endorsed by the Board team or Harris Hill Products, Inc.
+            </p>
+            <p className="mt-3 text-sm leading-7 text-slate-400">
+              Currently built and maintained by Matt Stroman. Want to contribute or collaborate? Reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+            </p>
+          </article>
+
+          <article className="app-panel landing-promo-card">
+            <div className="eyebrow">Why join now</div>
+            <h2>BE where the Board community shows up first.</h2>
+            <ul className="landing-promo-list" aria-label="Reasons to join early">
+              <li>See new third-party releases as they start to surface.</li>
+              <li>Get early access when the BE Library opens up.</li>
+              <li>Follow the tools and resources growing around Board.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div className="landing-hero-rail">
+          <article className="landing-showcase-card landing-showcase-card-spotlight landing-feature-card">
+            <div className="landing-icon-badge" aria-hidden="true">
+              <LandingGlyph kind="library" />
+            </div>
+            <div className="eyebrow">Coming soon</div>
+            <h2>One place to discover third-party Board games and apps.</h2>
+            <p>
+              The BE Library is taking shape as the shared home where players can find new releases in one place and developers can register where the community is already looking.
+            </p>
+            <div className="landing-feature-list">
+              <div className="landing-feature-item">
+                <strong>Players</strong>
+                <span>Discover and collect new third-party Board content in one place.</span>
+              </div>
+              <div className="landing-feature-item">
+                <strong>Developers</strong>
+                <span>Show up where players are browsing, following launches, and deciding what to install next.</span>
+              </div>
+            </div>
+            <div className="card-actions mt-5">
+              <LandingUpdatesLink className="secondary-button">Get Early Updates</LandingUpdatesLink>
+            </div>
+          </article>
+          <article id="signup" className="landing-showcase-card landing-signup-card">
+            <div className="eyebrow">Get early access</div>
+            <h2>BE there when the Library opens.</h2>
+            <p>
+              Join the BE list for launch updates, early invites, community announcements, and new resources for Board players and developers.
+            </p>
+            <form className="mt-6 stack-form" onSubmit={(event) => void handleSubmit(event)}>
+              <div className="form-grid">
+                <Field label="First name" hint="Optional">
+                  <input value={firstName} onChange={(event) => setFirstName(event.currentTarget.value)} placeholder="Taylor" disabled={submitting} />
+                </Field>
+                <Field label="Email" hint={emailError ?? undefined} hintTone={emailError ? "error" : "default"} required>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.currentTarget.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    disabled={submitting}
+                  />
+                </Field>
+              </div>
+
+              <label className="landing-consent">
+                <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} disabled={submitting} />
+                <span>I want email updates from Board Enthusiasts about launch progress, new BE resources, community announcements, and future invites.</span>
+              </label>
+
+              {appConfig.turnstileSiteKey ? <TurnstileWidget siteKey={appConfig.turnstileSiteKey} onTokenChange={setTurnstileToken} /> : null}
+
+              {statusMessage ? <p className="success-text">{statusMessage}</p> : null}
+              {errorMessage ? (
+                <p className="error-text">
+                  {errorMessage}{" "}
+                  <button type="button" className="landing-inline-button" onClick={() => void handleReportIssue()} disabled={reportingIssue}>
+                    {reportingIssue ? "Reporting..." : "Report the issue"}
+                  </button>
+                </p>
+              ) : null}
+              {issueReportStatusMessage ? (
+                <p className={issueReportStatusMessage.includes("couldn't") ? "error-text" : "success-text"}>
+                  {issueReportStatusMessage}
+                  {showManualIssueFallback ? (
+                    <>
+                      {" "}
+                      <a className="landing-inline-link" href={landingSupportMailtoHref}>
+                        Email support instead
+                      </a>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+
+              <div className="button-row">
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={submitting || Boolean(emailError) || !consented || (requiresTurnstile && !turnstileToken)}
+                >
+                  {submitting ? "Joining..." : "Join the list"}
+                </button>
+                <Link to={landingPrivacyRoute} className="secondary-button">
+                  Privacy
+                </Link>
+              </div>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-section-heading">
+          <div className="eyebrow">Start here</div>
+          <h2>Use the community now. Follow the bigger launch as it grows.</h2>
+          <p>Board Enthusiasts already has places to plug in today while the library and broader platform surface keep taking shape.</p>
+        </div>
+        <div className="landing-card-grid">
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-icon-badge" aria-hidden="true">
+              <LandingGlyph kind="discord" />
+            </div>
+            <div className="eyebrow">Community</div>
+            <h2>Board Enthusiasts Discord</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Our main community space for Board players and developers to connect, share projects, ask questions, and help the ecosystem grow together.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
+            </div>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-icon-badge" aria-hidden="true">
+              <LandingGlyph kind="spark" />
+            </div>
+            <div className="eyebrow">Resource</div>
+            <h2>Board Enthusiasts GPT</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A Board-focused assistant for players and developers, with guidance drawn from official Board docs, FAQ, and troubleshooting resources.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingGptUrl} target="_blank" rel="noreferrer">Open GPT</a>
+            </div>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top">
+              <div className="landing-icon-badge" aria-hidden="true">
+                <LandingGlyph kind="toolkit" />
+              </div>
+              <span className="status-chip">Coming Soon</span>
+            </div>
+            <div>
+              <div>
+                <div className="eyebrow">In progress</div>
+                <h2>Board GDK</h2>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A companion toolkit for the official Board SDK currently in development, with workflow helpers, editor tools, and higher-level systems designed to help developers focus on the game.
+            </p>
+            <div className="card-actions mt-5">
+              <LandingUpdatesLink className="secondary-button">Get Updates</LandingUpdatesLink>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-board-note">
+          <div className="eyebrow">Official source</div>
+          <p>
+            Looking for official Board news, hardware, or platform information? Visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
+          </p>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-section-heading">
+          <div className="eyebrow">Why BE</div>
+          <h2>Built to help the Board ecosystem connect and grow.</h2>
+          <p>BE is meant to be useful right away for supporting and growing the Board community, while also giving players and developers a reason to get involved early.</p>
+        </div>
+        <div className="landing-card-grid">
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="eyebrow">For Players</div>
+            <h2>Follow what is being built</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
+            </p>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="eyebrow">For Developers</div>
+            <h2>Show up where the community is looking</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Connect with players and fellow builders, share progress, explore practical resources, and be ready to register where discovery is taking shape.
+            </p>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="eyebrow">For The Ecosystem</div>
+            <h2>Community, tools, and momentum around Board</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              BE exists to support the growing Board community by helping players and developers connect, collaborate, and stay engaged.
+            </p>
+          </article>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PrivacyPage() {
+  return (
+    <div className="page-grid narrow">
+      <section className="app-panel p-6">
+        <div className="eyebrow">Privacy</div>
+        <h1 className="app-page-title">Board Enthusiasts Privacy Snapshot</h1>
+        <p className="mt-4 text-base leading-8 text-slate-300">
+          Board Enthusiasts currently collects only the information needed to run this launch-updates signup flow and respond to direct contact requests.
+        </p>
+        <div className="mt-6 list-stack">
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>What we collect</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">Email address, optional first name, signup source metadata, consent timestamp, and anti-abuse verification data.</p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>Why we collect it</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">To send Board Enthusiasts launch updates, future invite emails, developer resources, and basic project announcements.</p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>Who processes it</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">Cloudflare, Supabase, and Brevo support the current hosted site, signup system, and email delivery workflow.</p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>How to reach us</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">Send privacy or contact requests to <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a>.</p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -5376,6 +5893,18 @@ function NotFoundPage() {
 }
 
 export function App() {
+  if (appConfig.landingMode) {
+    return (
+      <LandingShell>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path={landingPrivacyRoute} element={<PrivacyPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </LandingShell>
+    );
+  }
+
   return (
     <Shell>
       <Routes>
