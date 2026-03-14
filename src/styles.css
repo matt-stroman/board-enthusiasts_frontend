@@ -713,6 +713,14 @@
     @apply mt-1 size-4 shrink-0 accent-cyan-300;
   }
 
+  .landing-turnstile-container {
+    @apply mt-3 min-h-[72px];
+  }
+
+  .landing-turnstile-simulator {
+    @apply mt-3;
+  }
+
   .landing-role-interest-group {
     @apply grid gap-3 border-0 p-0;
   }

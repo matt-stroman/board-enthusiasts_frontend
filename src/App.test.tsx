@@ -133,6 +133,13 @@ function renderApp(path: string) {
   );
 }
 
+async function completeLocalAntiSpamCheck(scope: typeof screen | ReturnType<typeof within> = screen) {
+  const checkbox = scope.queryByRole("checkbox", { name: /Local anti-spam check \(development only\)/i });
+  if (checkbox && !(checkbox as HTMLInputElement).checked) {
+    await userEvent.click(checkbox);
+  }
+}
+
 function buildNearLimitCopy(segments: readonly string[], maxLength: number, reserve = 24): string {
   const cleanedSegments = segments.map((segment) => segment.trim()).filter(Boolean);
   let value = cleanedSegments.join(" ");
@@ -555,6 +562,7 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
     await userEvent.click(screen.getByRole("checkbox", { name: /I want to discover and follow new Board games and apps/i }));
     await userEvent.click(screen.getByRole("checkbox", { name: /I want to create third-party content for Board/i }));
+    await completeLocalAntiSpamCheck();
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
     await waitFor(() => {
@@ -563,11 +571,74 @@ describe("App", () => {
         firstName: "Matt",
         source: "landing_page",
         consentTextVersion: "landing-page-v1",
-        turnstileToken: null,
+        turnstileToken: "local-development-turnstile-token",
         roleInterests: ["player", "developer"],
       });
     });
     expect(await screen.findByText(/You are on the list/i)).toBeVisible();
+  });
+
+  it("keeps first name optional, marks consent required, and enables submit after consent", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+    };
+
+    renderApp("/");
+
+    expect(await screen.findByText("First name (optional)")).toBeVisible();
+    expect(screen.getByText((content, node) => node?.textContent === "Email updates *")).toBeVisible();
+
+    const submitButton = screen.getByRole("button", { name: "Join the list" });
+    expect(submitButton).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText("you@example.com"), "alex@example.com");
+    expect(submitButton).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    expect(submitButton).toBeEnabled();
+  });
+
+  it("allows clicking submit before turnstile completes and shows a helpful error", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+      turnstileSiteKey: "turnstile-site-key",
+    };
+
+    renderApp("/");
+
+    await userEvent.type(await screen.findByPlaceholderText("you@example.com"), "alex@example.com");
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
+
+    expect(await screen.findByText("Please complete the anti-spam check below and try again.")).toBeVisible();
+    expect(apiMocks.createMarketingSignup).not.toHaveBeenCalled();
+  });
+
+  it("does not render the custom anti-spam panel while the turnstile widget is loading", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+      turnstileSiteKey: "turnstile-site-key",
+    };
+
+    renderApp("/");
+
+    expect(screen.queryByText("Anti-spam check")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading anti-spam check…")).not.toBeInTheDocument();
+  });
+
+  it("renders a local anti-spam simulator on loopback when no real turnstile key is configured", async () => {
+    configState.value = {
+      ...configState.value,
+      landingMode: true,
+      turnstileSiteKey: null,
+    };
+
+    renderApp("/");
+
+    expect(await screen.findByRole("checkbox", { name: /Local anti-spam check \(development only\)/i })).toBeVisible();
   });
 
   it.each([
@@ -614,6 +685,7 @@ describe("App", () => {
     for (const label of toggleLabels) {
       await userEvent.click(screen.getByRole("checkbox", { name: label }));
     }
+    await completeLocalAntiSpamCheck();
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
     await waitFor(() => {
@@ -622,7 +694,7 @@ describe("App", () => {
         firstName: "Alex",
         source: "landing_page",
         consentTextVersion: "landing-page-v1",
-        turnstileToken: null,
+        turnstileToken: "local-development-turnstile-token",
         roleInterests: expectedRoleInterests,
       });
     });
@@ -641,6 +713,7 @@ describe("App", () => {
     await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
     await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    await completeLocalAntiSpamCheck();
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
     expect(await screen.findByText(/We couldn't submit your signup right now/i)).toBeVisible();
@@ -676,6 +749,7 @@ describe("App", () => {
     await userEvent.type(await screen.findByPlaceholderText("Taylor"), "Taylor");
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "taylor@example.com");
     await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    await completeLocalAntiSpamCheck();
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
     await screen.findByText(/We couldn't submit your signup right now/i);
 
@@ -1145,6 +1219,7 @@ describe("App", () => {
     fireEvent.blur(within(registerDialog).getByLabelText(/^Password/i));
     await userEvent.type(within(registerDialog).getByLabelText(/^Confirm password/i), "NewPlayer!123");
     fireEvent.blur(within(registerDialog).getByLabelText(/^Confirm password/i));
+    await completeLocalAntiSpamCheck(within(registerDialog));
 
     expect(await within(registerDialog).findByText("✓ Available")).toBeVisible();
     await waitFor(() => expect(createAccountButton).toBeEnabled());
@@ -1158,7 +1233,7 @@ describe("App", () => {
       lastName: "Player",
       avatarUrl: null,
       avatarDataUrl: null,
-      captchaToken: null,
+      captchaToken: "local-development-turnstile-token",
     });
     expect(await screen.findByText(/Account created\. Check your email/i)).toBeVisible();
   });
@@ -1289,9 +1364,10 @@ describe("App", () => {
     expect(within(recoveryDialog).getByRole("heading", { name: "Recover access" })).toBeVisible();
 
     await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await completeLocalAntiSpamCheck(within(recoveryDialog));
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
 
-    expect(requestPasswordReset).toHaveBeenCalledWith("new.player@example.com", null);
+    expect(requestPasswordReset).toHaveBeenCalledWith("new.player@example.com", "local-development-turnstile-token");
     expect(await within(recoveryDialog).findByText(/If that email matches an account/i)).toBeVisible();
     expect(within(recoveryDialog).getByLabelText("Recovery code")).toBeVisible();
     expect(within(recoveryDialog).getByRole("button", { name: "Confirm code" })).toBeVisible();
@@ -1343,6 +1419,7 @@ describe("App", () => {
     const recoveryDialog = await screen.findByRole("dialog", { name: "Recover access" });
 
     await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await completeLocalAntiSpamCheck(within(recoveryDialog));
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
     await userEvent.type(within(recoveryDialog).getByLabelText("Recovery code"), "123456");
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Confirm code" }));
@@ -1415,6 +1492,7 @@ describe("App", () => {
     const recoveryDialog = await screen.findByRole("dialog", { name: "Recover access" });
 
     await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await completeLocalAntiSpamCheck(within(recoveryDialog));
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
     await userEvent.type(within(recoveryDialog).getByLabelText("Recovery code"), "123456");
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Confirm code" }));

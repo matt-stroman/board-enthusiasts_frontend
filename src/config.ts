@@ -14,6 +14,20 @@ export interface FrontendRuntimeEnv {
   VITE_LANDING_MODE?: string;
 }
 
+function normalizeOptionalValue(value: string | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.toLowerCase();
+  if (normalized.startsWith("optional-for-") || normalized === "replace-me" || normalized.startsWith("replace-with-")) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 function requireValue(name: string, value: string | undefined): string {
   const trimmed = (value ?? "").trim();
   if (!trimmed) {
@@ -48,7 +62,7 @@ export function readAppConfigFromEnv(env: FrontendRuntimeEnv): AppConfig {
     apiBaseUrl: requireRuntimeUrl("VITE_API_BASE_URL", env.VITE_API_BASE_URL),
     supabaseUrl: requireRuntimeUrl("VITE_SUPABASE_URL", env.VITE_SUPABASE_URL),
     supabasePublishableKey: requireValue("VITE_SUPABASE_PUBLISHABLE_KEY", env.VITE_SUPABASE_PUBLISHABLE_KEY),
-    turnstileSiteKey: (env.VITE_TURNSTILE_SITE_KEY ?? "").trim() || null,
+    turnstileSiteKey: normalizeOptionalValue(env.VITE_TURNSTILE_SITE_KEY),
     landingMode: (env.VITE_LANDING_MODE ?? "").trim().toLowerCase() === "true",
   };
 }

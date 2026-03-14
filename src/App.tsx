@@ -118,6 +118,25 @@ const supportedPublisherOptions = [
   { id: "11111111-1111-1111-1111-111111111111", label: "itch.io", homepageUrl: "https://itch.io" },
   { id: "22222222-2222-2222-2222-222222222222", label: "Humble", homepageUrl: "https://www.humblebundle.com" },
 ] as const;
+
+type CaptchaMode = "disabled" | "turnstile" | "simulated-local";
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function getCaptchaMode(siteKey: string | null): CaptchaMode {
+  if (siteKey) {
+    return "turnstile";
+  }
+
+  if (typeof window !== "undefined" && isLoopbackHostname(window.location.hostname)) {
+    return "simulated-local";
+  }
+
+  return "disabled";
+}
 const PLAYER_FILTER_MIN = 1;
 const PLAYER_FILTER_MAX = 8;
 const avatarUploadPolicy = migrationMediaUploadPolicies.avatars;
@@ -1539,6 +1558,7 @@ function LandingPage() {
   const [playerInterestSelected, setPlayerInterestSelected] = useState(false);
   const [developerInterestSelected, setDeveloperInterestSelected] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileStatus, setTurnstileStatus] = useState<TurnstileWidgetStatus>("loading");
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1547,11 +1567,13 @@ function LandingPage() {
   const [issueReportStatusMessage, setIssueReportStatusMessage] = useState<string | null>(null);
   const [showManualIssueFallback, setShowManualIssueFallback] = useState(false);
   const emailError = validateEmailInput(email);
-  const requiresTurnstile = Boolean(appConfig.turnstileSiteKey);
+  const captchaMode = getCaptchaMode(appConfig.turnstileSiteKey);
+  const requiresTurnstile = captchaMode !== "disabled";
+  const canSubmitSignup = !submitting && !emailError && consented;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (emailError || !consented || submitting || (requiresTurnstile && !turnstileToken)) {
+    if (emailError || !consented || submitting) {
       return;
     }
 
@@ -1562,6 +1584,15 @@ function LandingPage() {
     setIssueReportStatusMessage(null);
     setShowManualIssueFallback(false);
     try {
+      if (requiresTurnstile && !turnstileToken) {
+        setErrorMessage(
+          turnstileStatus === "error"
+            ? "The anti-spam check is unavailable right now. Refresh the page or disable content blockers and try again."
+            : "Please complete the anti-spam check below and try again.",
+        );
+        return;
+      }
+
       const roleInterests = [
         ...(playerInterestSelected ? ["player" as const] : []),
         ...(developerInterestSelected ? ["developer" as const] : []),
@@ -1702,7 +1733,7 @@ function LandingPage() {
             </p>
             <form className="mt-6 stack-form" onSubmit={(event) => void handleSubmit(event)}>
               <div className="form-grid">
-                <Field label="First name" hint="Optional">
+                <Field label="First name (optional)" reserveHintSpace={false}>
                   <input value={firstName} onChange={(event) => setFirstName(event.currentTarget.value)} placeholder="Taylor" disabled={submitting} />
                 </Field>
                 <Field label="Email" hint={emailError ?? undefined} hintTone={emailError ? "error" : "default"} required>
@@ -1717,6 +1748,9 @@ function LandingPage() {
                 </Field>
               </div>
 
+              <div className="eyebrow">
+                Email updates <span aria-hidden="true" className="field-required-marker">*</span>
+              </div>
               <label className="landing-consent">
                 <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} disabled={submitting} />
                 <span>I want email updates from Board Enthusiasts about launch progress, new BE resources, community announcements, and future invites.</span>
@@ -1744,7 +1778,13 @@ function LandingPage() {
                 </label>
               </fieldset>
 
-              {appConfig.turnstileSiteKey ? <TurnstileWidget siteKey={appConfig.turnstileSiteKey} onTokenChange={setTurnstileToken} /> : null}
+              <CaptchaWidget
+                mode={captchaMode}
+                siteKey={appConfig.turnstileSiteKey}
+                token={turnstileToken}
+                onTokenChange={setTurnstileToken}
+                onStatusChange={setTurnstileStatus}
+              />
 
               {statusMessage ? <p className="success-text">{statusMessage}</p> : null}
               {errorMessage ? (
@@ -1773,7 +1813,7 @@ function LandingPage() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={submitting || Boolean(emailError) || !consented || (requiresTurnstile && !turnstileToken)}
+                  disabled={!canSubmitSignup}
                 >
                   {submitting ? "Joining..." : "Join the list"}
                 </button>
@@ -4098,21 +4138,44 @@ type TurnstileApi = {
   remove?: (widgetId: string) => void;
 };
 
+type TurnstileWidgetStatus = "loading" | "ready" | "error";
+
 declare global {
   interface Window {
     turnstile?: TurnstileApi;
   }
 }
 
-function TurnstileWidget({ siteKey, onTokenChange }: { siteKey: string; onTokenChange: (token: string | null) => void }) {
+function TurnstileWidget({
+  siteKey,
+  onTokenChange,
+  onStatusChange,
+}: {
+  siteKey: string;
+  onTokenChange: (token: string | null) => void;
+  onStatusChange?: (status: TurnstileWidgetStatus) => void;
+}) {
   const containerId = useMemo(() => `turnstile-${Math.random().toString(36).slice(2)}`, []);
+  const [status, setStatus] = useState<TurnstileWidgetStatus>("loading");
 
   useEffect(() => {
     onTokenChange(null);
+    setStatus("loading");
+    onStatusChange?.("loading");
 
     let widgetId: string | null = null;
     let cancelled = false;
     const scriptSelector = 'script[data-turnstile-script="true"]';
+    let renderTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const updateStatus = (value: TurnstileWidgetStatus) => {
+      if (cancelled) {
+        return;
+      }
+
+      setStatus(value);
+      onStatusChange?.(value);
+    };
 
     const renderWidget = () => {
       if (cancelled || !window.turnstile) {
@@ -4125,25 +4188,33 @@ function TurnstileWidget({ siteKey, onTokenChange }: { siteKey: string; onTokenC
       }
 
       container.innerHTML = "";
-      widgetId = window.turnstile.render(container, {
-        sitekey: siteKey,
-        theme: "dark",
-        callback: (token: string) => {
-          if (!cancelled) {
-            onTokenChange(token);
-          }
-        },
-        "expired-callback": () => {
-          if (!cancelled) {
-            onTokenChange(null);
-          }
-        },
-        "error-callback": () => {
-          if (!cancelled) {
-            onTokenChange(null);
-          }
-        },
-      });
+      try {
+        widgetId = window.turnstile.render(container, {
+          sitekey: siteKey,
+          theme: "dark",
+          callback: (token: string) => {
+            if (!cancelled) {
+              onTokenChange(token);
+              updateStatus("ready");
+            }
+          },
+          "expired-callback": () => {
+            if (!cancelled) {
+              onTokenChange(null);
+            }
+          },
+          "error-callback": () => {
+            if (!cancelled) {
+              onTokenChange(null);
+              updateStatus("error");
+            }
+          },
+        });
+        updateStatus("ready");
+      } catch {
+        onTokenChange(null);
+        updateStatus("error");
+      }
     };
 
     if (window.turnstile) {
@@ -4171,17 +4242,83 @@ function TurnstileWidget({ siteKey, onTokenChange }: { siteKey: string; onTokenC
       script.addEventListener("load", handleLoad);
     }
 
+    renderTimeout = setTimeout(() => {
+      if (!window.turnstile) {
+        onTokenChange(null);
+        updateStatus("error");
+      }
+    }, 8000);
+
     return () => {
       cancelled = true;
       onTokenChange(null);
+      if (renderTimeout) {
+        clearTimeout(renderTimeout);
+      }
       script?.removeEventListener("load", handleLoad);
       if (widgetId && window.turnstile?.remove) {
         window.turnstile.remove(widgetId);
       }
     };
-  }, [containerId, onTokenChange, siteKey]);
+  }, [containerId, onStatusChange, onTokenChange, siteKey]);
 
-  return <div id={containerId} className="mt-3" />;
+  return (
+    <>
+      <div id={containerId} className="landing-turnstile-container" />
+      {status === "error" ? (
+        <p className="error-text">The anti-spam check did not load. Refresh the page or disable content blockers and try again.</p>
+      ) : null}
+    </>
+  );
+}
+
+function LocalTurnstileSimulator({
+  token,
+  onTokenChange,
+  onStatusChange,
+}: {
+  token: string | null;
+  onTokenChange: (token: string | null) => void;
+  onStatusChange?: (status: TurnstileWidgetStatus) => void;
+}) {
+  useEffect(() => {
+    onStatusChange?.("ready");
+  }, [onStatusChange]);
+
+  return (
+    <label className="landing-consent landing-turnstile-simulator">
+      <input
+        type="checkbox"
+        checked={Boolean(token)}
+        onChange={(event) => onTokenChange(event.currentTarget.checked ? "local-development-turnstile-token" : null)}
+      />
+      <span>Local anti-spam check (development only). Check this box to simulate the Cloudflare verification passing.</span>
+    </label>
+  );
+}
+
+function CaptchaWidget({
+  mode,
+  siteKey,
+  token,
+  onTokenChange,
+  onStatusChange,
+}: {
+  mode: CaptchaMode;
+  siteKey: string | null;
+  token: string | null;
+  onTokenChange: (token: string | null) => void;
+  onStatusChange?: (status: TurnstileWidgetStatus) => void;
+}) {
+  if (mode === "disabled") {
+    return null;
+  }
+
+  if (mode === "simulated-local") {
+    return <LocalTurnstileSimulator token={token} onTokenChange={onTokenChange} onStatusChange={onStatusChange} />;
+  }
+
+  return <TurnstileWidget siteKey={siteKey ?? ""} onTokenChange={onTokenChange} onStatusChange={onStatusChange} />;
 }
 
 function SignInPage() {
@@ -4237,6 +4374,8 @@ function SignInPage() {
   const [recoveryStatusMessage, setRecoveryStatusMessage] = useState<string | null>(null);
   const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const [passwordRecoveryError, setPasswordRecoveryError] = useState<string | null>(null);
+  const captchaMode = getCaptchaMode(appConfig.turnstileSiteKey);
+  const captchaRequired = captchaMode !== "disabled";
 
   const returnTo = searchParams.get("returnTo") || "/player";
   const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen;
@@ -4291,7 +4430,7 @@ function SignInPage() {
     !registrationEmailError &&
     registrationPasswordErrors.length === 0 &&
     !registrationConfirmPasswordError &&
-    (!appConfig.turnstileSiteKey || Boolean(registrationCaptchaToken));
+    (!captchaRequired || Boolean(registrationCaptchaToken));
 
   async function validateRegistrationUserName(): Promise<boolean> {
     const trimmed = registrationUserName.trim();
@@ -4404,7 +4543,7 @@ function SignInPage() {
     if (!recoveryEmail.trim()) {
       throw new Error("Email is required.");
     }
-    if (appConfig.turnstileSiteKey && !recoveryCaptchaToken) {
+    if (captchaRequired && !recoveryCaptchaToken) {
       throw new Error("Complete the human verification challenge.");
     }
 
@@ -4468,7 +4607,7 @@ function SignInPage() {
       if (!confirmPasswordValid) {
         throw new Error("Password confirmation must match.");
       }
-      if (appConfig.turnstileSiteKey && !registrationCaptchaToken) {
+      if (captchaRequired && !registrationCaptchaToken) {
         throw new Error("Complete the human verification challenge.");
       }
 
@@ -4767,10 +4906,15 @@ function SignInPage() {
                   onUpload={(event) => void handleRegistrationAvatarUpload(event)}
                 />
 
-                {appConfig.turnstileSiteKey ? (
+                {captchaRequired ? (
                   <div className="surface-panel-strong rounded-[1rem] p-4">
                     <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Human verification</div>
-                    <TurnstileWidget siteKey={appConfig.turnstileSiteKey} onTokenChange={setRegistrationCaptchaToken} />
+                    <CaptchaWidget
+                      mode={captchaMode}
+                      siteKey={appConfig.turnstileSiteKey}
+                      token={registrationCaptchaToken}
+                      onTokenChange={setRegistrationCaptchaToken}
+                    />
                   </div>
                 ) : null}
 
@@ -4813,10 +4957,15 @@ function SignInPage() {
                     <input value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.currentTarget.value)} autoComplete="email" />
                   </Field>
 
-                  {appConfig.turnstileSiteKey ? (
+                  {captchaRequired ? (
                     <div className="surface-panel-strong rounded-[1rem] p-4">
                       <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Human verification</div>
-                      <TurnstileWidget siteKey={appConfig.turnstileSiteKey} onTokenChange={setRecoveryCaptchaToken} />
+                      <CaptchaWidget
+                        mode={captchaMode}
+                        siteKey={appConfig.turnstileSiteKey}
+                        token={recoveryCaptchaToken}
+                        onTokenChange={setRecoveryCaptchaToken}
+                      />
                     </div>
                   ) : null}
 
