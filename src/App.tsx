@@ -1447,7 +1447,7 @@ function LandingShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="app-mobile-nav" aria-label="Landing mobile">
-          <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Board</a>
+          <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Get Board</a>
           <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
         </nav>
       </header>
@@ -1661,7 +1661,6 @@ function LandingPage() {
         <div className="landing-hero-column">
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
-              <div className="eyebrow">Community for the Board ecosystem</div>
               <h1><i>The</i> community hub for Board players and builders.</h1>
               <p>
                 Join the community forming around Board, explore useful BE resources, and get early access to the upcoming third-party library.
