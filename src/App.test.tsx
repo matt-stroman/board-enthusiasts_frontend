@@ -2192,6 +2192,77 @@ describe("App", () => {
     });
   });
 
+  it("publishes route-specific metadata for the landing privacy page", async () => {
+    configState.value = {
+      apiBaseUrl: "http://127.0.0.1:8787",
+      supabaseUrl: "http://127.0.0.1:55421",
+      supabasePublishableKey: "publishable-key",
+      turnstileSiteKey: null,
+      landingMode: true,
+    };
+
+    const descriptionMeta = document.createElement("meta");
+    descriptionMeta.setAttribute("name", "description");
+    descriptionMeta.setAttribute("content", "default description");
+    document.head.appendChild(descriptionMeta);
+
+    const ogTitleMeta = document.createElement("meta");
+    ogTitleMeta.setAttribute("property", "og:title");
+    ogTitleMeta.setAttribute("content", "default og title");
+    document.head.appendChild(ogTitleMeta);
+
+    const ogDescriptionMeta = document.createElement("meta");
+    ogDescriptionMeta.setAttribute("property", "og:description");
+    ogDescriptionMeta.setAttribute("content", "default og description");
+    document.head.appendChild(ogDescriptionMeta);
+
+    const ogUrlMeta = document.createElement("meta");
+    ogUrlMeta.setAttribute("property", "og:url");
+    ogUrlMeta.setAttribute("content", "https://boardenthusiasts.com/");
+    document.head.appendChild(ogUrlMeta);
+
+    const twitterTitleMeta = document.createElement("meta");
+    twitterTitleMeta.setAttribute("name", "twitter:title");
+    twitterTitleMeta.setAttribute("content", "default twitter title");
+    document.head.appendChild(twitterTitleMeta);
+
+    const twitterDescriptionMeta = document.createElement("meta");
+    twitterDescriptionMeta.setAttribute("name", "twitter:description");
+    twitterDescriptionMeta.setAttribute("content", "default twitter description");
+    document.head.appendChild(twitterDescriptionMeta);
+
+    const canonicalLink = document.createElement("link");
+    canonicalLink.setAttribute("rel", "canonical");
+    canonicalLink.setAttribute("href", "https://boardenthusiasts.com/");
+    document.head.appendChild(canonicalLink);
+
+    renderApp("/privacy");
+
+    expect(await screen.findByRole("heading", { name: "Board Enthusiasts Privacy Snapshot" })).toBeVisible();
+    expect(document.title).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
+    expect(descriptionMeta.getAttribute("content")).toBe(
+      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+    );
+    expect(ogTitleMeta.getAttribute("content")).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
+    expect(ogDescriptionMeta.getAttribute("content")).toBe(
+      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+    );
+    expect(ogUrlMeta.getAttribute("content")).toBe("https://boardenthusiasts.com/privacy");
+    expect(twitterTitleMeta.getAttribute("content")).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
+    expect(twitterDescriptionMeta.getAttribute("content")).toBe(
+      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+    );
+    expect(canonicalLink.getAttribute("href")).toBe("https://boardenthusiasts.com/privacy");
+
+    descriptionMeta.remove();
+    ogTitleMeta.remove();
+    ogDescriptionMeta.remove();
+    ogUrlMeta.remove();
+    twitterTitleMeta.remove();
+    twitterDescriptionMeta.remove();
+    canonicalLink.remove();
+  });
+
   it("shows the same studio media controls in the edit studio flow", async () => {
     seedDeveloperWorkspace();
     window.sessionStorage.setItem(

@@ -113,6 +113,16 @@ const landingDiscordUrl = "https://discord.gg/cz2zReWqcA";
 const landingGptUrl = "https://chatgpt.com/g/g-69b033db223c81919edf748c33b08b3f-board-enthusiast";
 const landingBoardUrl = "https://board.fun/";
 const landingSupportMailtoHref = "mailto:support@boardenthusiasts.com?subject=%5BBug%20Report%5D%20Email%20signup%20issue";
+const landingMetadata = {
+  defaultTitle: "Board Enthusiasts | Community Hub for Board Players and Builders",
+  defaultDescription:
+    "Board Enthusiasts is the unofficial community hub for Board players and builders. Follow Board games and apps, discover BE resources, join the Discord, and get updates on the upcoming third-party library.",
+  defaultCanonical: "https://boardenthusiasts.com/",
+  privacyTitle: "Board Enthusiasts Privacy Snapshot | Board Players and Builders",
+  privacyDescription:
+    "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+  privacyCanonical: "https://boardenthusiasts.com/privacy",
+} as const;
 const supportedPublisherOptions = [
   { id: "", label: "Custom publisher", homepageUrl: "" },
   { id: "11111111-1111-1111-1111-111111111111", label: "itch.io", homepageUrl: "https://itch.io" },
@@ -1551,7 +1561,76 @@ function buildLandingSupportIssuePayload(firstName: string, email: string, error
   };
 }
 
+function useDocumentMetadata({
+  title,
+  description,
+  canonicalUrl,
+}: {
+  title: string;
+  description: string;
+  canonicalUrl: string;
+}) {
+  useEffect(() => {
+    const previousTitle = document.title;
+    const descriptionElement = document.querySelector('meta[name="description"]');
+    const ogTitleElement = document.querySelector('meta[property="og:title"]');
+    const ogDescriptionElement = document.querySelector('meta[property="og:description"]');
+    const ogUrlElement = document.querySelector('meta[property="og:url"]');
+    const twitterTitleElement = document.querySelector('meta[name="twitter:title"]');
+    const twitterDescriptionElement = document.querySelector('meta[name="twitter:description"]');
+    const canonicalElement = document.querySelector('link[rel="canonical"]');
+
+    const previousDescription = descriptionElement?.getAttribute("content");
+    const previousOgTitle = ogTitleElement?.getAttribute("content");
+    const previousOgDescription = ogDescriptionElement?.getAttribute("content");
+    const previousOgUrl = ogUrlElement?.getAttribute("content");
+    const previousTwitterTitle = twitterTitleElement?.getAttribute("content");
+    const previousTwitterDescription = twitterDescriptionElement?.getAttribute("content");
+    const previousCanonicalUrl = canonicalElement?.getAttribute("href");
+
+    document.title = title;
+    descriptionElement?.setAttribute("content", description);
+    ogTitleElement?.setAttribute("content", title);
+    ogDescriptionElement?.setAttribute("content", description);
+    ogUrlElement?.setAttribute("content", canonicalUrl);
+    twitterTitleElement?.setAttribute("content", title);
+    twitterDescriptionElement?.setAttribute("content", description);
+    canonicalElement?.setAttribute("href", canonicalUrl);
+
+    return () => {
+      document.title = previousTitle;
+      if (previousDescription) {
+        descriptionElement?.setAttribute("content", previousDescription);
+      }
+      if (previousOgTitle) {
+        ogTitleElement?.setAttribute("content", previousOgTitle);
+      }
+      if (previousOgDescription) {
+        ogDescriptionElement?.setAttribute("content", previousOgDescription);
+      }
+      if (previousOgUrl) {
+        ogUrlElement?.setAttribute("content", previousOgUrl);
+      }
+      if (previousTwitterTitle) {
+        twitterTitleElement?.setAttribute("content", previousTwitterTitle);
+      }
+      if (previousTwitterDescription) {
+        twitterDescriptionElement?.setAttribute("content", previousTwitterDescription);
+      }
+      if (previousCanonicalUrl) {
+        canonicalElement?.setAttribute("href", previousCanonicalUrl);
+      }
+    };
+  }, [canonicalUrl, description, title]);
+}
+
 function LandingPage() {
+  useDocumentMetadata({
+    title: landingMetadata.defaultTitle,
+    description: landingMetadata.defaultDescription,
+    canonicalUrl: landingMetadata.defaultCanonical,
+  });
+
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [consented, setConsented] = useState(false);
@@ -1970,6 +2049,12 @@ function LandingPage() {
 }
 
 function PrivacyPage() {
+  useDocumentMetadata({
+    title: landingMetadata.privacyTitle,
+    description: landingMetadata.privacyDescription,
+    canonicalUrl: landingMetadata.privacyCanonical,
+  });
+
   return (
     <div className="page-grid narrow">
       <section className="app-panel p-6">
