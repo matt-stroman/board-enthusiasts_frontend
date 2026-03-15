@@ -1661,7 +1661,7 @@ function LandingPage() {
         <div className="landing-hero-column">
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
-              <h1><i>The</i> community hub for Board players and builders.</h1>
+              <h1><i>The</i> unofficial community hub for Board players and builders.</h1>
               <p>
                 Join the community forming around Board, explore useful BE resources, and get early access to the upcoming third-party library.
               </p>
