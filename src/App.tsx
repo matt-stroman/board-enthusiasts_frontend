@@ -1685,7 +1685,7 @@ function LandingPage() {
               Board Enthusiasts is a community project supporting Board players and builders. It is not officially affiliated with nor endorsed by the Board team or Harris Hill Products, Inc.
             </p>
             <p className="mt-3 text-sm leading-7 text-slate-400">
-              Currently built and maintained by Matt Stroman. Want to contribute or collaborate? Reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+              Currently built and maintained by Matt Stroman. Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
             </p>
           </article>
 
@@ -1820,6 +1820,9 @@ function LandingPage() {
                   Privacy
                 </Link>
               </div>
+              <p className="mt-4 text-sm leading-7 text-slate-300">
+                Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+              </p>
             </form>
           </article>
         </div>
@@ -1833,8 +1836,11 @@ function LandingPage() {
         </div>
         <div className="landing-card-grid">
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-icon-badge" aria-hidden="true">
-              <LandingGlyph kind="discord" />
+            <div className="landing-offering-card-top">
+              <div className="landing-icon-badge" aria-hidden="true">
+                <LandingGlyph kind="discord" />
+              </div>
+              <span className="status-chip">Available now</span>
             </div>
             <div className="eyebrow">Community</div>
             <h2>Board Enthusiasts Discord</h2>
@@ -1846,8 +1852,11 @@ function LandingPage() {
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-icon-badge" aria-hidden="true">
-              <LandingGlyph kind="spark" />
+            <div className="landing-offering-card-top">
+              <div className="landing-icon-badge" aria-hidden="true">
+                <LandingGlyph kind="spark" />
+              </div>
+              <span className="status-chip">Available now</span>
             </div>
             <div className="eyebrow">Resource</div>
             <h2>Board Enthusiasts GPT</h2>

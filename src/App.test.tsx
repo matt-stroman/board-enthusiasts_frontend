@@ -533,6 +533,7 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Get Updates" }).every((link) => link.getAttribute("href") === "#signup")).toBe(true);
     expect(screen.getByRole("heading", { name: "BE App Launcher" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Board OS Emulator" })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "contact@boardenthusiasts.com" }).some((link) => link.getAttribute("href") === "mailto:contact@boardenthusiasts.com")).toBe(true);
     expect(screen.getByRole("button", { name: "Join the list" })).toBeVisible();
     expect(screen.queryByRole("link", { name: "Browse" })).not.toBeInTheDocument();
   });
