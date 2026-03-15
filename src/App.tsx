@@ -1861,6 +1861,42 @@ function LandingPage() {
           <article className="app-panel p-6 landing-offering-card">
             <div className="landing-offering-card-top">
               <div className="landing-icon-badge" aria-hidden="true">
+                <LandingGlyph kind="library" />
+              </div>
+              <span className="status-chip">Available now</span>
+            </div>
+            <div>
+              <div className="eyebrow">Utility</div>
+              <h2>BE App Launcher</h2>
+            </div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Learn More</a>
+            </div>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top">
+              <div className="landing-icon-badge" aria-hidden="true">
+                <LandingGlyph kind="toolkit" />
+              </div>
+              <span className="status-chip">Coming Soon</span>
+            </div>
+            <div>
+              <div className="eyebrow">Developer tool</div>
+              <h2>Board OS Emulator</h2>
+            </div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              An emulator for the Board OS used in the Unity editor to show the screens Board would show for SDK calls, making it easier to test titles in-editor without building and deploying to target as often.
+            </p>
+            <div className="card-actions mt-5">
+              <LandingUpdatesLink className="secondary-button">Get Updates</LandingUpdatesLink>
+            </div>
+          </article>
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top">
+              <div className="landing-icon-badge" aria-hidden="true">
                 <LandingGlyph kind="toolkit" />
               </div>
               <span className="status-chip">Coming Soon</span>
