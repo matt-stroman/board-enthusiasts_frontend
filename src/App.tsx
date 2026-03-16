@@ -1415,6 +1415,8 @@ function TitleReportConversation({ detail }: { detail: TitleReportDetail }) {
 function LandingShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const currentYear = new Date().getFullYear();
+  const [mobileHeaderVisible, setMobileHeaderVisible] = useState(true);
+  const lastMobileScrollY = useRef(0);
 
   useEffect(() => {
     if (!location.hash) {
@@ -1432,9 +1434,77 @@ function LandingShell({ children }: { children: React.ReactNode }) {
     });
   }, [location.hash, location.pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    let animationFrameId: number | null = null;
+
+    const resetHeaderVisibility = () => {
+      lastMobileScrollY.current = window.scrollY;
+      setMobileHeaderVisible(true);
+    };
+
+    const updateHeaderVisibility = () => {
+      animationFrameId = null;
+
+      if (!mediaQuery.matches) {
+        lastMobileScrollY.current = window.scrollY;
+        setMobileHeaderVisible(true);
+        return;
+      }
+
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastMobileScrollY.current;
+
+      if (currentScrollY <= 8) {
+        setMobileHeaderVisible(true);
+      } else if (Math.abs(delta) >= 6) {
+        setMobileHeaderVisible(delta < 0);
+      }
+
+      lastMobileScrollY.current = currentScrollY;
+    };
+
+    const handleScroll = () => {
+      if (animationFrameId !== null) {
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(updateHeaderVisibility);
+    };
+
+    const handleViewportChange = () => {
+      resetHeaderVisibility();
+    };
+
+    resetHeaderVisibility();
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+    } else {
+      mediaQuery.addListener(handleViewportChange);
+    }
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", handleViewportChange);
+      } else {
+        mediaQuery.removeListener(handleViewportChange);
+      }
+    };
+  }, []);
+
   return (
     <div className="app-root landing-root">
-      <header className="app-header">
+      <header className={`app-header landing-header ${mobileHeaderVisible ? "is-visible" : "is-hidden"}`}>
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />

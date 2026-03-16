@@ -1006,9 +1006,21 @@
   }
 
   @media (max-width: 767px) {
-    .landing-root .app-header {
-      position: relative;
-      top: auto;
+    .landing-root .landing-header {
+      position: sticky;
+      top: 0;
+      transition:
+        transform 180ms ease,
+        opacity 180ms ease;
+      will-change: transform;
+    }
+
+    .landing-root .landing-header.is-visible {
+      transform: translateY(0);
+    }
+
+    .landing-root .landing-header.is-hidden {
+      transform: translateY(calc(-100% - 0.5rem));
     }
 
     .app-main {
