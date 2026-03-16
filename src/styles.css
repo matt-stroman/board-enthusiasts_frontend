@@ -1006,6 +1006,11 @@
   }
 
   @media (max-width: 767px) {
+    .landing-root .app-header {
+      position: relative;
+      top: auto;
+    }
+
     .app-main {
       @apply px-3 py-6;
     }
@@ -1079,8 +1084,8 @@
     }
 
     .landing-hero-panel h1 {
-      font-size: clamp(1.7rem, 8.8vw, 2.45rem);
-      line-height: 0.92;
+      font-size: clamp(1.45rem, 7vw, 2.1rem);
+      line-height: 0.94;
     }
 
     .landing-promo-card h2,
@@ -1101,6 +1106,13 @@
     .card-actions > * {
       flex: 1 1 100%;
       width: 100%;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .landing-hero-panel h1 {
+      font-size: clamp(1.3rem, 6.1vw, 1.75rem);
+      line-height: 0.96;
     }
   }
 }
