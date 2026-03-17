@@ -2031,7 +2031,7 @@ function LandingPage() {
               A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
             </p>
             <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Learn More</a>
+              <a className="secondary-button" href="https://discord.gg/wqdcusHUKM" target="_blank" rel="noreferrer">Learn More</a>
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
