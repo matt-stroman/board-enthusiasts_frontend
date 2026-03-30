@@ -64,7 +64,6 @@ import {
   getPlayerTitleReports,
   getPlayerWishlist,
   getUserNameAvailability,
-  publishTitleRelease,
   getPublicStudio,
   getTitleMediaAssets,
   getTitleMetadataVersions,
@@ -92,13 +91,17 @@ import {
   uploadTitleMediaAsset,
   uploadStudioMedia,
   validateModerationTitleReport,
-  withdrawTitleRelease,
   type StudioLinkMutationRequest,
   type StudioMutationRequest,
 } from "./api";
 import { hasPlatformRole, useAuth, type SignUpInput } from "./auth";
 import { readAppConfig, type AppConfig } from "./config";
 import { DevelopWorkspacePage } from "./develop-workspace";
+import {
+  buildAcceptedMimeTypeError,
+  formatMediaUploadGuidance,
+  normalizeImageUpload,
+} from "./media-upload";
 
 const appConfig = new Proxy({} as AppConfig, {
   get(_target, property) {
@@ -121,6 +124,16 @@ const landingMetadata = {
   privacyTitle: "Board Enthusiasts Privacy Snapshot | Board Players and Builders",
   privacyDescription:
     "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+  privacyCanonical: "https://boardenthusiasts.com/privacy",
+} as const;
+const liveMetadata = {
+  homeTitle: "Board Enthusiasts | For Board Players and Builders",
+  homeDescription:
+    "BE is the branded front door for Board players and builders. Browse the BE Library, plug into Discord, discover current tools, and see what is shipping next.",
+  homeCanonical: "https://boardenthusiasts.com/",
+  privacyTitle: "BE Privacy Snapshot | For Board Players and Builders",
+  privacyDescription:
+    "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
   privacyCanonical: "https://boardenthusiasts.com/privacy",
 } as const;
 const supportedPublisherOptions = [
@@ -150,7 +163,6 @@ function getCaptchaMode(siteKey: string | null): CaptchaMode {
 const PLAYER_FILTER_MIN = 1;
 const PLAYER_FILTER_MAX = 8;
 const avatarUploadPolicy = migrationMediaUploadPolicies.avatars;
-const AVATAR_UPLOAD_MAX_BYTES = avatarUploadPolicy.maxUploadBytes;
 const AVATAR_UPLOAD_ACCEPT = avatarUploadPolicy.acceptedMimeTypes.join(",");
 const USER_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -242,8 +254,8 @@ interface TitleCreateState {
 interface TitleSettingsState {
   slug: string;
   contentKind: "game" | "app";
-  lifecycleStatus: "draft" | "testing" | "published" | "archived";
-  visibility: "private" | "unlisted" | "listed";
+  lifecycleStatus: "draft" | "active" | "archived";
+  visibility: "unlisted" | "listed";
 }
 
 interface MetadataEditorState {
@@ -265,7 +277,6 @@ interface MediaEditorState {
 
 interface ReleaseCreateState {
   version: string;
-  metadataRevisionNumber: number;
 }
 
 interface ConnectionCreateState {
@@ -309,6 +320,69 @@ interface AvatarEditorState {
   fileName: string | null;
 }
 
+interface SignInPageDraftState {
+  email: string;
+  password: string;
+  showSignInPassword: boolean;
+  mfaChallengeOpen: boolean;
+  mfaCode: string;
+  mfaFactorId: string | null;
+  mfaFactorLabel: string;
+  registerModalOpen: boolean;
+  recoveryModalOpen: boolean;
+  confirmationModalOpen: boolean;
+  recoveryStep: "request" | "code" | "reset";
+  registrationUserName: string;
+  registrationEmail: string;
+  registrationFirstName: string;
+  registrationLastName: string;
+  registrationPassword: string;
+  registrationConfirmPassword: string;
+  showRegistrationPassword: boolean;
+  showRegistrationConfirmPassword: boolean;
+  registrationAvatar: AvatarEditorState;
+  recoveryEmail: string;
+  recoveryCode: string;
+  recoveryPassword: string;
+  recoveryConfirmPassword: string;
+  showRecoveryPassword: boolean;
+  showRecoveryConfirmPassword: boolean;
+  confirmationEmail: string;
+  confirmationCode: string;
+}
+
+interface PlayerPageDraftState {
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  settingsCurrentPassword: string;
+  showSettingsCurrentPassword: boolean;
+  profileAvatar: AvatarEditorState;
+  profileEditMode: boolean;
+  settingsEditMode: boolean;
+  newPassword: string;
+  confirmNewPassword: string;
+  showNewPassword: boolean;
+  showConfirmNewPassword: boolean;
+  mfaEnrollmentCode: string;
+  mfaDisableCode: string;
+  reportReply: string;
+  selectedReportId: string | null;
+}
+
+interface LandingSignupDraftState {
+  firstName: string;
+  email: string;
+  consented: boolean;
+  playerInterestSelected: boolean;
+  developerInterestSelected: boolean;
+}
+
+const LANDING_SIGNUP_DRAFT_STORAGE_KEY = "landing-signup-draft";
+const SIGN_IN_PAGE_DRAFT_STORAGE_KEY = "signin-page-draft";
+const PLAYER_PAGE_DRAFT_STORAGE_KEY = "player-page-draft";
+
 function slugifyValue(value: string): string {
   return value
     .toLowerCase()
@@ -338,6 +412,80 @@ function getInitials(value: string | null | undefined): string {
   }
 
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
+
+function getCurrentUserAvatarUrl(user: CurrentUserResponse | null): string | null {
+  const avatarUrl = user?.avatarUrl?.trim();
+  return avatarUrl ? avatarUrl : null;
+}
+
+function readSessionStorageJson<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(key);
+    if (!rawValue) {
+      return null;
+    }
+
+    return JSON.parse(rawValue) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionStorageJson(key: string, value: unknown): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage write failures and keep the in-memory form state.
+  }
+}
+
+function removeSessionStorageJson(key: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures and keep the in-memory form state.
+  }
+}
+
+function restoreAvatarEditorState(value: unknown): AvatarEditorState {
+  if (!value || typeof value !== "object") {
+    return createAvatarEditorState(null);
+  }
+
+  const candidate = value as Partial<AvatarEditorState>;
+  return {
+    mode: candidate.mode === "upload" ? "upload" : "url",
+    url: typeof candidate.url === "string" ? candidate.url : "",
+    dataUrl: typeof candidate.dataUrl === "string" ? candidate.dataUrl : null,
+    fileName: typeof candidate.fileName === "string" ? candidate.fileName : null,
+  };
+}
+
+function renderCurrentUserAvatar(user: CurrentUserResponse | null, loading: boolean, initials: string) {
+  if (loading) {
+    return <span>...</span>;
+  }
+
+  const avatarUrl = getCurrentUserAvatarUrl(user);
+  if (!avatarUrl) {
+    return <span>{initials}</span>;
+  }
+
+  const avatarLabel = user?.displayName ?? user?.email ?? "User";
+  return <img className="h-full w-full object-cover" src={avatarUrl} alt={`${avatarLabel} avatar`} />;
 }
 
 function isApiErrorStatus(error: unknown, status: number): boolean {
@@ -435,6 +583,19 @@ function formatAudienceLabel(value: string): string {
   }
 }
 
+function canViewTitleReportMessageAudience(audience: string, viewerRole: "player" | "developer" | "moderator"): boolean {
+  switch (audience) {
+    case "all":
+      return true;
+    case "player":
+      return viewerRole === "player" || viewerRole === "moderator";
+    case "developer":
+      return viewerRole === "developer" || viewerRole === "moderator";
+    default:
+      return viewerRole === "moderator";
+  }
+}
+
 function isBrowsePath(pathname: string): boolean {
   return pathname === "/" || pathname.startsWith("/browse") || pathname.startsWith("/studios");
 }
@@ -467,6 +628,26 @@ function formatMembershipRole(role: string | null | undefined): string {
     .join(" ");
 }
 
+function isCatalogTitlePubliclyAvailable(title: Pick<CatalogTitleSummary, "lifecycleStatus" | "visibility">): boolean {
+  return title.lifecycleStatus === "active" && title.visibility === "listed";
+}
+
+function getCatalogTitleAvailabilityNote(title: Pick<CatalogTitleSummary, "lifecycleStatus" | "visibility">): string | null {
+  if (isCatalogTitlePubliclyAvailable(title)) {
+    return null;
+  }
+
+  if (title.lifecycleStatus === "archived") {
+    return "Archived and no longer available";
+  }
+
+  if (title.lifecycleStatus === "draft") {
+    return "Still in draft and not publicly available";
+  }
+
+  return "Unlisted and no longer available";
+}
+
 function createInitialTitleState(): TitleCreateState {
   return {
     displayName: "",
@@ -489,7 +670,7 @@ function createTitleSettingsState(title: DeveloperTitle | null): TitleSettingsSt
     slug: title?.slug ?? "",
     contentKind: title?.contentKind ?? "game",
     lifecycleStatus: title?.lifecycleStatus ?? "draft",
-    visibility: title?.visibility ?? "private",
+    visibility: title?.visibility ?? "unlisted",
   };
 }
 
@@ -567,14 +748,6 @@ function formatPlayerFilterSummary(minPlayers: number, maxPlayers: number): stri
   return `${minPlayers} to ${formatPlayerFilterValue(maxPlayers)} players`;
 }
 
-function formatBinaryFileSize(bytes: number): string {
-  if (bytes % (1024 * 1024) === 0) {
-    return `${bytes / (1024 * 1024)} MB`;
-  }
-
-  return `${Math.round(bytes / 1024)} KB`;
-}
-
 function getHeroImageUrl(title: CatalogTitleResponse["title"]): string | null {
   return title.mediaAssets.find((asset) => asset.mediaRole === "hero")?.sourceUrl ?? title.cardImageUrl ?? null;
 }
@@ -611,24 +784,22 @@ async function readAvatarUpload(event: ChangeEvent<HTMLInputElement>): Promise<{
   if (!file) {
     throw new Error("No avatar file was selected.");
   }
-  if (!avatarUploadPolicy.acceptedMimeTypes.some((mimeType) => mimeType === file.type)) {
-    throw new Error("Uploaded avatar must be a WEBP, JPEG, or PNG image.");
-  }
-  if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
-    throw new Error(`Uploaded avatar must be ${formatBinaryFileSize(AVATAR_UPLOAD_MAX_BYTES)} or smaller.`);
-  }
+  try {
+    const result = await normalizeImageUpload(file, avatarUploadPolicy, {
+      label: "avatar",
+      readErrorMessage: "Avatar upload could not be read.",
+    });
 
-  const reader = new FileReader();
-  const result = await new Promise<string>((resolve, reject) => {
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error("Avatar upload could not be read."));
-    reader.readAsDataURL(file);
-  });
-
-  return {
-    dataUrl: result,
-    fileName: file.name,
-  };
+    return {
+      dataUrl: result.dataUrl,
+      fileName: result.fileName,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === buildAcceptedMimeTypeError("avatar", avatarUploadPolicy)) {
+      throw new Error("Uploaded avatar must be a WEBP, JPEG, or PNG image.");
+    }
+    throw error;
+  }
 }
 
 function FilePicker({
@@ -759,6 +930,7 @@ function PasswordField({
   hint,
   hintTone = "default",
   required = false,
+  disabled = false,
   reserveHintSpace = true,
 }: {
   label: string;
@@ -771,6 +943,7 @@ function PasswordField({
   hint?: React.ReactNode;
   hintTone?: "default" | "error" | "success";
   required?: boolean;
+  disabled?: boolean;
   reserveHintSpace?: boolean;
 }) {
   return (
@@ -782,6 +955,7 @@ function PasswordField({
           onChange={(event) => onChange(event.currentTarget.value)}
           onBlur={onBlur}
           autoComplete={autoComplete}
+          disabled={disabled}
         />
         <button
           type="button"
@@ -791,6 +965,7 @@ function PasswordField({
           title={show ? "Hide password" : "Show password"}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onToggle}
+          disabled={disabled}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.8]" aria-hidden="true">
             <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
@@ -856,7 +1031,7 @@ function AvatarEditor({
             />
           </Field>
           <p className="mt-2 text-xs text-slate-400">
-            Optional. Max {formatBinaryFileSize(AVATAR_UPLOAD_MAX_BYTES)}.
+            {formatMediaUploadGuidance(avatarUploadPolicy, { optional: true })}
           </p>
         </div>
       )}
@@ -1099,6 +1274,7 @@ function TitleCard({
   const logoImageUrl = !logoImageFailed && title.logoImageUrl ? title.logoImageUrl : null;
   const genreTags = parseGenreTags(title.genreDisplay);
   const panelClassName = logoImageUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
+  const availabilityNote = getCatalogTitleAvailabilityNote(title);
   const cardBody = (
     <div className="relative flex h-full flex-col justify-end">
       <div className="absolute inset-0 overflow-hidden">
@@ -1152,6 +1328,11 @@ function TitleCard({
             >
               {title.shortDescription}
             </p>
+            {availabilityNote ? (
+              <div className="mt-3 inline-flex rounded-full border border-amber-200/30 bg-amber-300/12 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-amber-50">
+                {availabilityNote}
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-nowrap gap-2 overflow-hidden">
               {genreTags.map((tag) => (
                 <span key={tag} className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-100">
@@ -1276,6 +1457,7 @@ function CompactTitleList({
             <p>
               {title.studioDisplayName} · {title.playerCountDisplay} · {formatContentKindLabel(title.contentKind)}
             </p>
+            {getCatalogTitleAvailabilityNote(title) ? <p className="mt-1 text-sm text-amber-200">{getCatalogTitleAvailabilityNote(title)}</p> : null}
           </div>
           <div className="button-row compact">
             {onOpenQuickView ? (
@@ -1364,7 +1546,15 @@ function ModerationReportList({
   );
 }
 
-function TitleReportConversation({ detail }: { detail: TitleReportDetail }) {
+function TitleReportConversation({
+  detail,
+  viewerRole,
+}: {
+  detail: TitleReportDetail;
+  viewerRole: "player" | "developer" | "moderator";
+}) {
+  const visibleMessages = detail.messages.filter((message) => canViewTitleReportMessageAudience(message.audience, viewerRole));
+
   return (
     <div className="list-stack">
       <article className="list-item">
@@ -1388,9 +1578,9 @@ function TitleReportConversation({ detail }: { detail: TitleReportDetail }) {
         ) : null}
       </section>
 
-      {detail.messages.length > 0 ? (
+      {visibleMessages.length > 0 ? (
         <div className="list-stack">
-          {detail.messages.map((message) => (
+          {visibleMessages.map((message) => (
             <article key={message.id} className="surface-panel-soft rounded-[1rem] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">
@@ -1565,6 +1755,22 @@ function LandingUpdatesLink({ className, children }: { className?: string; child
   );
 }
 
+function DiscordIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M20.317 4.369A19.79 19.79 0 0 0 15.438 3c-.211.375-.458.88-.628 1.274a18.27 18.27 0 0 0-5.62 0A13.74 13.74 0 0 0 8.56 3 19.736 19.736 0 0 0 3.68 4.37C.59 9.04-.246 13.595.172 18.084A19.9 19.9 0 0 0 6.16 21c.484-.665.915-1.37 1.287-2.11a12.85 12.85 0 0 1-2.024-.977c.17-.126.336-.257.497-.392 3.905 1.836 8.14 1.836 11.998 0 .166.135.332.266.497.392a12.9 12.9 0 0 1-2.03.98c.372.739.803 1.444 1.287 2.109a19.86 19.86 0 0 0 5.99-2.916c.49-5.2-.837-9.714-3.346-13.715ZM8.02 15.332c-1.18 0-2.15-1.085-2.15-2.42 0-1.335.951-2.42 2.15-2.42 1.208 0 2.17 1.094 2.15 2.42 0 1.335-.951 2.42-2.15 2.42Zm7.96 0c-1.18 0-2.15-1.085-2.15-2.42 0-1.335.951-2.42 2.15-2.42 1.208 0 2.17 1.094 2.15 2.42 0 1.335-.942 2.42-2.15 2.42Z" />
+    </svg>
+  );
+}
+
+function DiscordIconButton({ className = "app-icon-button" }: { className?: string }) {
+  return (
+    <a className={className} href={landingDiscordUrl} target="_blank" rel="noreferrer" aria-label="Join the Board Enthusiasts Discord">
+      <DiscordIcon className="size-5" />
+    </a>
+  );
+}
+
 function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" | "toolkit" }) {
   if (kind === "discord") {
     return (
@@ -1701,11 +1907,12 @@ function LandingPage() {
     canonicalUrl: landingMetadata.defaultCanonical,
   });
 
-  const [firstName, setFirstName] = useState("");
-  const [email, setEmail] = useState("");
-  const [consented, setConsented] = useState(false);
-  const [playerInterestSelected, setPlayerInterestSelected] = useState(false);
-  const [developerInterestSelected, setDeveloperInterestSelected] = useState(false);
+  const landingSignupDraft = readSessionStorageJson<Partial<LandingSignupDraftState>>(LANDING_SIGNUP_DRAFT_STORAGE_KEY);
+  const [firstName, setFirstName] = useState(landingSignupDraft?.firstName ?? "");
+  const [email, setEmail] = useState(landingSignupDraft?.email ?? "");
+  const [consented, setConsented] = useState(landingSignupDraft?.consented ?? false);
+  const [playerInterestSelected, setPlayerInterestSelected] = useState(landingSignupDraft?.playerInterestSelected ?? false);
+  const [developerInterestSelected, setDeveloperInterestSelected] = useState(landingSignupDraft?.developerInterestSelected ?? false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileStatus, setTurnstileStatus] = useState<TurnstileWidgetStatus>("loading");
   const [submitting, setSubmitting] = useState(false);
@@ -1719,6 +1926,28 @@ function LandingPage() {
   const captchaMode = getCaptchaMode(appConfig.turnstileSiteKey);
   const requiresTurnstile = captchaMode !== "disabled";
   const canSubmitSignup = !submitting && !emailError && consented;
+
+  useEffect(() => {
+    const hasDraft =
+      firstName.trim().length > 0 ||
+      email.trim().length > 0 ||
+      consented ||
+      playerInterestSelected ||
+      developerInterestSelected;
+
+    if (!hasDraft) {
+      removeSessionStorageJson(LANDING_SIGNUP_DRAFT_STORAGE_KEY);
+      return;
+    }
+
+    writeSessionStorageJson(LANDING_SIGNUP_DRAFT_STORAGE_KEY, {
+      firstName,
+      email,
+      consented,
+      playerInterestSelected,
+      developerInterestSelected,
+    } satisfies LandingSignupDraftState);
+  }, [consented, developerInterestSelected, email, firstName, playerInterestSelected]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -1765,6 +1994,7 @@ function LandingPage() {
       setPlayerInterestSelected(false);
       setDeveloperInterestSelected(false);
       setTurnstileToken(null);
+      removeSessionStorageJson(LANDING_SIGNUP_DRAFT_STORAGE_KEY);
     } catch (error) {
       setErrorMessage("We couldn't submit your signup right now. Please try again, or report the issue and we'll help you out.");
       setTechnicalErrorDetails(error instanceof Error ? `${error.message}${error.stack ? `\n${error.stack}` : ""}` : String(error));
@@ -2118,7 +2348,7 @@ function LandingPage() {
   );
 }
 
-function PrivacyPage() {
+function LandingPrivacyPage() {
   useDocumentMetadata({
     title: landingMetadata.privacyTitle,
     description: landingMetadata.privacyDescription,
@@ -2156,11 +2386,58 @@ function PrivacyPage() {
   );
 }
 
+function LivePrivacyPage() {
+  useDocumentMetadata({
+    title: liveMetadata.privacyTitle,
+    description: liveMetadata.privacyDescription,
+    canonicalUrl: liveMetadata.privacyCanonical,
+  });
+
+  return (
+    <div className="page-grid narrow">
+      <section className="app-panel p-6">
+        <h1 className="app-page-title">BE Privacy Snapshot</h1>
+        <p className="mt-4 text-base leading-8 text-slate-300">
+          BE currently collects the information needed to create and secure accounts, run the live library and workspace flows, process developer submissions, and respond to contact or support requests.
+        </p>
+        <div className="mt-6 list-stack">
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>What we collect</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Account email, username, authentication records managed by Supabase Auth, optional profile fields, player library and wishlist activity, title reports and messages, developer-submitted studio or title or release data, uploaded media metadata, and support or contact request details.
+            </p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>Why we collect it</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              To run the BE Library, support sign-in and recovery, power player and developer workflows, operate moderation paths, send direct responses when you contact us, and maintain optional BE communications where offered.
+            </p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>Who processes it</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Cloudflare, Supabase, and Brevo support the live BE web experience, account and storage systems, and any direct email delivery workflows still in use.
+            </p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>How to reach us</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Send privacy or contact requests to <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a>.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const currentYear = new Date().getFullYear();
   const accessToken = session?.access_token ?? "";
+  const homeShell = location.pathname === "/";
   const browseActive = isBrowsePath(location.pathname);
   const installActive = location.pathname.startsWith("/install-guide");
   const showSignedInSections = Boolean(session && currentUser);
@@ -2251,7 +2528,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   return (
-    <div className="app-root">
+    <div className={homeShell ? "app-root landing-root" : "app-root"}>
       {userMenuOpen || notificationsOpen ? (
         <button className="fixed inset-0 z-40 cursor-default bg-transparent" type="button" aria-label="Close navigation menus" onClick={closeOverlays} />
       ) : null}
@@ -2261,7 +2538,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
             <div>
               <div className="app-brand-title">Board Enthusiasts</div>
-              <div className="app-brand-subtitle">Players and Developers who ♡ Board</div>
+              <div className="app-brand-subtitle">For Board Players And Builders</div>
             </div>
           </Link>
 
@@ -2284,23 +2561,18 @@ function Shell({ children }: { children: React.ReactNode }) {
                 ) : null}
               </>
             ) : null}
-            <NavLink to="/install-guide" className={({ isActive }) => navLinkClass(isActive || installActive)}>
-              Install
-            </NavLink>
+            {!homeShell ? (
+              <NavLink to="/install-guide" className={({ isActive }) => navLinkClass(isActive || installActive)}>
+                Install
+              </NavLink>
+            ) : null}
+            <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">
+              Get Board
+            </a>
           </nav>
 
           <div className="app-header-actions">
-            <a
-              className="app-icon-button"
-              href="https://discord.gg/cz2zReWqcA"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Join the Board Enthusiasts Discord"
-            >
-              <svg className="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20.317 4.369A19.79 19.79 0 0 0 15.438 3c-.211.375-.458.88-.628 1.274a18.27 18.27 0 0 0-5.62 0A13.74 13.74 0 0 0 8.56 3 19.736 19.736 0 0 0 3.68 4.37C.59 9.04-.246 13.595.172 18.084A19.9 19.9 0 0 0 6.16 21c.484-.665.915-1.37 1.287-2.11a12.85 12.85 0 0 1-2.024-.977c.17-.126.336-.257.497-.392 3.905 1.836 8.14 1.836 11.998 0 .166.135.332.266.497.392a12.9 12.9 0 0 1-2.03.98c.372.739.803 1.444 1.287 2.109a19.86 19.86 0 0 0 5.99-2.916c.49-5.2-.837-9.714-3.346-13.715ZM8.02 15.332c-1.18 0-2.15-1.085-2.15-2.42 0-1.335.951-2.42 2.15-2.42 1.208 0 2.17 1.094 2.15 2.42 0 1.335-.951 2.42-2.15 2.42Zm7.96 0c-1.18 0-2.15-1.085-2.15-2.42 0-1.335.951-2.42 2.15-2.42 1.208 0 2.17 1.094 2.15 2.42 0 1.335-.942 2.42-2.15 2.42Z" />
-              </svg>
-            </a>
+            <DiscordIconButton />
 
             {session ? (
               <>
@@ -2375,13 +2647,13 @@ function Shell({ children }: { children: React.ReactNode }) {
                     aria-label={loading || !accountReady ? "Loading account" : `Open account for ${formatRoles(currentUser)}`}
                     onClick={() => { setNotificationsOpen(false); setUserMenuOpen((current) => !current); }}
                   >
-                    <span>{loading ? "..." : avatarInitials}</span>
+                    {renderCurrentUserAvatar(currentUser, loading, avatarInitials)}
                   </button>
                   {userMenuOpen && currentUser ? (
                     <section className="absolute right-0 z-50 mt-3 w-[min(92vw,21rem)] overflow-hidden rounded-[1.5rem] border border-white/15 bg-[#111017] shadow-[0_28px_70px_rgba(0,0,0,0.48)]">
                       <div className="flex items-center gap-3 p-4">
                         <div className="grid size-12 place-items-center overflow-hidden rounded-full bg-slate-800 text-sm font-bold text-slate-100">
-                          <span>{avatarInitials}</span>
+                          {renderCurrentUserAvatar(currentUser, false, avatarInitials)}
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-white">{currentUser.displayName ?? currentUser.email ?? "Account"}</div>
@@ -2452,21 +2724,32 @@ function Shell({ children }: { children: React.ReactNode }) {
               ) : null}
             </>
           ) : null}
-          <NavLink to="/install-guide" className={({ isActive }) => `${navLinkClass(isActive || installActive)} whitespace-nowrap`}>
-            Install
-          </NavLink>
+          {!homeShell ? (
+            <NavLink to="/install-guide" className={({ isActive }) => `${navLinkClass(isActive || installActive)} whitespace-nowrap`}>
+              Install
+            </NavLink>
+          ) : null}
+          <a href={landingBoardUrl} className={`${navLinkClass(false)} whitespace-nowrap`} target="_blank" rel="noreferrer">
+            Get Board
+          </a>
         </div>
       </header>
 
-      <main className="app-main">
+      <main className={homeShell ? "app-main landing-main" : "app-main"}>
         <div className="page-shell">{children}</div>
       </main>
 
       <footer className="app-footer">
         <div className="app-footer-inner">
-          <div>Browse games, manage your account, and build in the developer console.</div>
+          <div className="landing-footer-copy-block">
+            <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Independent and community-built.</div>
+            <div>Board Enthusiasts is a community project supporting Board players and builders.</div>
+          </div>
           <div className="app-footer-links">
             <Link to="/browse">Browse</Link>
+            <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
+            <a href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+            <Link to="/privacy">Privacy</Link>
             {showSignedInSections ? (
               <>
                 <Link to="/player">Play</Link>
@@ -2476,9 +2759,11 @@ function Shell({ children }: { children: React.ReactNode }) {
                 {showModerateSection ? <Link to="/moderate">Moderate</Link> : null}
                 <Link to="/player?workflow=account-profile">Account</Link>
               </>
-            ) : (
-              <Link to="/install-guide">Install</Link>
-            )}
+            ) : null}
+            {!homeShell ? <Link to="/install-guide">Install</Link> : null}
+          </div>
+          <div className="landing-footer-copyright">
+            © {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a>
           </div>
         </div>
       </footer>
@@ -2517,89 +2802,226 @@ function ProtectedRoute({
 }
 
 function HomePage() {
-  const { session } = useAuth();
+  useDocumentMetadata({
+    title: liveMetadata.homeTitle,
+    description: liveMetadata.homeDescription,
+    canonicalUrl: liveMetadata.homeCanonical,
+  });
 
   return (
-    <div className="page-grid">
-      <section className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6">
-          <div>
-            <h1 className="font-display text-5xl font-black uppercase leading-[0.93] tracking-[0.03em] text-white sm:text-6xl">
-              Discover new games for Board
-            </h1>
-            <p className="text-lg leading-8 text-[#ece3d5]">Browse games created by the Board community.</p>
+    <div className="landing-shell page-grid">
+      <section className="landing-hero">
+        <div className="landing-hero-column">
+          <div className="hero-panel landing-hero-panel">
+            <div className="landing-hero-copy">
+              <h1><i>The</i> unofficial community hub for Board players and builders.</h1>
+              <p>
+                Join the community forming around Board, explore useful BE resources, and browse the live BE Library as it grows.
+              </p>
+            </div>
+            <div className="landing-hero-footer">
+              <div className="hero-actions">
+                <Link className="primary-button" to="/browse">Browse Library</Link>
+                <a className="secondary-button" href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+                <DiscordIconButton />
+              </div>
+              <p className="landing-hero-note">
+                For official Board news, hardware, and platform information, visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
+              </p>
+            </div>
           </div>
-          <div className="home-actions">
-            {session ? (
-              <>
-                <Link to="/player" className="primary-button">
-                  Open play area
-                </Link>
-                <Link to="/browse" className="secondary-button">
-                  Browse
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/browse" className="primary-button">
-                  Browse
-                </Link>
-                <Link to="/auth/signin?returnTo=%2Fplayer" className="secondary-button">
-                  Sign In
-                </Link>
-              </>
-            )}
-          </div>
+
+          <article className="app-panel landing-about-card">
+            <h2>Built to support the Board community.</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Board Enthusiasts is a community project supporting Board players and builders. It is not officially affiliated with nor endorsed by the Board team or Harris Hill Products, Inc.
+            </p>
+            <p className="mt-3 text-sm leading-7 text-slate-400">
+              Currently built and maintained by Matt Stroman. Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+            </p>
+          </article>
+
+          <article className="app-panel landing-promo-card">
+            <h2>BE where the Board community shows up first.</h2>
+            <ul className="landing-promo-list" aria-label="Reasons to use BE now">
+              <li>See new third-party releases as they start to surface.</li>
+              <li>Browse the live BE Library as it keeps growing.</li>
+              <li>Follow the tools and resources growing around Board.</li>
+            </ul>
+          </article>
         </div>
-        <div className="relative overflow-hidden rounded-[2rem] border border-[#fffef1]/40 bg-[linear-gradient(140deg,_rgba(255,251,240,0.98),_rgba(255,245,222,0.96)_38%,_rgba(220,247,234,0.92)_100%)] p-6 text-[#272831] shadow-[0_30px_80px_rgba(9,8,14,0.32)]">
-          <div className="absolute inset-y-0 right-0 w-2/3 bg-[radial-gradient(circle_at_top,_rgba(243,154,46,0.22),_transparent_34%),radial-gradient(circle_at_bottom,_rgba(77,117,244,0.18),_transparent_42%)]" />
-          <div className="relative space-y-5">
-            <div className="inline-flex rounded-full bg-[#272831]/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#5c4b43]">
-              Featured rail direction
-            </div>
-            <div className="space-y-2">
-              <div className="text-xs font-bold uppercase tracking-[0.24em] text-[#6b5a50]">1-4 players • Arcade • Ages 10+</div>
-              <div className="font-display text-4xl font-black uppercase tracking-[0.04em]">Star Blasters</div>
-              <p className="max-w-md text-sm leading-7 text-[#5c4b43]">Jump into featured games quickly, then explore more titles from the community.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div className="rounded-[1.3rem] border border-white/50 bg-[linear-gradient(160deg,_#272831,_#4d75f4)] p-4 text-white shadow-lg">
-                <div className="text-xs uppercase tracking-[0.24em] text-[#dcf7ea]">Action</div>
-                <div className="mt-10 font-semibold">Play now</div>
+
+        <div className="landing-hero-rail">
+          <article className="landing-showcase-card landing-showcase-card-spotlight landing-feature-card">
+            <h2 className="!mt-0">One place to discover third-party Board games and apps.</h2>
+            <p>
+              The BE Library is live as the shared home where players can find new releases in one place and developers can register where the community is already looking.
+            </p>
+            <div className="landing-feature-list">
+              <div className="landing-feature-item">
+                <strong>Players</strong>
+                <span>Discover and collect new third-party Board content in one place.</span>
               </div>
-              <div className="rounded-[1.3rem] bg-[linear-gradient(160deg,_#fffef1,_#f7edd6)] p-4 text-[#272831] shadow-lg">
-                <div className="text-xs uppercase tracking-[0.24em] text-[#6b5a50]">Rail</div>
-                <div className="mt-10 font-semibold">Card 01</div>
-              </div>
-              <div className="rounded-[1.3rem] bg-[linear-gradient(160deg,_#ffe2b6,_#f39a2e)] p-4 text-[#272831] shadow-lg">
-                <div className="text-xs uppercase tracking-[0.24em] text-[#6b4a2d]">Rail</div>
-                <div className="mt-10 font-semibold">Card 02</div>
-              </div>
-              <div className="rounded-[1.3rem] bg-[linear-gradient(160deg,_#dff7ea,_#40c68d)] p-4 text-[#163423] shadow-lg">
-                <div className="text-xs uppercase tracking-[0.24em] text-[#21563b]">Rail</div>
-                <div className="mt-10 font-semibold">Card 03</div>
+              <div className="landing-feature-item">
+                <strong>Developers</strong>
+                <span>Show up where players are browsing, following launches, and deciding what to install next.</span>
               </div>
             </div>
-          </div>
+            <div className="card-actions mt-5">
+              <Link className="secondary-button" to="/browse">Browse Library</Link>
+            </div>
+          </article>
+
+          <article className="landing-showcase-card landing-signup-card">
+            <h2>Use BE right now.</h2>
+            <p>
+              Browse the BE Library, sign in when you want player or developer features, and keep the rest of the BE community tools close at hand.
+            </p>
+            <div className="landing-feature-list">
+              <div className="landing-feature-item">
+                <strong>Browse</strong>
+                <span>Discover new Board games and apps from the community catalog.</span>
+              </div>
+              <div className="landing-feature-item">
+                <strong>Play</strong>
+                <span>Track your library, wishlist, and account activity in one place after signing in.</span>
+              </div>
+              <div className="landing-feature-item">
+                <strong>Build</strong>
+                <span>Manage studios, titles, media, and releases from the developer side when you are ready.</span>
+              </div>
+            </div>
+            <div className="button-row mt-6">
+              <Link className="primary-button" to="/browse">Browse Library</Link>
+            </div>
+            <p className="mt-4 text-sm leading-7 text-slate-300">
+              Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+            </p>
+          </article>
         </div>
       </section>
 
-      <section className="home-card-grid">
-        <Link className="app-panel p-6 transition hover:-translate-y-0.5 hover:border-cyan-300/35" to="/browse">
-          <div className="eyebrow">Public</div>
-          <h2>Browse</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">Find new games by genre, player count, and developer.</p>
-        </Link>
-        <Link className="app-panel p-6 transition hover:-translate-y-0.5 hover:border-cyan-300/35" to="/player">
-          <div className="eyebrow">Players</div>
-          <h2>Play</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">Keep your library and wishlist in one place.</p>
-        </Link>
-        <Link className="app-panel p-6 transition hover:-translate-y-0.5 hover:border-cyan-300/35" to="/develop">
-          <div className="eyebrow">Developers</div>
-          <h2>Developer access</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">Set up your studio and manage titles in the developer console.</p>
-        </Link>
+      <section className="landing-section">
+        <div className="landing-section-heading">
+          <h2>Use BE today.</h2>
+          <p>Board Enthusiasts already has places to plug in today while the BE Library and broader platform surface keep taking shape.</p>
+        </div>
+        <div className="landing-card-grid">
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Available now</span>
+            </div>
+            <h2 className="!mt-0">BE Library</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              The shared home for browsing third-party Board games and apps, with player and developer flows ready when you sign in.
+            </p>
+            <div className="card-actions mt-5">
+              <Link className="secondary-button" to="/browse">Browse Library</Link>
+            </div>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Available now</span>
+            </div>
+            <h2 className="!mt-0">BE Discord</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Our main community space for Board players and developers to connect, share projects, ask questions, and help the ecosystem grow together.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
+            </div>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Available now</span>
+            </div>
+            <h2 className="!mt-0">BE GPT</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A Board-focused assistant for players and developers, with guidance drawn from official Board docs, FAQ, and troubleshooting resources.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingGptUrl} target="_blank" rel="noreferrer">Open GPT</a>
+            </div>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Available now</span>
+            </div>
+            <h2 className="!mt-0">BE App Launcher</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href="https://discord.gg/wqdcusHUKM" target="_blank" rel="noreferrer">Learn More</a>
+            </div>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Coming Soon</span>
+            </div>
+            <h2 className="!mt-0">Board OS Emulator</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              An emulator for the Board OS used in the Unity editor to show the screens Board would show for SDK calls, making it easier to test titles in-editor without building and deploying to target as often.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Follow in Discord</a>
+            </div>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <div className="landing-offering-card-top justify-end">
+              <span className="status-chip">Coming Soon</span>
+            </div>
+            <h2 className="!mt-0">Board GDK</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              A companion toolkit for the official Board SDK currently in development, with workflow helpers, editor tools, and higher-level systems designed to help developers focus on the game.
+            </p>
+            <div className="card-actions mt-5">
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Follow in Discord</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-board-note">
+          <p>
+            Looking for official Board news, hardware, or platform information? Visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
+          </p>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <div className="landing-section-heading">
+          <h2>Built to help the Board ecosystem connect and grow.</h2>
+          <p>BE is meant to be useful right away for supporting and growing the Board community, while also giving players and developers a reason to get involved early.</p>
+        </div>
+        <div className="landing-card-grid">
+          <article className="app-panel p-6 landing-offering-card">
+            <h2>Follow what is being built</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
+            </p>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <h2>Show up where the community is looking</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Connect with players and fellow builders, share progress, explore practical resources, and be ready to register where discovery is taking shape.
+            </p>
+          </article>
+
+          <article className="app-panel p-6 landing-offering-card">
+            <h2>Community, tools, and momentum around Board</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              BE exists to support the growing Board community by helping players and developers connect, collaborate, and stay engaged.
+            </p>
+          </article>
+        </div>
       </section>
     </div>
   );
@@ -2766,6 +3188,9 @@ function BrowsePage() {
   const totalPages = normalizedResultsPerPage <= 0 ? 1 : Math.max(1, Math.ceil(filteredTitles.length / normalizedResultsPerPage));
   const pagedTitles =
     normalizedResultsPerPage <= 0 ? filteredTitles : filteredTitles.slice((currentPage - 1) * normalizedResultsPerPage, currentPage * normalizedResultsPerPage);
+  const visibleResultStart =
+    filteredTitles.length === 0 || pagedTitles.length === 0 ? 0 : normalizedResultsPerPage <= 0 ? 1 : (currentPage - 1) * normalizedResultsPerPage + 1;
+  const visibleResultEnd = visibleResultStart === 0 ? 0 : visibleResultStart + pagedTitles.length - 1;
 
   function toggleStudio(studioSlug: string): void {
     setSelectedStudios((current) => (current.includes(studioSlug) ? current.filter((candidate) => candidate !== studioSlug) : [...current, studioSlug]));
@@ -3075,7 +3500,7 @@ function BrowsePage() {
                     Previous
                   </button>
                   <div className="text-sm text-slate-400">
-                    Showing {pagedTitles.length} of {filteredTitles.length} results
+                    Showing results {visibleResultStart} - {visibleResultEnd} of {filteredTitles.length}
                   </div>
                   <button className={`secondary-button ${currentPage < totalPages ? "" : "pointer-events-none opacity-40"}`} type="button" onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage >= totalPages}>
                     Next
@@ -3250,6 +3675,9 @@ function StudioDetailPage() {
   const totalPages = normalizedResultsPerPage <= 0 ? 1 : Math.max(1, Math.ceil(filteredTitles.length / normalizedResultsPerPage));
   const pagedTitles =
     normalizedResultsPerPage <= 0 ? filteredTitles : filteredTitles.slice((currentPage - 1) * normalizedResultsPerPage, currentPage * normalizedResultsPerPage);
+  const visibleResultStart =
+    filteredTitles.length === 0 || pagedTitles.length === 0 ? 0 : normalizedResultsPerPage <= 0 ? 1 : (currentPage - 1) * normalizedResultsPerPage + 1;
+  const visibleResultEnd = visibleResultStart === 0 ? 0 : visibleResultStart + pagedTitles.length - 1;
 
   function toggleGenre(genreTag: string): void {
     setSelectedGenres((current) => (current.includes(genreTag) ? current.filter((candidate) => candidate !== genreTag) : [...current, genreTag]));
@@ -3545,7 +3973,7 @@ function StudioDetailPage() {
                 Previous
               </button>
               <div className="text-sm text-slate-400">
-                Showing {pagedTitles.length} of {filteredTitles.length} results
+                Showing results {visibleResultStart} - {visibleResultEnd} of {filteredTitles.length}
               </div>
               <button className={`secondary-button ${currentPage < totalPages ? "" : "pointer-events-none opacity-40"}`} type="button" onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage >= totalPages}>
                 Next
@@ -3700,7 +4128,7 @@ function TitleQuickViewModal({
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug);
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug, accessToken || null);
         if (cancelled) {
           return;
         }
@@ -3820,6 +4248,7 @@ function TitleQuickViewModal({
 
   const heroImageUrl = title ? getHeroImageUrl(title) : null;
   const reportedByCurrentUser = title ? Boolean(existingReport && existingReport.titleId === title.id) : false;
+  const availabilityNote = title ? getCatalogTitleAvailabilityNote(title) : null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>
@@ -3861,6 +4290,11 @@ function TitleQuickViewModal({
               </div>
               {actionMessage ? <div className="rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">{actionMessage}</div> : null}
               {playerStateError ? <div className="rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{playerStateError}</div> : null}
+              {availabilityNote ? (
+                <div className="rounded-[1.5rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
+                  This title is {availabilityNote.toLowerCase()}. It remains visible here because it is already in your library or wishlist.
+                </div>
+              ) : null}
               {title.isReported ? (
                 <div className="rounded-[1.5rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
                   {reportedByCurrentUser
@@ -4008,7 +4442,7 @@ function TitleDetailPage() {
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug);
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug, accessToken || null);
         if (cancelled) {
           return;
         }
@@ -4155,6 +4589,9 @@ function TitleDetailPage() {
   const heroImageUrl = getHeroImageUrl(title);
   const canViewMetadata = moderatorAccessEnabled || managedStudioIds.has(title.studioId);
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
+  const showPlayerReleaseSummary = playerAccessEnabled && !canViewMetadata;
+  const showCurrentReleasePanel = !showPlayerReleaseSummary;
+  const availabilityNote = getCatalogTitleAvailabilityNote(title);
 
   return (
     <section className="space-y-8">
@@ -4212,31 +4649,43 @@ function TitleDetailPage() {
                 />
                 {actionMessage ? <div className="rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">{actionMessage}</div> : null}
               </div>
+              {showPlayerReleaseSummary ? (
+                <div className="text-sm text-slate-300">
+                  Current version <span className="font-semibold text-slate-100">{title.currentRelease?.version ?? "Not published"}</span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </section>
 
       {playerStateError ? <div className="rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{playerStateError}</div> : null}
+      {availabilityNote ? (
+        <div className="rounded-[1.25rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
+          This title is {availabilityNote.toLowerCase()}. It remains visible because you already saved it in your library or wishlist.
+        </div>
+      ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className={showCurrentReleasePanel ? "grid gap-6 lg:grid-cols-[1.2fr_0.8fr]" : "grid gap-6"}>
         <section className="app-panel p-6">
           <h2 className="text-xl font-semibold text-white">About</h2>
           <p className="mt-4 text-base leading-8 text-slate-300">{title.description}</p>
         </section>
-        <section className="app-panel p-6">
-          <h2 className="text-xl font-semibold text-white">Current release</h2>
-          <dl className="mt-4 grid gap-3 text-sm text-slate-300">
-            <div className="flex justify-between gap-4">
-              <dt>Version</dt>
-              <dd>{title.currentRelease?.version ?? "Not published"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt>Acquisition</dt>
-              <dd>{title.acquisitionUrl ? "Configured" : "Not configured"}</dd>
-            </div>
-          </dl>
-        </section>
+        {showCurrentReleasePanel ? (
+          <section className="app-panel p-6">
+            <h2 className="text-xl font-semibold text-white">Current release</h2>
+            <dl className="mt-4 grid gap-3 text-sm text-slate-300">
+              <div className="flex justify-between gap-4">
+                <dt>Version</dt>
+                <dd>{title.currentRelease?.version ?? "Not published"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt>Acquisition</dt>
+                <dd>{title.acquisitionUrl ? "Configured" : "Not configured"}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
       </section>
 
       <section className={`grid gap-6 ${canViewMetadata ? "lg:grid-cols-[1.15fr_0.85fr]" : ""}`}>
@@ -4306,7 +4755,7 @@ function TitleDetailPage() {
               </div>
               <div className="flex justify-between gap-4">
                 <dt>Metadata revision</dt>
-                <dd>{title.currentRelease?.metadataRevisionNumber.toString() ?? title.currentMetadataRevision.toString()}</dd>
+                <dd>{title.currentMetadataRevision.toString()}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt>Media assets</dt>
@@ -4521,28 +4970,69 @@ function CaptchaWidget({
 }
 
 function SignInPage() {
-  const { session, currentUser, signIn, signUp, requestPasswordReset, verifyEmailCode, verifyRecoveryCode, updatePassword, signOut } = useAuth();
+  const { client, session, currentUser, signIn, signUp, requestPasswordReset, verifyEmailCode, verifyRecoveryCode, updatePassword, signOut } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const recoveryMode = searchParams.get("mode") === "recovery";
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const signInDraftRef = useRef<SignInPageDraftState | null>(null);
+  if (signInDraftRef.current === null) {
+    const storedDraft = readSessionStorageJson<Partial<SignInPageDraftState>>(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+    signInDraftRef.current = {
+      email: storedDraft?.email ?? "",
+      password: storedDraft?.password ?? "",
+      showSignInPassword: storedDraft?.showSignInPassword ?? false,
+      mfaChallengeOpen: storedDraft?.mfaChallengeOpen ?? false,
+      mfaCode: storedDraft?.mfaCode ?? "",
+      mfaFactorId: typeof storedDraft?.mfaFactorId === "string" ? storedDraft.mfaFactorId : null,
+      mfaFactorLabel: storedDraft?.mfaFactorLabel ?? "Authenticator app",
+      registerModalOpen: storedDraft?.registerModalOpen ?? false,
+      recoveryModalOpen: storedDraft?.recoveryModalOpen ?? recoveryMode,
+      confirmationModalOpen: storedDraft?.confirmationModalOpen ?? false,
+      recoveryStep: storedDraft?.recoveryStep === "code" || storedDraft?.recoveryStep === "reset" ? storedDraft.recoveryStep : recoveryMode ? "reset" : "request",
+      registrationUserName: storedDraft?.registrationUserName ?? "",
+      registrationEmail: storedDraft?.registrationEmail ?? "",
+      registrationFirstName: storedDraft?.registrationFirstName ?? "",
+      registrationLastName: storedDraft?.registrationLastName ?? "",
+      registrationPassword: storedDraft?.registrationPassword ?? "",
+      registrationConfirmPassword: storedDraft?.registrationConfirmPassword ?? "",
+      showRegistrationPassword: storedDraft?.showRegistrationPassword ?? false,
+      showRegistrationConfirmPassword: storedDraft?.showRegistrationConfirmPassword ?? false,
+      registrationAvatar: restoreAvatarEditorState(storedDraft?.registrationAvatar),
+      recoveryEmail: storedDraft?.recoveryEmail ?? "",
+      recoveryCode: storedDraft?.recoveryCode ?? "",
+      recoveryPassword: storedDraft?.recoveryPassword ?? "",
+      recoveryConfirmPassword: storedDraft?.recoveryConfirmPassword ?? "",
+      showRecoveryPassword: storedDraft?.showRecoveryPassword ?? false,
+      showRecoveryConfirmPassword: storedDraft?.showRecoveryConfirmPassword ?? false,
+      confirmationEmail: storedDraft?.confirmationEmail ?? "",
+      confirmationCode: storedDraft?.confirmationCode ?? "",
+    };
+  }
+  const signInDraft = signInDraftRef.current;
+  const [email, setEmail] = useState(signInDraft.email);
+  const [password, setPassword] = useState(signInDraft.password);
+  const [showSignInPassword, setShowSignInPassword] = useState(signInDraft.showSignInPassword);
+  const [mfaChallengeOpen, setMfaChallengeOpen] = useState(signInDraft.mfaChallengeOpen);
+  const [mfaCode, setMfaCode] = useState(signInDraft.mfaCode);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(signInDraft.mfaFactorId);
+  const [mfaFactorLabel, setMfaFactorLabel] = useState(signInDraft.mfaFactorLabel);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
-  const [registerModalOpen, setRegisterModalOpen] = useState(false);
-  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
-  const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
-  const [recoveryStep, setRecoveryStep] = useState<"request" | "code" | "reset">(recoveryMode ? "reset" : "request");
-  const [registrationUserName, setRegistrationUserName] = useState("");
-  const [registrationEmail, setRegistrationEmail] = useState("");
-  const [registrationFirstName, setRegistrationFirstName] = useState("");
-  const [registrationLastName, setRegistrationLastName] = useState("");
-  const [registrationPassword, setRegistrationPassword] = useState("");
-  const [registrationConfirmPassword, setRegistrationConfirmPassword] = useState("");
-  const [showRegistrationPassword, setShowRegistrationPassword] = useState(false);
-  const [showRegistrationConfirmPassword, setShowRegistrationConfirmPassword] = useState(false);
+  const [registerModalOpen, setRegisterModalOpen] = useState(signInDraft.registerModalOpen);
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(signInDraft.recoveryModalOpen);
+  const [confirmationModalOpen, setConfirmationModalOpen] = useState(signInDraft.confirmationModalOpen);
+  const [recoveryStep, setRecoveryStep] = useState<"request" | "code" | "reset">(signInDraft.recoveryStep);
+  const [registrationUserName, setRegistrationUserName] = useState(signInDraft.registrationUserName);
+  const [registrationEmail, setRegistrationEmail] = useState(signInDraft.registrationEmail);
+  const [registrationFirstName, setRegistrationFirstName] = useState(signInDraft.registrationFirstName);
+  const [registrationLastName, setRegistrationLastName] = useState(signInDraft.registrationLastName);
+  const [registrationPassword, setRegistrationPassword] = useState(signInDraft.registrationPassword);
+  const [registrationConfirmPassword, setRegistrationConfirmPassword] = useState(signInDraft.registrationConfirmPassword);
+  const [showRegistrationPassword, setShowRegistrationPassword] = useState(signInDraft.showRegistrationPassword);
+  const [showRegistrationConfirmPassword, setShowRegistrationConfirmPassword] = useState(signInDraft.showRegistrationConfirmPassword);
   const registrationUserNameCheckRequest = useRef(0);
   const [registrationUserNameError, setRegistrationUserNameError] = useState<string | null>(null);
   const [registrationUserNameAvailability, setRegistrationUserNameAvailability] = useState<{
@@ -4552,17 +5042,17 @@ function SignInPage() {
   const [registrationEmailError, setRegistrationEmailError] = useState<string | null>(null);
   const [registrationPasswordErrors, setRegistrationPasswordErrors] = useState<string[]>([]);
   const [registrationConfirmPasswordError, setRegistrationConfirmPasswordError] = useState<string | null>(null);
-  const [registrationAvatar, setRegistrationAvatar] = useState<AvatarEditorState>(createAvatarEditorState(null));
+  const [registrationAvatar, setRegistrationAvatar] = useState<AvatarEditorState>(signInDraft.registrationAvatar);
   const [registrationCaptchaToken, setRegistrationCaptchaToken] = useState<string | null>(null);
-  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState(signInDraft.recoveryEmail);
   const [recoveryCaptchaToken, setRecoveryCaptchaToken] = useState<string | null>(null);
-  const [recoveryCode, setRecoveryCode] = useState("");
-  const [recoveryPassword, setRecoveryPassword] = useState("");
-  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
-  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
-  const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(false);
-  const [confirmationEmail, setConfirmationEmail] = useState("");
-  const [confirmationCode, setConfirmationCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState(signInDraft.recoveryCode);
+  const [recoveryPassword, setRecoveryPassword] = useState(signInDraft.recoveryPassword);
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState(signInDraft.recoveryConfirmPassword);
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(signInDraft.showRecoveryPassword);
+  const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(signInDraft.showRecoveryConfirmPassword);
+  const [confirmationEmail, setConfirmationEmail] = useState(signInDraft.confirmationEmail);
+  const [confirmationCode, setConfirmationCode] = useState(signInDraft.confirmationCode);
   const [registering, setRegistering] = useState(false);
   const [requestingRecovery, setRequestingRecovery] = useState(false);
   const [verifyingRecoveryCode, setVerifyingRecoveryCode] = useState(false);
@@ -4577,7 +5067,7 @@ function SignInPage() {
   const captchaRequired = captchaMode !== "disabled";
 
   const returnTo = searchParams.get("returnTo") || "/player";
-  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen;
+  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen || mfaChallengeOpen;
 
   useEffect(() => {
     if (session && currentUser && !suppressAuthenticatedRedirect) {
@@ -4594,6 +5084,96 @@ function SignInPage() {
       setRecoveryStatusMessage(null);
     }
   }, [recoveryMode]);
+
+  useEffect(() => {
+    const hasDraft =
+      email.trim().length > 0 ||
+      password.length > 0 ||
+      mfaChallengeOpen ||
+      mfaCode.trim().length > 0 ||
+      registerModalOpen ||
+      recoveryModalOpen ||
+      confirmationModalOpen ||
+      registrationUserName.trim().length > 0 ||
+      registrationEmail.trim().length > 0 ||
+      registrationFirstName.trim().length > 0 ||
+      registrationLastName.trim().length > 0 ||
+      registrationPassword.length > 0 ||
+      registrationConfirmPassword.length > 0 ||
+      registrationAvatar.url.trim().length > 0 ||
+      Boolean(registrationAvatar.dataUrl) ||
+      recoveryEmail.trim().length > 0 ||
+      recoveryCode.trim().length > 0 ||
+      recoveryPassword.length > 0 ||
+      recoveryConfirmPassword.length > 0 ||
+      confirmationEmail.trim().length > 0 ||
+      confirmationCode.trim().length > 0;
+
+    if (!hasDraft) {
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+      return;
+    }
+
+    writeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY, {
+      email,
+      password,
+      showSignInPassword,
+      mfaChallengeOpen,
+      mfaCode,
+      mfaFactorId,
+      mfaFactorLabel,
+      registerModalOpen,
+      recoveryModalOpen,
+      confirmationModalOpen,
+      recoveryStep,
+      registrationUserName,
+      registrationEmail,
+      registrationFirstName,
+      registrationLastName,
+      registrationPassword,
+      registrationConfirmPassword,
+      showRegistrationPassword,
+      showRegistrationConfirmPassword,
+      registrationAvatar,
+      recoveryEmail,
+      recoveryCode,
+      recoveryPassword,
+      recoveryConfirmPassword,
+      showRecoveryPassword,
+      showRecoveryConfirmPassword,
+      confirmationEmail,
+      confirmationCode,
+    } satisfies SignInPageDraftState);
+  }, [
+    confirmationCode,
+    confirmationEmail,
+    confirmationModalOpen,
+    email,
+    mfaFactorId,
+    mfaFactorLabel,
+    mfaChallengeOpen,
+    mfaCode,
+    password,
+    recoveryCode,
+    recoveryConfirmPassword,
+    recoveryEmail,
+    recoveryModalOpen,
+    recoveryPassword,
+    recoveryStep,
+    registerModalOpen,
+    registrationAvatar,
+    registrationConfirmPassword,
+    registrationEmail,
+    registrationFirstName,
+    registrationLastName,
+    registrationPassword,
+    registrationUserName,
+    showRecoveryConfirmPassword,
+    showRecoveryPassword,
+    showRegistrationConfirmPassword,
+    showRegistrationPassword,
+    showSignInPassword,
+  ]);
 
   const registrationUserNameHint =
     registrationUserNameAvailability.status === "available"
@@ -4709,6 +5289,7 @@ function SignInPage() {
   function closeRegisterModal(): void {
     setRegisterModalOpen(false);
     resetRegistrationForm();
+    removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
   }
 
   function resetRecoveryState(): void {
@@ -4733,6 +5314,7 @@ function SignInPage() {
   function closeRecoveryModal(): void {
     setRecoveryModalOpen(false);
     resetRecoveryState();
+    removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
     if (recoveryMode) {
       navigate("/auth/signin", { replace: true });
     }
@@ -4767,12 +5349,83 @@ function SignInPage() {
       }
 
       await signIn(email.trim(), password);
+      const assuranceResponse = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (assuranceResponse.error) {
+        throw new Error(assuranceResponse.error.message);
+      }
+
+      if (assuranceResponse.data.nextLevel === "aal2" && assuranceResponse.data.currentLevel !== "aal2") {
+        const factorsResponse = await client.auth.mfa.listFactors();
+        if (factorsResponse.error) {
+          throw new Error(factorsResponse.error.message);
+        }
+
+        const totpFactor = factorsResponse.data.totp[0] ?? factorsResponse.data.all.find((factor) => factor.factor_type === "totp" && factor.status === "verified");
+        if (!totpFactor) {
+          throw new Error("Multi-factor authentication is required, but no verified authenticator app is available.");
+        }
+
+        setMfaFactorId(totpFactor.id);
+        setMfaFactorLabel(totpFactor.friendly_name?.trim() || "Authenticator app");
+        setMfaChallengeOpen(true);
+        setMfaCode("");
+        setMfaError(null);
+        setPageMessage("Enter the code from your authenticator app to finish signing in.");
+        return;
+      }
+
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
       navigate(returnTo, { replace: true });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleMfaSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setMfaSubmitting(true);
+    setMfaError(null);
+    try {
+      if (!mfaFactorId) {
+        throw new Error("No authenticator app is available for this account.");
+      }
+      if (!mfaCode.trim()) {
+        throw new Error("Authenticator code is required.");
+      }
+
+      const response = await client.auth.mfa.challengeAndVerify({
+        factorId: mfaFactorId,
+        code: mfaCode.trim(),
+      });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      setMfaChallengeOpen(false);
+      setMfaCode("");
+      setMfaFactorId(null);
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+      navigate(returnTo, { replace: true });
+    } catch (nextError) {
+      setMfaError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setMfaSubmitting(false);
+    }
+  }
+
+  async function handleCancelMfaChallenge(): Promise<void> {
+    try {
+      await signOut({ tolerateNetworkFailure: true });
+    } catch {
+      // Best-effort cleanup; the page stays on the sign-in screen either way.
+    }
+
+    setMfaChallengeOpen(false);
+    setMfaCode("");
+    setMfaFactorId(null);
+    setMfaError(null);
   }
 
   async function handleRegister(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -4827,6 +5480,7 @@ function SignInPage() {
         setPageMessage("Account created. Check your email to confirm the registration before signing in. You can open the email link or enter the confirmation code here.");
         setConfirmationModalOpen(true);
       } else {
+        removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
         navigate(returnTo, { replace: true });
       }
       closeRegisterModal();
@@ -4882,6 +5536,7 @@ function SignInPage() {
 
       await verifyEmailCode(confirmationEmail.trim(), confirmationCode.trim());
       setConfirmationModalOpen(false);
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
       navigate(returnTo, { replace: true });
     } catch (nextError) {
       setConfirmationError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -4935,6 +5590,7 @@ function SignInPage() {
       setRecoveryModalOpen(false);
       resetRecoveryState();
       setPageMessage("Password updated. Sign in with your new password.");
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
       navigate("/auth/signin", { replace: true });
     } catch (nextError) {
       setPasswordRecoveryError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -5273,6 +5929,38 @@ function SignInPage() {
           </div>
         </div>
       ) : null}
+
+      {mfaChallengeOpen ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={() => void handleCancelMfaChallenge()}>
+          <div className="mx-auto max-w-xl" onClick={(event) => event.stopPropagation()}>
+            <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="mfa-modal-title">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="mfa-modal-title" className="text-2xl font-semibold text-white">Complete sign-in</h2>
+                  <p className="mt-2 text-sm leading-7 text-slate-300">
+                    Enter the current code from {mfaFactorLabel.toLowerCase()} to finish signing in.
+                  </p>
+                </div>
+                <button className="secondary-button" type="button" onClick={() => void handleCancelMfaChallenge()}>Cancel</button>
+              </div>
+
+              <form className="stack-form text-left" onSubmit={handleMfaSubmit}>
+                <Field label="Authenticator code">
+                  <input value={mfaCode} onChange={(event) => setMfaCode(event.currentTarget.value)} autoComplete="one-time-code" inputMode="numeric" />
+                </Field>
+
+                {mfaError ? <p className="error-text">{mfaError}</p> : null}
+
+                <div className="button-row">
+                  <button type="submit" className="primary-button" disabled={mfaSubmitting}>
+                    {mfaSubmitting ? "Verifying..." : "Verify code"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -5304,33 +5992,79 @@ function SignOutPage() {
 }
 
 function PlayerPage() {
-  const { session, currentUser, refreshCurrentUser } = useAuth();
+  const { client, session, currentUser, refreshCurrentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedReportId = searchParams.get("reportId");
   const accessToken = session?.access_token ?? "";
+  const authSubject = currentUser?.subject ?? "";
+  const playerDraftRef = useRef<PlayerPageDraftState | null>(null);
+  if (playerDraftRef.current === null) {
+    const storedDraft = readSessionStorageJson<Partial<PlayerPageDraftState>>(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+    playerDraftRef.current = {
+      displayName: storedDraft?.displayName ?? "",
+      firstName: storedDraft?.firstName ?? "",
+      lastName: storedDraft?.lastName ?? "",
+      email: storedDraft?.email ?? "",
+      settingsCurrentPassword: storedDraft?.settingsCurrentPassword ?? "",
+      showSettingsCurrentPassword: storedDraft?.showSettingsCurrentPassword ?? false,
+      profileAvatar: restoreAvatarEditorState(storedDraft?.profileAvatar),
+      profileEditMode: storedDraft?.profileEditMode ?? false,
+      settingsEditMode: storedDraft?.settingsEditMode ?? false,
+      newPassword: storedDraft?.newPassword ?? "",
+      confirmNewPassword: storedDraft?.confirmNewPassword ?? "",
+      showNewPassword: storedDraft?.showNewPassword ?? false,
+      showConfirmNewPassword: storedDraft?.showConfirmNewPassword ?? false,
+      mfaEnrollmentCode: storedDraft?.mfaEnrollmentCode ?? "",
+      mfaDisableCode: storedDraft?.mfaDisableCode ?? "",
+      reportReply: storedDraft?.reportReply ?? "",
+      selectedReportId: typeof storedDraft?.selectedReportId === "string" ? storedDraft.selectedReportId : null,
+    };
+  }
+  const playerDraft = playerDraftRef.current;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [boardProfile, setBoardProfile] = useState<BoardProfile | null>(null);
-  const [displayName, setDisplayName] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [profileAvatar, setProfileAvatar] = useState<AvatarEditorState>(createAvatarEditorState(null));
-  const [profileEditMode, setProfileEditMode] = useState(false);
-  const [settingsEditMode, setSettingsEditMode] = useState(false);
+  const [displayName, setDisplayName] = useState(playerDraft.displayName);
+  const [firstName, setFirstName] = useState(playerDraft.firstName);
+  const [lastName, setLastName] = useState(playerDraft.lastName);
+  const [email, setEmail] = useState(playerDraft.email);
+  const [settingsCurrentPassword, setSettingsCurrentPassword] = useState(playerDraft.settingsCurrentPassword);
+  const [showSettingsCurrentPassword, setShowSettingsCurrentPassword] = useState(playerDraft.showSettingsCurrentPassword);
+  const [profileAvatar, setProfileAvatar] = useState<AvatarEditorState>(playerDraft.profileAvatar);
+  const [profileEditMode, setProfileEditMode] = useState(playerDraft.profileEditMode);
+  const [settingsEditMode, setSettingsEditMode] = useState(playerDraft.settingsEditMode);
+  const [newPassword, setNewPassword] = useState(playerDraft.newPassword);
+  const [confirmNewPassword, setConfirmNewPassword] = useState(playerDraft.confirmNewPassword);
+  const [showNewPassword, setShowNewPassword] = useState(playerDraft.showNewPassword);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(playerDraft.showConfirmNewPassword);
+  const [mfaEnrollmentCode, setMfaEnrollmentCode] = useState(playerDraft.mfaEnrollmentCode);
+  const [mfaDisableCode, setMfaDisableCode] = useState(playerDraft.mfaDisableCode);
   const [developerAccessEnabled, setDeveloperAccessEnabled] = useState(false);
   const [verifiedDeveloper, setVerifiedDeveloper] = useState(false);
+  const [mfaTotpFactor, setMfaTotpFactor] = useState<{ id: string; friendlyName: string | null; status: "verified" | "unverified" } | null>(null);
+  const [mfaAssuranceLevel, setMfaAssuranceLevel] = useState<string | null>(null);
+  const [mfaPendingEnrollment, setMfaPendingEnrollment] = useState<{ id: string; qrCode: string; secret: string; friendlyName: string } | null>(null);
   const [libraryTitles, setLibraryTitles] = useState<CatalogTitleSummary[]>([]);
   const [wishlistTitles, setWishlistTitles] = useState<CatalogTitleSummary[]>([]);
   const [reports, setReports] = useState<PlayerTitleReportSummary[]>([]);
-  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(playerDraft.selectedReportId);
   const [selectedReport, setSelectedReport] = useState<TitleReportDetail | null>(null);
-  const [reportReply, setReportReply] = useState("");
+  const [reportReply, setReportReply] = useState(playerDraft.reportReply);
   const [reportLoading, setReportLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextPendingEmail =
+      typeof session?.user?.new_email === "string" && session.user.new_email.trim().length > 0
+        ? session.user.new_email.trim().toLowerCase()
+        : null;
+    setPendingEmailChange(nextPendingEmail);
+  }, [session?.user?.new_email]);
 
   async function loadBoardProfileSafe(): Promise<BoardProfile | null> {
     try {
@@ -5357,6 +6091,106 @@ function PlayerPage() {
     setSelectedReportId(nextSelectedReportId);
   }
 
+  async function loadMfaState(): Promise<{
+    factor: { id: string; friendlyName: string | null; status: "verified" | "unverified" } | null;
+    assuranceLevel: string | null;
+  }> {
+    const [factorsResponse, assuranceResponse] = await Promise.all([
+      client.auth.mfa.listFactors(),
+      client.auth.mfa.getAuthenticatorAssuranceLevel(),
+    ]);
+    if (factorsResponse.error) {
+      throw new Error(factorsResponse.error.message);
+    }
+    if (assuranceResponse.error) {
+      throw new Error(assuranceResponse.error.message);
+    }
+
+    const totpFactor = factorsResponse.data.totp[0] ?? factorsResponse.data.all.find((factor) => factor.factor_type === "totp");
+    return {
+      factor: totpFactor
+        ? {
+            id: totpFactor.id,
+            friendlyName: totpFactor.friendly_name?.trim() || null,
+            status: totpFactor.status,
+          }
+        : null,
+      assuranceLevel: assuranceResponse.data.currentLevel ?? "aal1",
+    };
+  }
+
+  async function confirmCurrentPassword(passwordToConfirm: string): Promise<void> {
+    const currentEmail = profile?.email?.trim().toLowerCase() ?? "";
+    if (!currentEmail) {
+      throw new Error("Email is not available for this account.");
+    }
+    if (!passwordToConfirm) {
+      throw new Error("Current password is required.");
+    }
+
+    const response = await client.auth.signInWithPassword({
+      email: currentEmail,
+      password: passwordToConfirm,
+    });
+    if (response.error) {
+      throw new Error("Current password was not accepted.");
+    }
+  }
+
+  useEffect(() => {
+    const hasDraft =
+      profileEditMode ||
+      settingsEditMode ||
+      settingsCurrentPassword.length > 0 ||
+      newPassword.length > 0 ||
+      confirmNewPassword.length > 0 ||
+      mfaEnrollmentCode.trim().length > 0 ||
+      mfaDisableCode.trim().length > 0 ||
+      reportReply.trim().length > 0;
+    if (!hasDraft) {
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+      return;
+    }
+
+    writeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY, {
+      displayName,
+      firstName,
+      lastName,
+      email,
+      settingsCurrentPassword,
+      showSettingsCurrentPassword,
+      profileAvatar,
+      profileEditMode,
+      settingsEditMode,
+      newPassword,
+      confirmNewPassword,
+      showNewPassword,
+      showConfirmNewPassword,
+      mfaEnrollmentCode,
+      mfaDisableCode,
+      reportReply,
+      selectedReportId,
+    } satisfies PlayerPageDraftState);
+  }, [
+    confirmNewPassword,
+    displayName,
+    email,
+    firstName,
+    lastName,
+    mfaDisableCode,
+    mfaEnrollmentCode,
+    newPassword,
+    profileAvatar,
+    profileEditMode,
+    reportReply,
+    selectedReportId,
+    settingsCurrentPassword,
+    settingsEditMode,
+    showConfirmNewPassword,
+    showNewPassword,
+    showSettingsCurrentPassword,
+  ]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -5370,20 +6204,25 @@ function PlayerPage() {
           getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
         ]);
         const reportsResponse = await getPlayerTitleReports(appConfig.apiBaseUrl, accessToken);
+        const mfaState = await loadMfaState();
         if (cancelled) {
           return;
         }
 
         setProfile(profileResponse.profile);
         setBoardProfile(boardProfileResponse);
-        setDisplayName(profileResponse.profile.displayName ?? "");
-        setFirstName(profileResponse.profile.firstName ?? "");
-        setLastName(profileResponse.profile.lastName ?? "");
-        setProfileAvatar(createAvatarEditorState(profileResponse.profile));
-        setProfileEditMode(false);
-        setSettingsEditMode(false);
+        setDisplayName(profileEditMode ? displayName : profileResponse.profile.displayName ?? "");
+        setFirstName(settingsEditMode ? firstName : profileResponse.profile.firstName ?? "");
+        setLastName(settingsEditMode ? lastName : profileResponse.profile.lastName ?? "");
+        setEmail(settingsEditMode ? email : pendingEmailChange ?? profileResponse.profile.email ?? "");
+        setProfileAvatar(profileEditMode ? profileAvatar : createAvatarEditorState(profileResponse.profile));
         setDeveloperAccessEnabled(enrollmentResponse.developerEnrollment.developerAccessEnabled);
         setVerifiedDeveloper(enrollmentResponse.developerEnrollment.verifiedDeveloper);
+        setMfaTotpFactor(mfaState.factor);
+        setMfaAssuranceLevel(mfaState.assuranceLevel);
+        if (mfaState.factor?.status === "verified") {
+          setMfaPendingEnrollment(null);
+        }
         setLibraryTitles(libraryResponse.titles);
         setWishlistTitles(wishlistResponse.titles);
         setReports(reportsResponse.reports);
@@ -5409,7 +6248,7 @@ function PlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, requestedReportId]);
+  }, [authSubject, pendingEmailChange, requestedReportId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5442,7 +6281,7 @@ function PlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, selectedReportId]);
+  }, [authSubject, selectedReportId]);
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -5464,6 +6303,7 @@ function PlayerPage() {
       setDisplayName(response.profile.displayName ?? "");
       setProfileAvatar(createAvatarEditorState(response.profile));
       setProfileEditMode(false);
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
       await refreshCurrentUser();
       setMessage("Profile updated.");
       setError(null);
@@ -5491,8 +6331,7 @@ function PlayerPage() {
     }
   }
 
-  async function handleSettingsSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function handleSettingsSave(): Promise<void> {
     if (!settingsEditMode) {
       setSettingsEditMode(true);
       setMessage(null);
@@ -5502,15 +6341,195 @@ function PlayerPage() {
 
     setSaving(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const currentEmail = profile?.email?.trim().toLowerCase() ?? "";
+      const emailChanged = normalizedEmail !== currentEmail;
+
+      if (normalizedEmail.length === 0) {
+        throw new Error("Email is required.");
+      }
+
+      let nextPendingEmail = pendingEmailChange;
+      if (emailChanged) {
+        await confirmCurrentPassword(settingsCurrentPassword);
+        const emailUpdate = await client.auth.updateUser({ email: normalizedEmail });
+        if (emailUpdate.error) {
+          throw new Error(emailUpdate.error.message);
+        }
+
+        const updatedAuthUser = emailUpdate.data.user;
+        nextPendingEmail =
+          typeof updatedAuthUser?.new_email === "string" && updatedAuthUser.new_email.trim().length > 0
+            ? updatedAuthUser.new_email.trim().toLowerCase()
+            : null;
+      }
+
       const response = await updateUserProfile(appConfig.apiBaseUrl, accessToken, {
         firstName,
         lastName,
       });
+      await refreshCurrentUser();
       setProfile(response.profile);
       setFirstName(response.profile.firstName ?? "");
       setLastName(response.profile.lastName ?? "");
+      setEmail(nextPendingEmail ?? normalizedEmail);
+      setPendingEmailChange(nextPendingEmail);
+      setSettingsCurrentPassword("");
+      setShowSettingsCurrentPassword(false);
       setSettingsEditMode(false);
-      setMessage("Settings updated.");
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+      setMessage(
+        emailChanged && nextPendingEmail
+          ? `Settings updated. Confirm the email change from the message sent to ${nextPendingEmail}.`
+          : "Settings updated.",
+      );
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePasswordChangeSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (!settingsCurrentPassword) {
+        throw new Error("Current password is required.");
+      }
+      if (!newPassword) {
+        throw new Error("New password is required.");
+      }
+
+      const passwordErrors = getPasswordPolicyErrors(newPassword);
+      if (passwordErrors.length > 0) {
+        throw new Error(passwordErrors[0] ?? "Password does not meet the required policy.");
+      }
+      if (validatePasswordConfirmation(newPassword, confirmNewPassword)) {
+        throw new Error("Password confirmation must match.");
+      }
+
+      await confirmCurrentPassword(settingsCurrentPassword);
+      const response = await client.auth.updateUser({ password: newPassword, current_password: settingsCurrentPassword });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      setSettingsCurrentPassword("");
+      setShowSettingsCurrentPassword(false);
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setShowNewPassword(false);
+      setShowConfirmNewPassword(false);
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+      setMessage("Password updated.");
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleStartMfaEnrollment(): Promise<void> {
+    setSaving(true);
+    try {
+      const response = await client.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "Board Enthusiasts Authenticator",
+        issuer: "Board Enthusiasts",
+      });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      setMfaPendingEnrollment({
+        id: response.data.id,
+        qrCode: response.data.totp.qr_code,
+        secret: response.data.totp.secret,
+        friendlyName: response.data.friendly_name ?? "Board Enthusiasts Authenticator",
+      });
+      setMfaEnrollmentCode("");
+      setMessage("Scan the authenticator QR code, then enter the current code to finish enabling MFA.");
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleVerifyMfaEnrollment(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (!mfaPendingEnrollment) {
+        throw new Error("Start MFA setup before verifying a code.");
+      }
+      if (!mfaEnrollmentCode.trim()) {
+        throw new Error("Authenticator code is required.");
+      }
+
+      const response = await client.auth.mfa.challengeAndVerify({
+        factorId: mfaPendingEnrollment.id,
+        code: mfaEnrollmentCode.trim(),
+      });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const mfaState = await loadMfaState();
+      await refreshCurrentUser();
+      setMfaTotpFactor(mfaState.factor);
+      setMfaAssuranceLevel(mfaState.assuranceLevel);
+      setMfaPendingEnrollment(null);
+      setMfaEnrollmentCode("");
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+      setMessage("Authenticator app enabled.");
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisableMfa(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (!mfaTotpFactor) {
+        throw new Error("No authenticator app is enabled for this account.");
+      }
+      if (!mfaDisableCode.trim()) {
+        throw new Error("Authenticator code is required.");
+      }
+
+      const verification = await client.auth.mfa.challengeAndVerify({
+        factorId: mfaTotpFactor.id,
+        code: mfaDisableCode.trim(),
+      });
+      if (verification.error) {
+        throw new Error(verification.error.message);
+      }
+
+      const unenrollResponse = await client.auth.mfa.unenroll({ factorId: mfaTotpFactor.id });
+      if (unenrollResponse.error) {
+        throw new Error(unenrollResponse.error.message);
+      }
+
+      const mfaState = await loadMfaState();
+      await refreshCurrentUser();
+      setMfaTotpFactor(mfaState.factor);
+      setMfaAssuranceLevel(mfaState.assuranceLevel);
+      setMfaDisableCode("");
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
+      setMessage("Authenticator app removed.");
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -5557,6 +6576,7 @@ function PlayerPage() {
       setSelectedReport(response.report);
       await refreshReportList(selectedReportId);
       setReportReply("");
+      removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
       setMessage("Reply added to the report thread.");
       setError(null);
     } catch (nextError) {
@@ -5740,7 +6760,7 @@ function PlayerPage() {
                   </section>
                   <section className="surface-panel-soft rounded-[1.25rem] p-4">
                     {reportLoading ? <LoadingPanel title="Loading report..." /> : null}
-                    {!reportLoading && selectedReport ? <TitleReportConversation detail={selectedReport} /> : null}
+                    {!reportLoading && selectedReport ? <TitleReportConversation detail={selectedReport} viewerRole="player" /> : null}
                     {!reportLoading && !selectedReport ? (
                       <EmptyState title="Select a report" detail="Open a report thread to review moderator updates or reply." />
                     ) : null}
@@ -5797,7 +6817,7 @@ function PlayerPage() {
               <>
                 <h2 className="text-2xl font-semibold text-white">Account Settings</h2>
                 <p className="mt-3 text-sm leading-7 text-slate-300">Review access, verification, and account details.</p>
-                <form className="mt-6 stack-form" onSubmit={handleSettingsSubmit}>
+                <div className="mt-6 stack-form">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="First name">
                       <input value={firstName} onChange={(event) => setFirstName(event.currentTarget.value)} disabled={!settingsEditMode || saving} />
@@ -5805,16 +6825,30 @@ function PlayerPage() {
                     <Field label="Last name">
                       <input value={lastName} onChange={(event) => setLastName(event.currentTarget.value)} disabled={!settingsEditMode || saving} />
                     </Field>
+                    <Field label="Email">
+                      <input type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} disabled={!settingsEditMode || saving} />
+                    </Field>
+                    <PasswordField
+                      label="Current password"
+                      value={settingsCurrentPassword}
+                      autoComplete="current-password"
+                      show={showSettingsCurrentPassword}
+                      onChange={setSettingsCurrentPassword}
+                      onToggle={() => setShowSettingsCurrentPassword((current) => !current)}
+                      disabled={!settingsEditMode || saving}
+                      hint={settingsEditMode ? "Required when you change your email address." : undefined}
+                    />
                   </div>
 
                   <div className="grid gap-4 text-sm text-slate-300 sm:grid-cols-2">
                     <div className="surface-panel-soft rounded-[1.25rem] p-4">
-                      <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email</div>
-                      <div className="mt-2 text-base text-white">{profile?.email ?? "Not set"}</div>
-                    </div>
-                    <div className="surface-panel-soft rounded-[1.25rem] p-4">
                       <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Email verification</div>
-                      <div className="mt-2 text-base text-white">{currentUser?.emailVerified ? "Verified" : "Pending"}</div>
+                      <div className="mt-2 text-base text-white">
+                        {pendingEmailChange ? "Confirmation sent" : currentUser?.emailVerified ? "Verified" : "Pending"}
+                      </div>
+                      {pendingEmailChange ? (
+                        <p className="mt-3 text-sm leading-7 text-slate-300">Confirm the change from the email sent to {pendingEmailChange}. Your current sign-in email stays active until then.</p>
+                      ) : null}
                     </div>
                     <div className="surface-panel-soft rounded-[1.25rem] p-4">
                       <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Library titles</div>
@@ -5850,12 +6884,116 @@ function PlayerPage() {
                     </div>
                   </div>
 
+                  <div className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
+                    <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Password</div>
+                    <p className="mt-3 text-sm leading-7 text-slate-300">Change your password from account settings without leaving the signed-in workspace.</p>
+                    <form className="mt-4 stack-form" onSubmit={handlePasswordChangeSubmit}>
+                      <PasswordField
+                        label="Current password"
+                        value={settingsCurrentPassword}
+                        autoComplete="current-password"
+                        show={showSettingsCurrentPassword}
+                        onChange={setSettingsCurrentPassword}
+                        onToggle={() => setShowSettingsCurrentPassword((current) => !current)}
+                        disabled={saving}
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <PasswordField
+                          label="New password"
+                          value={newPassword}
+                          autoComplete="new-password"
+                          show={showNewPassword}
+                          onChange={setNewPassword}
+                          onToggle={() => setShowNewPassword((current) => !current)}
+                          disabled={saving}
+                        />
+                        <PasswordField
+                          label="Confirm password"
+                          value={confirmNewPassword}
+                          autoComplete="new-password"
+                          show={showConfirmNewPassword}
+                          onChange={setConfirmNewPassword}
+                          onToggle={() => setShowConfirmNewPassword((current) => !current)}
+                          disabled={saving}
+                        />
+                      </div>
+                      <div className="button-row">
+                        <button type="submit" className="secondary-button" disabled={saving}>
+                          {saving ? "Updating..." : "Change Password"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
+                    <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Multi-factor authentication</div>
+                    <div className="mt-3 text-base text-white">
+                      {mfaTotpFactor?.status === "verified" ? "Authenticator app enabled" : mfaPendingEnrollment ? "Finish authenticator setup" : "Authenticator app not enabled"}
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-slate-300">
+                      {mfaTotpFactor?.status === "verified"
+                        ? `This account is protected with ${mfaTotpFactor.friendlyName ?? "an authenticator app"}. Current assurance level: ${mfaAssuranceLevel ?? "aal1"}.`
+                        : "Use an authenticator app to add a second step during sign-in."}
+                    </p>
+
+                    {!mfaTotpFactor && !mfaPendingEnrollment ? (
+                      <div className="mt-4">
+                        <button type="button" className="secondary-button" disabled={saving} onClick={() => void handleStartMfaEnrollment()}>
+                          {saving ? "Starting..." : "Set Up Authenticator App"}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {mfaPendingEnrollment ? (
+                      <form className="mt-4 stack-form" onSubmit={handleVerifyMfaEnrollment}>
+                        <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+                          <div className="rounded-[1rem] border border-cyan-300/20 bg-slate-950/70 p-3">
+                            <img
+                              src={`data:image/svg+xml;utf8,${encodeURIComponent(mfaPendingEnrollment.qrCode)}`}
+                              alt="Authenticator QR code"
+                              className="mx-auto h-48 w-48 rounded-lg bg-white p-2"
+                            />
+                          </div>
+                          <div className="space-y-4">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Manual setup secret</div>
+                              <div className="mt-2 rounded-[1rem] border border-cyan-300/20 bg-slate-950/70 px-4 py-3 font-mono text-sm text-cyan-50">
+                                {mfaPendingEnrollment.secret}
+                              </div>
+                            </div>
+                            <Field label="Authenticator code">
+                              <input value={mfaEnrollmentCode} onChange={(event) => setMfaEnrollmentCode(event.currentTarget.value)} autoComplete="one-time-code" inputMode="numeric" />
+                            </Field>
+                            <div className="button-row">
+                              <button type="submit" className="secondary-button" disabled={saving}>
+                                {saving ? "Verifying..." : "Enable MFA"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </form>
+                    ) : null}
+
+                    {mfaTotpFactor?.status === "verified" ? (
+                      <form className="mt-4 stack-form" onSubmit={handleDisableMfa}>
+                        <Field label="Authenticator code">
+                          <input value={mfaDisableCode} onChange={(event) => setMfaDisableCode(event.currentTarget.value)} autoComplete="one-time-code" inputMode="numeric" />
+                        </Field>
+                        <div className="button-row">
+                          <button type="submit" className="danger-button" disabled={saving}>
+                            {saving ? "Removing..." : "Remove Authenticator App"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                  </div>
+
                   {message ? <p className="success-text">{message}</p> : null}
                   {error ? <p className="error-text">{error}</p> : null}
-                  <button type="submit" className={settingsEditMode ? "primary-button" : "secondary-button"} disabled={saving}>
+                  <button type="button" className={settingsEditMode ? "primary-button" : "secondary-button"} disabled={saving} onClick={() => void handleSettingsSave()}>
                     {saving ? "Saving..." : settingsEditMode ? "Save Settings" : "Edit Settings"}
                   </button>
-                </form>
+                </div>
               </>
             ) : null}
           </section>
@@ -6173,7 +7311,7 @@ function ModeratePage() {
                   </section>
                   <section className="surface-panel-soft rounded-[1.25rem] p-4">
                     {reportsLoading && selectedReportId ? <LoadingPanel title="Loading report..." /> : null}
-                    {!reportsLoading && selectedReport ? <TitleReportConversation detail={selectedReport} /> : null}
+                    {!reportsLoading && selectedReport ? <TitleReportConversation detail={selectedReport} viewerRole="moderator" /> : null}
                     {!reportsLoading && !selectedReport ? (
                       <EmptyState title="Select a report" detail="Pick a report to message participants or record a moderation decision." />
                     ) : null}
@@ -6286,7 +7424,7 @@ export function App() {
       <LandingShell>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path={landingPrivacyRoute} element={<PrivacyPage />} />
+          <Route path={landingPrivacyRoute} element={<LandingPrivacyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </LandingShell>
@@ -6297,6 +7435,7 @@ export function App() {
     <Shell>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/privacy" element={<LivePrivacyPage />} />
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/browse/:studioSlug/:titleSlug" element={<TitleDetailPage />} />
         <Route path="/studios/:studioSlug" element={<StudioDetailPage />} />

@@ -30,15 +30,13 @@ interface TitleFormValidationInput {
 }
 
 interface TitleOverviewValidationInput {
-  slug: string;
   contentKind: string;
-  lifecycleStatus: string;
   visibility: string;
 }
 
 interface ReleaseValidationInput {
   version: string;
-  metadataRevisionNumber: number;
+  status: string;
   acquisitionUrl: string;
 }
 
@@ -184,30 +182,15 @@ export function validateTitleFormInput(
 
 export function validateTitleOverviewInput(
   input: TitleOverviewValidationInput,
-  context: { existingSlugs: string[]; currentSlug?: string | null },
+  _context: { existingSlugs: string[]; currentSlug?: string | null },
 ): ValidationResult {
   const errors: ValidationErrors = {};
-  const slug = input.slug.trim().toLowerCase();
-
-  if (!slug) {
-    errors.slug = "Title slug is required.";
-  } else {
-    const currentSlug = context.currentSlug?.trim().toLowerCase() ?? null;
-    const duplicate = context.existingSlugs.some((candidate) => candidate.trim().toLowerCase() === slug && candidate.trim().toLowerCase() !== currentSlug);
-    if (duplicate) {
-      errors.slug = "This title slug is already in use for the selected studio.";
-    }
-  }
 
   if (!input.contentKind.trim()) {
     errors.contentKind = "Content kind is required.";
   }
 
-  if (!input.lifecycleStatus.trim()) {
-    errors.lifecycleStatus = "Lifecycle status is required.";
-  }
-
-  if (!input.visibility.trim()) {
+  if (input.visibility !== "unlisted" && input.visibility !== "listed") {
     errors.visibility = "Visibility is required.";
   }
 
@@ -221,8 +204,8 @@ export function validateReleaseInput(input: ReleaseValidationInput): ValidationR
     errors.version = "Version is required.";
   }
 
-  if (!Number.isFinite(input.metadataRevisionNumber) || input.metadataRevisionNumber < 1) {
-    errors.metadataRevisionNumber = "Select a metadata revision.";
+  if (input.status !== "testing" && input.status !== "production") {
+    errors.status = "Release type is required.";
   }
 
   if (input.acquisitionUrl.trim() && !isAbsoluteUrl(input.acquisitionUrl.trim())) {

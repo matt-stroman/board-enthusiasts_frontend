@@ -1,9 +1,7 @@
 # Frontend Planning
 
-This directory contains frontend-specific planning artifacts for the web UI and any later client work that belongs only to the `frontend/` submodule.
+This directory no longer carries active frontend planning files.
 
-Current planning artifacts:
+The current frontend direction lives in the maintained source, tests, and developer docs.
 
-- [`adr-0001-web-ui-foundation.md`](adr-0001-web-ui-foundation.md)
-- [`web-ui-mvp-brief.md`](web-ui-mvp-brief.md)
-- [`web-ui-wireframes.md`](web-ui-wireframes.md)
+Older frontend planning documents were removed during MVP release cleanup. Use Git history if those early UX or architecture drafts ever need to be referenced again.

@@ -135,7 +135,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const subscription = supabase.auth.onAuthStateChange((_event, nextSession) => {
       void (async () => {
-        setLoading(true);
         setSession(nextSession);
         await refreshCurrentUser(nextSession);
         if (!cancelled) {

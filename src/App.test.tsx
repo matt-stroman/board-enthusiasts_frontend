@@ -4,22 +4,50 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { mockRasterImageProcessing } from "./test/image-processing";
+
+const fallbackAuthClient = vi.hoisted(() => ({
+  auth: {
+    updateUser: vi.fn(),
+    signInWithPassword: vi.fn(),
+    mfa: {
+      getAuthenticatorAssuranceLevel: vi.fn(),
+      listFactors: vi.fn(),
+      challengeAndVerify: vi.fn(),
+      enroll: vi.fn(),
+      unenroll: vi.fn(),
+    },
+  },
+}));
 
 const authState = vi.hoisted(() => ({
   value: {
-    session: null as { access_token: string } | null,
+    session: null as { access_token: string; user?: { email?: string; new_email?: string } } | null,
     currentUser: null as CurrentUserResponse | null,
     loading: false,
-      authError: null,
-      signIn: vi.fn(),
-      signUp: vi.fn(),
-      requestPasswordReset: vi.fn(),
-      verifyEmailCode: vi.fn(),
-      verifyRecoveryCode: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn(),
-      refreshCurrentUser: vi.fn(),
-  },
+    authError: null,
+    client: {
+      auth: {
+        updateUser: vi.fn(),
+        signInWithPassword: vi.fn(),
+        mfa: {
+          getAuthenticatorAssuranceLevel: vi.fn(),
+          listFactors: vi.fn(),
+          challengeAndVerify: vi.fn(),
+          enroll: vi.fn(),
+          unenroll: vi.fn(),
+        },
+      },
+    },
+    signIn: vi.fn(),
+    signUp: vi.fn(),
+    requestPasswordReset: vi.fn(),
+    verifyEmailCode: vi.fn(),
+    verifyRecoveryCode: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn(),
+    refreshCurrentUser: vi.fn(),
+  } as any,
 }));
 
 const apiMocks = vi.hoisted(() => ({
@@ -48,6 +76,7 @@ const apiMocks = vi.hoisted(() => ({
   getPlayerTitleReport: vi.fn(),
   addPlayerTitleReportMessage: vi.fn(),
   updateUserProfile: vi.fn(),
+  verifyCurrentUserPassword: vi.fn(),
   enrollAsDeveloper: vi.fn(),
   listManagedStudios: vi.fn(),
   createStudio: vi.fn(),
@@ -62,6 +91,10 @@ const apiMocks = vi.hoisted(() => ({
   createTitle: vi.fn(),
   getDeveloperTitle: vi.fn(),
   updateTitle: vi.fn(),
+  activateTitle: vi.fn(),
+  archiveTitle: vi.fn(),
+  unarchiveTitle: vi.fn(),
+  deleteTitle: vi.fn(),
   upsertTitleMetadata: vi.fn(),
   getTitleMetadataVersions: vi.fn(),
   activateTitleMetadataVersion: vi.fn(),
@@ -75,9 +108,7 @@ const apiMocks = vi.hoisted(() => ({
   getTitleReleases: vi.fn(),
   createTitleRelease: vi.fn(),
   updateTitleRelease: vi.fn(),
-  publishTitleRelease: vi.fn(),
   activateTitleRelease: vi.fn(),
-  withdrawTitleRelease: vi.fn(),
   getStudioIntegrationConnections: vi.fn(),
   createStudioIntegrationConnection: vi.fn(),
   getTitleIntegrationBindings: vi.fn(),
@@ -109,7 +140,10 @@ vi.mock("./config", () => ({
 }));
 
 vi.mock("./auth", () => ({
-  useAuth: () => authState.value,
+  useAuth: () => ({
+    client: authState.value.client ?? fallbackAuthClient,
+    ...authState.value,
+  }),
   hasPlatformRole: (roles: string[], required: "player" | "developer" | "moderator") => {
     if (required === "player") {
       return roles.length > 0;
@@ -167,6 +201,19 @@ describe("App", () => {
       currentUser: null,
       loading: false,
       authError: null,
+      client: {
+        auth: {
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn(),
+            listFactors: vi.fn(),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
       signIn: vi.fn(),
       signUp: vi.fn(),
       requestPasswordReset: vi.fn(),
@@ -185,6 +232,29 @@ describe("App", () => {
     };
 
     Object.values(apiMocks).forEach((mockFn) => mockFn.mockReset());
+    fallbackAuthClient.auth.updateUser.mockReset();
+    fallbackAuthClient.auth.signInWithPassword.mockReset();
+    fallbackAuthClient.auth.mfa.getAuthenticatorAssuranceLevel.mockReset();
+    fallbackAuthClient.auth.mfa.listFactors.mockReset();
+    fallbackAuthClient.auth.mfa.challengeAndVerify.mockReset();
+    fallbackAuthClient.auth.mfa.enroll.mockReset();
+    fallbackAuthClient.auth.mfa.unenroll.mockReset();
+    authState.value.client.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal1" },
+      error: null,
+    });
+    authState.value.client.auth.mfa.listFactors.mockResolvedValue({
+      data: { all: [], totp: [] },
+      error: null,
+    });
+    fallbackAuthClient.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal1" },
+      error: null,
+    });
+    fallbackAuthClient.auth.mfa.listFactors.mockResolvedValue({
+      data: { all: [], totp: [] },
+      error: null,
+    });
     apiMocks.listPublicStudios.mockResolvedValue({ studios: [] });
     apiMocks.listCatalogTitles.mockResolvedValue({ titles: [], paging: { pageNumber: 1, pageSize: 48, totalCount: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
     apiMocks.listGenres.mockResolvedValue({
@@ -353,7 +423,7 @@ describe("App", () => {
           studioDisplayName: "Blue Harbor Games",
           slug: "lantern-drift",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 3,
@@ -385,7 +455,7 @@ describe("App", () => {
         description: titleDescription,
         genreSlugs: ["adventure", "puzzle", "family"],
         contentKind: "game",
-        lifecycleStatus: "published",
+        lifecycleStatus: "active",
         visibility: "listed",
         genreDisplay: "Adventure, Puzzle, Family",
         minPlayers: 1,
@@ -469,8 +539,7 @@ describe("App", () => {
         {
           id: "release-1",
           version: "1.0.0",
-          status: "published",
-          metadataRevisionNumber: 3,
+          status: "production",
           isCurrent: true,
           createdAt: "2026-03-08T12:00:00Z",
           publishedAt: "2026-03-08T12:30:00Z",
@@ -509,15 +578,62 @@ describe("App", () => {
     });
   }
 
-  it("renders the restored home hero and signed-out shell navigation", async () => {
+  it("renders the live BE front door and signed-out shell navigation", async () => {
     renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "Discover new games for Board" })).toBeVisible();
-    expect(screen.getByText("Browse games created by the Board community.")).toBeVisible();
-    expect(screen.getAllByRole("link", { name: "Browse" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Install" }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." })).toBeVisible();
+    expect(screen.getByText("For Board Players And Builders")).toBeVisible();
+    expect(screen.getByText(/The BE Library is live/i)).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Browse Library" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Install" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Developer access" })).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "BE Library" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "BE Discord" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Board OS Emulator" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "https://mattstroman.com");
+    expect(screen.getByRole("link", { name: "LinkedIn" })).toHaveAttribute("href", "https://www.linkedin.com/in/mattstromandev/");
+    expect(screen.queryByRole("link", { name: "Player Sign In" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Developer Sign In" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Join the list" })).not.toBeInTheDocument();
+  });
+
+  it("renders the signed-in account avatar in the shell and user menu", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Emma Torres",
+        email: "emma.torres@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: "https://cdn.boardenthusiasts.com/avatars/emma.png",
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    renderApp("/");
+
+    const avatarButton = screen.getByRole("button", { name: "Open account for player" });
+    expect(within(avatarButton).getByRole("img", { name: "Emma Torres avatar" })).toHaveAttribute(
+      "src",
+      "https://cdn.boardenthusiasts.com/avatars/emma.png",
+    );
+
+    await userEvent.click(avatarButton);
+
+    expect(screen.getAllByRole("img", { name: "Emma Torres avatar" })).toHaveLength(2);
   });
 
   it("renders the production landing mode surface when enabled", async () => {
@@ -840,7 +956,6 @@ describe("App", () => {
           titleId: "title-1",
           version: "1.0.0",
           status: "published",
-          metadataRevisionNumber: 2,
           isCurrent: true,
           publishedAt: "2026-03-08T12:00:00Z",
           createdAt: "2026-03-08T12:00:00Z",
@@ -862,7 +977,7 @@ describe("App", () => {
     expect(await screen.findByRole("dialog")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Browse" })).toBeVisible();
-    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift");
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null);
   });
 
   it("applies the restored live studio-scoped search filters without leaving the studio page", async () => {
@@ -947,7 +1062,209 @@ describe("App", () => {
 
     expect(screen.getByText("Signal Harbor")).toBeVisible();
     expect(screen.queryByText("Cinderline Workshop")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 1 results")).toBeVisible();
+    expect(screen.getByText("Showing results 1 - 1 of 1")).toBeVisible();
+  });
+
+  it("shows the visible browse result range for the current page", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: Array.from({ length: 22 }, (_, index) => ({
+        id: `title-${index + 1}`,
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: `title-${index + 1}`,
+        contentKind: "game" as const,
+        lifecycleStatus: "published" as const,
+        visibility: "listed" as const,
+        isReported: false,
+        currentMetadataRevision: 1,
+        displayName: `Title ${String(index + 1).padStart(2, "0")}`,
+        shortDescription: `Description ${index + 1}`,
+        genreDisplay: "Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        playerCountDisplay: "1-4 players",
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E",
+        minAgeYears: 6,
+        ageDisplay: "ESRB E",
+        cardImageUrl: null,
+        logoImageUrl: null,
+        acquisitionUrl: `https://example.com/title-${index + 1}`,
+      })),
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 22, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(screen.getByText("Showing results 1 - 10 of 22")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Showing results 11 - 20 of 22")).toBeVisible();
+  });
+
+  it("moves release version into the hero area for player title detail views", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        acquisition: {
+          url: "https://example.com/lantern-drift",
+          label: "Open publisher page",
+          providerDisplayName: "Blue Harbor Games Direct",
+          providerHomepageUrl: "https://example.com",
+        },
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByText("Current version", { exact: false })).toBeVisible();
+    expect(screen.getByText("1.0.0")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Current release" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Configured")).not.toBeInTheDocument();
+  });
+
+  it("shows an unavailable notice for unlisted titles that remain in a player's collection", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getPlayerLibrary.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "unlisted",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: null,
+        },
+      ],
+    });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "unlisted",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: null,
+        logoImageUrl: null,
+        acquisition: undefined,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByText(/unlisted and no longer available/i)).toBeVisible();
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", "player-token");
   });
 
   it("prefers a title logo on browse cards when one is available", async () => {
@@ -1170,19 +1487,364 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Reports" })).toBeVisible();
     expect(screen.queryByText("Revision history")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save metadata" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Title slug")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit overview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Title visibility" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Activate and list title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open current release" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open metadata" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete title" })).toBeVisible();
   });
 
-  it("restores release overview and publish workflows", async () => {
+  it("toggles title visibility directly from the title overview", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.updateTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "A thoughtful puzzle adventure.",
+        description: "A thoughtful puzzle adventure.",
+        genreSlugs: ["adventure", "puzzle"],
+        contentKind: "game",
+        lifecycleStatus: "active",
+        visibility: "unlisted",
+        genreDisplay: "Adventure, Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        currentMetadataRevision: 3,
+        acquisitionUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+        },
+      },
+    });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    const visibilitySwitch = await screen.findByRole("switch", { name: "Title visibility" });
+    expect(visibilitySwitch).toHaveAttribute("aria-checked", "true");
+
+    await userEvent.click(visibilitySwitch);
+
+    expect(apiMocks.updateTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "title-1", {
+      contentKind: "game",
+      visibility: "unlisted",
+    });
+  });
+
+  it("explains why the title visibility switch is disabled for draft titles", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "A thoughtful puzzle adventure.",
+        description: "A thoughtful puzzle adventure.",
+        genreSlugs: ["adventure", "puzzle"],
+        contentKind: "game",
+        lifecycleStatus: "draft",
+        visibility: "unlisted",
+        genreDisplay: "Adventure, Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        currentMetadataRevision: 3,
+        acquisitionUrl: null,
+        currentRelease: null,
+      },
+    });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    const visibilitySwitch = await screen.findByRole("switch", { name: "Title visibility" });
+    expect(visibilitySwitch).toBeDisabled();
+
+    await userEvent.hover(visibilitySwitch.parentElement as HTMLElement);
+
+    expect(screen.getByText("Create a release first, then activate the title before you list it.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Activate and list title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open releases" })).toBeVisible();
+  });
+
+  it("lets archived titles be unarchived while keeping other overview actions disabled", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "A thoughtful puzzle adventure.",
+        description: "A thoughtful puzzle adventure.",
+        genreSlugs: ["adventure", "puzzle"],
+        contentKind: "game",
+        lifecycleStatus: "archived",
+        visibility: "unlisted",
+        genreDisplay: "Adventure, Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        currentMetadataRevision: 3,
+        acquisitionUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+        },
+      },
+    });
+    apiMocks.unarchiveTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "A thoughtful puzzle adventure.",
+        description: "A thoughtful puzzle adventure.",
+        genreSlugs: ["adventure", "puzzle"],
+        contentKind: "game",
+        lifecycleStatus: "draft",
+        visibility: "unlisted",
+        genreDisplay: "Adventure, Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        currentMetadataRevision: 3,
+        acquisitionUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+        },
+      },
+    });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Unarchive title" })).toBeEnabled();
+    expect(screen.getByRole("switch", { name: "Title visibility" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Open current release" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Archive title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete title" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive title" }));
+
+    expect(apiMocks.unarchiveTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "title-1");
+  });
+
+  it("shows unarchive failures under the title actions section instead of the page header", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "A thoughtful puzzle adventure.",
+        description: "A thoughtful puzzle adventure.",
+        genreSlugs: ["adventure", "puzzle"],
+        contentKind: "game",
+        lifecycleStatus: "archived",
+        visibility: "unlisted",
+        genreDisplay: "Adventure, Puzzle",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        currentMetadataRevision: 3,
+        acquisitionUrl: null,
+        currentRelease: null,
+      },
+    });
+    apiMocks.unarchiveTitle.mockRejectedValue(new Error('new row for relation "titles" violates check constraint "titles_draft_private"'));
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    const titleActionsSection = screen.getByText("Title actions").closest("section");
+    expect(titleActionsSection).not.toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive title" }));
+
+    expect(await within(titleActionsSection as HTMLElement).findByText("Your local title rules are out of date. Apply the latest database migrations, then try again.")).toBeVisible();
+    expect(screen.queryByText('new row for relation "titles" violates check constraint "titles_draft_private"')).not.toBeInTheDocument();
+  });
+
+  it("restores the release overview without the old publish workflow", async () => {
     seedDeveloperWorkspace();
 
     renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
 
     expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Open publish" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open publish" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Release type/i)).toBeVisible();
+    expect(screen.getByLabelText(/Acquisition URL/i)).toBeVisible();
+    expect(screen.queryByLabelText(/Metadata revision/i)).not.toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: "Publish" }));
-    expect(await screen.findByRole("heading", { name: "Publish" })).toBeVisible();
-    expect(screen.getByLabelText("Acquisition URL")).toBeVisible();
+  it("keeps older releases selectable after a newer release is created", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getTitleReleases.mockResolvedValue({
+      releases: [
+        {
+          id: "release-2",
+          version: "1.0.1",
+          status: "testing",
+          isCurrent: false,
+          createdAt: "2026-03-09T12:00:00Z",
+          publishedAt: "2026-03-09T12:30:00Z",
+          updatedAt: "2026-03-09T12:30:00Z",
+        },
+        {
+          id: "release-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          createdAt: "2026-03-08T12:00:00Z",
+          publishedAt: "2026-03-08T12:30:00Z",
+          updatedAt: "2026-03-08T12:30:00Z",
+        },
+      ],
+    });
+
+    renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-2");
+
+    expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
+    const releaseSelect = screen.getByDisplayValue("1.0.1 (Testing)");
+    expect(within(releaseSelect).getByRole("option", { name: "1.0.0 (Production)" })).toBeVisible();
+    expect(within(releaseSelect).getByRole("option", { name: "1.0.1 (Testing)" })).toBeVisible();
+  });
+
+  it("blocks title deletion confirmation when the current password is invalid", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.verifyCurrentUserPassword.mockRejectedValue(new Error("Current password is incorrect."));
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    await screen.findByRole("heading", { name: "Lantern Drift" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
+
+    const passwordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    await userEvent.type(within(passwordDialog).getByLabelText(/Current password/i), "wrong-password");
+    await userEvent.click(within(passwordDialog).getByRole("button", { name: "Continue" }));
+
+    expect(apiMocks.verifyCurrentUserPassword).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", {
+      currentPassword: "wrong-password",
+    });
+    expect(await within(passwordDialog).findByText("Current password is incorrect.")).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Confirm deletion of Lantern Drift" })).not.toBeInTheDocument();
+  });
+
+  it("advances to the second delete confirmation when the current password is valid", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    await screen.findByRole("heading", { name: "Lantern Drift" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
+
+    const passwordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    await userEvent.type(within(passwordDialog).getByLabelText(/Current password/i), "Developer!123");
+    await userEvent.click(within(passwordDialog).getByRole("button", { name: "Continue" }));
+
+    expect(apiMocks.verifyCurrentUserPassword).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", {
+      currentPassword: "Developer!123",
+    });
+    expect(await screen.findByRole("dialog", { name: "Confirm deletion of Lantern Drift" })).toBeVisible();
+  });
+
+  it("submits the delete password step when Enter is pressed in the password field", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    await screen.findByRole("heading", { name: "Lantern Drift" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
+
+    const passwordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    const passwordField = within(passwordDialog).getByLabelText(/Current password/i);
+    await userEvent.type(passwordField, "Developer!123{enter}");
+
+    expect(apiMocks.verifyCurrentUserPassword).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", {
+      currentPassword: "Developer!123",
+    });
+    expect(await screen.findByRole("dialog", { name: "Confirm deletion of Lantern Drift" })).toBeVisible();
+  });
+
+  it("clears the delete password when the user goes back from the second confirmation step", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    await screen.findByRole("heading", { name: "Lantern Drift" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
+
+    const passwordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    await userEvent.type(within(passwordDialog).getByLabelText(/Current password/i), "Developer!123");
+    await userEvent.click(within(passwordDialog).getByRole("button", { name: "Continue" }));
+
+    const confirmationDialog = await screen.findByRole("dialog", { name: "Confirm deletion of Lantern Drift" });
+    await userEvent.click(within(confirmationDialog).getByRole("button", { name: "Back" }));
+
+    const returnedPasswordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    expect(within(returnedPasswordDialog).getByLabelText(/Current password/i)).toHaveValue("");
+  });
+
+  it("submits the second delete confirmation step when Enter is pressed in the title field", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
+    apiMocks.deleteTitle.mockResolvedValue(undefined);
+
+    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+
+    await screen.findByRole("heading", { name: "Lantern Drift" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
+
+    const passwordDialog = await screen.findByRole("dialog", { name: "Delete Lantern Drift" });
+    await userEvent.type(within(passwordDialog).getByLabelText(/Current password/i), "Developer!123");
+    await userEvent.click(within(passwordDialog).getByRole("button", { name: "Continue" }));
+
+    const confirmationDialog = await screen.findByRole("dialog", { name: "Confirm deletion of Lantern Drift" });
+    const titleField = within(confirmationDialog).getByLabelText(/Title name/i);
+    await userEvent.type(titleField, "Lantern Drift{enter}");
+
+    expect(apiMocks.deleteTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "title-1", {
+      currentPassword: "Developer!123",
+      confirmationTitleName: "Lantern Drift",
+    });
   });
 
   it("submits self-service registration from the sign-in page", async () => {
@@ -1211,6 +1873,9 @@ describe("App", () => {
     expect(within(registerDialog).getByRole("heading", { name: "Create account" })).toBeVisible();
     const createAccountButton = within(registerDialog).getByRole("button", { name: "Create account" });
     expect(createAccountButton).toBeDisabled();
+    await userEvent.click(within(registerDialog).getByRole("button", { name: "Upload image" }));
+    expect(within(registerDialog).getByText("Optional. Recommended 512 x 512 px. Max 256 KB.")).toBeVisible();
+    await userEvent.click(within(registerDialog).getByRole("button", { name: "Avatar URL" }));
 
     await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "new.player");
     fireEvent.blur(within(registerDialog).getByLabelText(/Username/i));
@@ -1340,6 +2005,26 @@ describe("App", () => {
     expect(within(registerDialog).getByLabelText(/^Password/i)).toHaveValue("");
     expect(within(registerDialog).getByLabelText(/^Confirm password/i)).toHaveValue("");
     expect(within(registerDialog).getByLabelText(/^Avatar URL$/i)).toHaveValue("");
+  });
+
+  it("restores the registration draft after the page remounts", async () => {
+    const firstRender = renderApp("/auth/signin");
+
+    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
+    const registerDialog = await screen.findByRole("dialog", { name: "Create account" });
+
+    await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "persisted.player");
+    await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "persisted.player@example.com");
+    await userEvent.type(within(registerDialog).getByLabelText(/^Avatar URL$/i), "https://example.com/persisted-avatar.png");
+
+    firstRender.unmount();
+
+    renderApp("/auth/signin");
+
+    const restoredDialog = await screen.findByRole("dialog", { name: "Create account" });
+    expect(within(restoredDialog).getByLabelText(/Username/i)).toHaveValue("persisted.player");
+    expect(within(restoredDialog).getByLabelText(/Email/i)).toHaveValue("persisted.player@example.com");
+    expect(within(restoredDialog).getByLabelText(/^Avatar URL$/i)).toHaveValue("https://example.com/persisted-avatar.png");
   });
 
   it("requests password recovery from the sign-in page", async () => {
@@ -1606,7 +2291,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { name: "Discover new games for Board" });
+    await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." });
     await userEvent.click(screen.getByRole("button", { name: /open account/i }));
 
     expect(screen.getByRole("button", { name: "Profile" })).toBeVisible();
@@ -1659,7 +2344,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { name: "Discover new games for Board" });
+    await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." });
     await userEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     expect(await screen.findByText("Moderator follow-up on your report")).toBeVisible();
@@ -1671,6 +2356,534 @@ describe("App", () => {
     await waitFor(() => {
       expect(apiMocks.markCurrentUserNotificationRead).toHaveBeenCalledWith("http://127.0.0.1:8787", "player-token", "notification-1");
     });
+  });
+
+  it("hides developer-only report messages from the player reported titles workflow", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({
+      reports: [
+        {
+          id: "report-1",
+          titleId: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          titleSlug: "compass-echo",
+          titleDisplayName: "Compass Echo",
+          titleShortDescription: "Coordinate routes across hidden currents.",
+          genreDisplay: "Puzzle, Family",
+          currentMetadataRevision: 2,
+          status: "needs_developer_response",
+          reason: "The install guidance references a companion feature that is not visible in the current testing build.",
+          createdAt: "2026-03-08T09:10:00Z",
+          updatedAt: "2026-03-08T10:05:00Z",
+          resolvedAt: null,
+          messageCount: 2,
+        },
+      ],
+    });
+    apiMocks.getPlayerTitleReport.mockResolvedValue({
+      report: {
+        report: {
+          id: "report-1",
+          titleId: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          titleSlug: "compass-echo",
+          titleDisplayName: "Compass Echo",
+          titleShortDescription: "Coordinate routes across hidden currents.",
+          genreDisplay: "Puzzle, Family",
+          currentMetadataRevision: 2,
+          reporterSubject: "user-1",
+          reporterUserName: "ava.garcia",
+          reporterDisplayName: "Ava Garcia",
+          reporterEmail: "ava.garcia@boardtpl.local",
+          status: "needs_developer_response",
+          reason: "The install guidance references a companion feature that is not visible in the current testing build.",
+          createdAt: "2026-03-08T09:10:00Z",
+          updatedAt: "2026-03-08T10:05:00Z",
+          resolvedAt: null,
+          messageCount: 2,
+        },
+        resolutionNote: null,
+        resolvedBy: null,
+        messages: [
+          {
+            id: "message-1",
+            authorSubject: "user-1",
+            authorUserName: "ava.garcia",
+            authorDisplayName: "Ava Garcia",
+            authorEmail: "ava.garcia@boardtpl.local",
+            authorRole: "player",
+            audience: "all",
+            message: "I expected to see the synced clue board mentioned in the listing, but I cannot find it.",
+            createdAt: "2026-03-08T09:10:00Z",
+          },
+          {
+            id: "message-2",
+            authorSubject: "user-2",
+            authorUserName: "alex.rivera",
+            authorDisplayName: "Alex Rivera",
+            authorEmail: "alex.rivera@boardtpl.local",
+            authorRole: "moderator",
+            audience: "developer",
+            message: "Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.",
+            createdAt: "2026-03-08T10:05:00Z",
+          },
+        ],
+      },
+    });
+
+    renderApp("/player?workflow=reported-titles&reportId=report-1");
+
+    expect(await screen.findByRole("heading", { name: "Reported Titles" })).toBeVisible();
+    expect(await screen.findByText("I expected to see the synced clue board mentioned in the listing, but I cannot find it.")).toBeVisible();
+    expect(screen.queryByText("Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/developer only/i)).not.toBeInTheDocument();
+  });
+
+  it("restores an in-progress player profile edit after the page remounts", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    const firstRender = renderApp("/player?workflow=account-profile");
+
+    await screen.findByRole("heading", { name: "Profile" });
+    await userEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    await userEvent.clear(screen.getByRole("textbox", { name: /display name/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /display name/i }), "Draft Ava");
+    await userEvent.type(screen.getByLabelText(/^Avatar URL$/i), "https://example.com/draft-avatar.png");
+
+    firstRender.unmount();
+
+    renderApp("/player?workflow=account-profile");
+
+    await screen.findByRole("heading", { name: "Profile" });
+    expect(screen.getByRole("button", { name: "Save Profile" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: /display name/i })).toHaveValue("Draft Ava");
+    expect(screen.getByLabelText(/^Avatar URL$/i)).toHaveValue("https://example.com/draft-avatar.png");
+  });
+
+  it("lets players request an email change from account settings", async () => {
+    const updateUser = vi.fn().mockResolvedValue({
+      data: {
+        user: {
+          email: "ava.garcia@boardtpl.local",
+          new_email: "ava.new@boardtpl.local",
+        },
+      },
+      error: null,
+    });
+    const signInWithPassword = vi.fn().mockResolvedValue({
+      data: {
+        session: { access_token: "player-token" },
+        user: { email: "ava.garcia@boardtpl.local" },
+      },
+      error: null,
+    });
+    const refreshCurrentUser = vi.fn();
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser,
+          signInWithPassword,
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser,
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+    apiMocks.updateUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:30:00Z",
+      },
+    });
+
+    renderApp("/player?workflow=account-settings");
+
+    await screen.findByRole("heading", { name: "Account Settings" });
+    await userEvent.click(screen.getByRole("button", { name: "Edit Settings" }));
+    await userEvent.clear(screen.getByRole("textbox", { name: /^email$/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /^email$/i }), "ava.new@boardtpl.local");
+    await userEvent.type(screen.getByLabelText(/^Current password$/i), "Player!123");
+    await userEvent.click(screen.getByRole("button", { name: "Save Settings" }));
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: "ava.garcia@boardtpl.local",
+        password: "Player!123",
+      });
+      expect(updateUser).toHaveBeenCalledWith({ email: "ava.new@boardtpl.local" });
+    });
+    expect(apiMocks.updateUserProfile).toHaveBeenCalledWith("http://127.0.0.1:8787", "player-token", {
+      firstName: "Ava",
+      lastName: "Garcia",
+    });
+    expect(refreshCurrentUser).toHaveBeenCalled();
+    expect(await screen.findByText("Settings updated. Confirm the email change from the message sent to ava.new@boardtpl.local.")).toBeVisible();
+    expect(screen.getByText("Confirmation sent")).toBeVisible();
+    expect(screen.getByText(/confirm the change from the email sent to ava\.new@boardtpl\.local/i)).toBeVisible();
+  });
+
+  it("lets players change their password from account settings", async () => {
+    const signInWithPassword = vi.fn().mockResolvedValue({
+      data: {
+        session: { access_token: "player-token" },
+        user: { email: "ava.garcia@boardtpl.local" },
+      },
+      error: null,
+    });
+    const updateUser = vi.fn().mockResolvedValue({
+      data: {
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      error: null,
+    });
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser,
+          signInWithPassword,
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-settings");
+
+    await screen.findByRole("heading", { name: "Account Settings" });
+    await userEvent.type(screen.getAllByLabelText(/^Current password$/i)[1]!, "Player!123");
+    await userEvent.type(screen.getByLabelText(/^New password$/i), "NewPlayer!123");
+    await userEvent.type(screen.getByLabelText(/^Confirm password$/i), "NewPlayer!123");
+    await userEvent.click(screen.getByRole("button", { name: "Change Password" }));
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: "ava.garcia@boardtpl.local",
+        password: "Player!123",
+      });
+      expect(updateUser).toHaveBeenCalledWith({
+        password: "NewPlayer!123",
+        current_password: "Player!123",
+      });
+    });
+    expect(await screen.findByText("Password updated.")).toBeVisible();
+  });
+
+  it("keeps developer-only report messages visible to moderators", async () => {
+    authState.value = {
+      session: { access_token: "moderator-token" },
+      currentUser: {
+        subject: "user-2",
+        displayName: "Alex Rivera",
+        email: "alex.rivera@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["moderator"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getModerationTitleReports.mockResolvedValue({
+      reports: [
+        {
+          id: "report-1",
+          titleId: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          titleSlug: "compass-echo",
+          titleDisplayName: "Compass Echo",
+          titleShortDescription: "Coordinate routes across hidden currents.",
+          genreDisplay: "Puzzle, Family",
+          currentMetadataRevision: 2,
+          reporterSubject: "user-1",
+          reporterUserName: "ava.garcia",
+          reporterDisplayName: "Ava Garcia",
+          reporterEmail: "ava.garcia@boardtpl.local",
+          status: "needs_developer_response",
+          reason: "The install guidance references a companion feature that is not visible in the current testing build.",
+          createdAt: "2026-03-08T09:10:00Z",
+          updatedAt: "2026-03-08T10:05:00Z",
+          resolvedAt: null,
+          messageCount: 2,
+        },
+      ],
+    });
+    apiMocks.getModerationTitleReport.mockResolvedValue({
+      report: {
+        report: {
+          id: "report-1",
+          titleId: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          titleSlug: "compass-echo",
+          titleDisplayName: "Compass Echo",
+          titleShortDescription: "Coordinate routes across hidden currents.",
+          genreDisplay: "Puzzle, Family",
+          currentMetadataRevision: 2,
+          reporterSubject: "user-1",
+          reporterUserName: "ava.garcia",
+          reporterDisplayName: "Ava Garcia",
+          reporterEmail: "ava.garcia@boardtpl.local",
+          status: "needs_developer_response",
+          reason: "The install guidance references a companion feature that is not visible in the current testing build.",
+          createdAt: "2026-03-08T09:10:00Z",
+          updatedAt: "2026-03-08T10:05:00Z",
+          resolvedAt: null,
+          messageCount: 2,
+        },
+        resolutionNote: null,
+        resolvedBy: null,
+        messages: [
+          {
+            id: "message-1",
+            authorSubject: "user-1",
+            authorUserName: "ava.garcia",
+            authorDisplayName: "Ava Garcia",
+            authorEmail: "ava.garcia@boardtpl.local",
+            authorRole: "player",
+            audience: "all",
+            message: "I expected to see the synced clue board mentioned in the listing, but I cannot find it.",
+            createdAt: "2026-03-08T09:10:00Z",
+          },
+          {
+            id: "message-2",
+            authorSubject: "user-2",
+            authorUserName: "alex.rivera",
+            authorDisplayName: "Alex Rivera",
+            authorEmail: "alex.rivera@boardtpl.local",
+            authorRole: "moderator",
+            audience: "developer",
+            message: "Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.",
+            createdAt: "2026-03-08T10:05:00Z",
+          },
+        ],
+      },
+    });
+
+    renderApp("/moderate?workflow=reports-review&reportId=report-1");
+
+    expect(await screen.findByRole("heading", { name: "Moderate" })).toBeVisible();
+    expect(await screen.findByText("Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.")).toBeVisible();
+    expect(screen.getByText(/developer only/i)).toBeVisible();
   });
 
   it("keeps the studio slug helper empty until the display name has a value", async () => {
@@ -1728,77 +2941,84 @@ describe("App", () => {
 
   it("supports studio avatar and media previews from url and upload in the create studio flow", async () => {
     seedDeveloperWorkspace();
-    apiMocks.createStudio.mockResolvedValue({
-      studio: {
-        id: "studio-2",
-        slug: "signal-harbor-studio",
-        displayName: "Signal Harbor Studio",
-        description: "A coastal co-op studio profile.",
-        avatarUrl: null,
-        logoUrl: null,
-        bannerUrl: null,
-        role: "owner",
-        links: [],
-      },
-    });
-    apiMocks.uploadStudioMedia.mockResolvedValue({
-      studio: {
-        id: "studio-2",
-        slug: "signal-harbor-studio",
-        displayName: "Signal Harbor Studio",
-        description: "A coastal co-op studio profile.",
-        avatarUrl: "/uploads/avatar.png",
-        logoUrl: "/uploads/logo.png",
-        bannerUrl: null,
-        role: "owner",
-        links: [],
-      },
-    });
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 400, height: 400 });
+    try {
+      apiMocks.createStudio.mockResolvedValue({
+        studio: {
+          id: "studio-2",
+          slug: "signal-harbor-studio",
+          displayName: "Signal Harbor Studio",
+          description: "A coastal co-op studio profile.",
+          avatarUrl: null,
+          logoUrl: null,
+          bannerUrl: null,
+          role: "owner",
+          links: [],
+        },
+      });
+      apiMocks.uploadStudioMedia.mockResolvedValue({
+        studio: {
+          id: "studio-2",
+          slug: "signal-harbor-studio",
+          displayName: "Signal Harbor Studio",
+          description: "A coastal co-op studio profile.",
+          avatarUrl: "/uploads/avatar.png",
+          logoUrl: "/uploads/logo.png",
+          bannerUrl: null,
+          role: "owner",
+          links: [],
+        },
+      });
 
-    renderApp("/develop");
+      renderApp("/develop");
 
-    await screen.findByRole("button", { name: "Studios" });
-    await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
+      await screen.findByRole("button", { name: "Studios" });
+      await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
 
-    const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
-    expect(createStudioForm).not.toBeNull();
+      const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
+      expect(createStudioForm).not.toBeNull();
 
-    const avatarPanel = within(createStudioForm as HTMLElement).getByText("Avatar").closest("section");
-    const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
-    expect(avatarPanel).not.toBeNull();
-    expect(logoPanel).not.toBeNull();
+      const avatarPanel = within(createStudioForm as HTMLElement).getByText("Avatar").closest("section");
+      const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+      expect(avatarPanel).not.toBeNull();
+      expect(logoPanel).not.toBeNull();
+      expect(within(avatarPanel as HTMLElement).getByText("Optional. Recommended 512 x 512 px. Max 256 KB.")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).getByText("Optional. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.")).toBeVisible();
 
-    await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /studio display name/i }), "Signal Harbor Studio");
-    await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /description/i }), "A coastal co-op studio profile.");
-    await userEvent.type(within(avatarPanel as HTMLElement).getByLabelText("URL"), "https://example.com/avatar.png");
-    await userEvent.type(within(logoPanel as HTMLElement).getByLabelText("URL"), "https://example.com/logo.png");
+      await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /studio display name/i }), "Signal Harbor Studio");
+      await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /description/i }), "A coastal co-op studio profile.");
+      await userEvent.type(within(avatarPanel as HTMLElement).getByLabelText("URL"), "https://example.com/avatar.png");
+      await userEvent.type(within(logoPanel as HTMLElement).getByLabelText("URL"), "https://example.com/logo.png");
 
-    await waitFor(() => {
-      expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview")).toHaveAttribute("src", "https://example.com/avatar.png");
-      expect(within(logoPanel as HTMLElement).getByAltText("Logo preview")).toHaveAttribute("src", "https://example.com/logo.png");
-    });
+      await waitFor(() => {
+        expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview")).toHaveAttribute("src", "https://example.com/avatar.png");
+        expect(within(logoPanel as HTMLElement).getByAltText("Logo preview")).toHaveAttribute("src", "https://example.com/logo.png");
+      });
 
-    const [avatarUploadInput, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
-    expect(avatarUploadInput).not.toBeUndefined();
-    expect(logoUploadInput).not.toBeUndefined();
+      const [avatarUploadInput, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
+      expect(avatarUploadInput).not.toBeUndefined();
+      expect(logoUploadInput).not.toBeUndefined();
 
-    await userEvent.upload(avatarUploadInput as HTMLInputElement, new File(["avatar-bytes"], "studio-avatar.png", { type: "image/png" }));
-    await userEvent.upload(logoUploadInput as HTMLInputElement, new File(["logo-bytes"], "studio-logo.png", { type: "image/png" }));
+      await userEvent.upload(avatarUploadInput as HTMLInputElement, new File(["avatar-bytes"], "studio-avatar.png", { type: "image/png" }));
+      await userEvent.upload(logoUploadInput as HTMLInputElement, new File(["logo-bytes"], "studio-logo.png", { type: "image/png" }));
 
-    await waitFor(() => {
-      expect(within(avatarPanel as HTMLElement).getByText("studio-avatar.png")).toBeVisible();
-      expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview").getAttribute("src")).toMatch(/^data:image\/png/);
-      expect(within(logoPanel as HTMLElement).getByText("studio-logo.png")).toBeVisible();
-      expect(within(logoPanel as HTMLElement).getByAltText("Logo preview").getAttribute("src")).toMatch(/^data:image\/png/);
-    });
+      await waitFor(() => {
+        expect(within(avatarPanel as HTMLElement).getByText("studio-avatar.png")).toBeVisible();
+        expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview").getAttribute("src")).toMatch(/^data:image\/png/);
+        expect(within(logoPanel as HTMLElement).getByText("studio-logo.png")).toBeVisible();
+        expect(within(logoPanel as HTMLElement).getByAltText("Logo preview").getAttribute("src")).toMatch(/^data:image\/png/);
+      });
 
-    await userEvent.click(within(createStudioForm as HTMLElement).getByRole("button", { name: "Create studio" }));
+      await userEvent.click(within(createStudioForm as HTMLElement).getByRole("button", { name: "Create studio" }));
 
-    await waitFor(() => {
-      expect(apiMocks.createStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", expect.objectContaining({ avatarUrl: null, logoUrl: null }));
-      expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "avatar", expect.any(File));
-      expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "logo", expect.any(File));
-    });
+      await waitFor(() => {
+        expect(apiMocks.createStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", expect.objectContaining({ avatarUrl: null, logoUrl: null }));
+        expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "avatar", expect.any(File));
+        expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "logo", expect.any(File));
+      });
+    } finally {
+      mockedImageProcessing.restore();
+    }
   });
 
   it("rejects oversized studio logo uploads before submission", async () => {
@@ -1814,13 +3034,15 @@ describe("App", () => {
 
     const [, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
     expect(logoUploadInput).not.toBeUndefined();
+    const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+    expect(logoPanel).not.toBeNull();
 
     await userEvent.upload(
       logoUploadInput as HTMLInputElement,
       new File([new Uint8Array(256 * 1024 + 1)], "studio-logo.png", { type: "image/png" }),
     );
 
-    expect(await screen.findByText("Uploaded studio logo image must be 256 KB or smaller.")).toBeVisible();
+    expect(await within(logoPanel as HTMLElement).findByText("Uploaded studio logo image must be 256 KB or smaller.")).toBeVisible();
     expect(apiMocks.uploadStudioMedia).not.toHaveBeenCalled();
   });
 
@@ -1834,14 +3056,87 @@ describe("App", () => {
 
     const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
     expect(cardUploadInput).not.toBeUndefined();
+    const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
+    expect(cardPanel).not.toBeNull();
 
     await userEvent.upload(
       cardUploadInput as HTMLInputElement,
       new File([new Uint8Array(1536 * 1024 + 1)], "card.png", { type: "image/png" }),
     );
 
-    expect(await screen.findByText("Uploaded card image must be 1536 KB or smaller.")).toBeVisible();
+    expect(await within(cardPanel as HTMLElement).findByText("Uploaded card image must be 1536 KB or smaller.")).toBeVisible();
     expect(apiMocks.uploadTitleMediaAsset).not.toHaveBeenCalled();
+  });
+
+  it("shows the selected title card preview immediately after upload", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
+    expect(cardUploadInput).not.toBeUndefined();
+    const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
+    expect(cardPanel).not.toBeNull();
+
+    const cardImage = new File([new Uint8Array([137, 80, 78, 71])], "card.png", { type: "image/png" });
+    Object.defineProperty(cardImage, "size", { value: 1024 });
+
+    const readAsDataURLSpy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function mockReadAsDataURL(this: FileReader, blob: Blob) {
+      const file = blob as File;
+      const dataUrl = file.name.endsWith(".webp") ? "data:image/webp;base64,preview" : "data:image/png;base64,source";
+      setTimeout(() => {
+        Object.defineProperty(this, "result", { configurable: true, value: dataUrl });
+        this.onload?.({ target: this } as ProgressEvent<FileReader>);
+      }, 0);
+    });
+
+    const originalImage = globalThis.Image;
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = 900;
+      naturalHeight = 1280;
+      width = 900;
+      height = 1280;
+
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+    // @ts-expect-error test double
+    globalThis.Image = MockImage;
+
+    const originalCreateElement = document.createElement.bind(document);
+    const toBlob = vi.fn((callback: BlobCallback) => callback(new Blob([new Uint8Array([1, 2, 3])], { type: "image/webp" })));
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options);
+      if (tagName.toLowerCase() === "canvas") {
+        Object.defineProperty(element, "getContext", {
+          configurable: true,
+          value: () => ({ drawImage: vi.fn() }),
+        });
+        Object.defineProperty(element, "toBlob", {
+          configurable: true,
+          value: toBlob,
+        });
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    try {
+      await userEvent.upload(cardUploadInput as HTMLInputElement, cardImage);
+
+      expect(await within(cardPanel as HTMLElement).findByAltText("card media")).toHaveAttribute("src", expect.stringMatching(/^data:image\//));
+      expect(within(cardPanel as HTMLElement).getByText("card.png")).toBeVisible();
+      expect(within(cardPanel as HTMLElement).queryByText("No media")).not.toBeInTheDocument();
+    } finally {
+      readAsDataURLSpy.mockRestore();
+      createElementSpy.mockRestore();
+      globalThis.Image = originalImage;
+    }
   });
 
   it("lets developers add multiple genres and remove only the selected chip in title create", async () => {
@@ -2020,6 +3315,57 @@ describe("App", () => {
         }),
       );
     });
+  });
+
+  it("restores legacy cached title-create drafts without crashing when fields change", async () => {
+    seedDeveloperWorkspace();
+    window.sessionStorage.setItem(
+      "develop-workspace-state",
+      JSON.stringify({
+        workspace: { domain: "titles", workflow: "titles-create", studioId: "studio-1", titleId: "", releaseId: "" },
+        studioCreateDraft: {
+          displayName: "",
+          slug: "",
+          description: "",
+          logo: { url: "", previewUrl: "", fileName: null },
+          banner: { url: "", previewUrl: "", fileName: null },
+          links: [{ label: "", url: "" }],
+        },
+        studioCreateTouched: {},
+        titleCreate: {
+          studioId: "studio-1",
+          touched: {},
+          draft: {
+            displayName: "Legacy Draft",
+            slug: "legacy-draft",
+            contentKind: "game",
+            lifecycleStatus: "draft",
+            visibility: "private",
+            genres: ["puzzle"],
+            shortDescription: "",
+            description: "Older cached drafts did not include every modern field.",
+            minPlayers: 1,
+            maxPlayers: 4,
+            ageRatingAuthority: "ESRB",
+            ageRatingValue: "E",
+            minAgeYears: 10,
+          },
+        },
+        selectedReportId: null,
+        reportReply: "",
+      }),
+    );
+
+    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    const shortDescriptionField = within(createTitleForm as HTMLElement).getByRole("textbox", { name: /short description/i });
+    await userEvent.type(shortDescriptionField, "Legacy drafts still edit safely.");
+
+    expect(shortDescriptionField).toHaveValue("Legacy drafts still edit safely.");
+    expect(screen.getByRole("heading", { name: "Create Title" })).toBeVisible();
   });
 
   it("normalizes legacy metadata token values and removes only the selected genre in edit mode", async () => {
@@ -2253,6 +3599,70 @@ describe("App", () => {
       "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
     );
     expect(canonicalLink.getAttribute("href")).toBe("https://boardenthusiasts.com/privacy");
+
+    descriptionMeta.remove();
+    ogTitleMeta.remove();
+    ogDescriptionMeta.remove();
+    ogUrlMeta.remove();
+    twitterTitleMeta.remove();
+    twitterDescriptionMeta.remove();
+    canonicalLink.remove();
+  });
+
+  it("publishes route-specific metadata for the live privacy page", async () => {
+    const descriptionMeta = document.createElement("meta");
+    descriptionMeta.setAttribute("name", "description");
+    descriptionMeta.setAttribute("content", "default description");
+    document.head.appendChild(descriptionMeta);
+
+    const ogTitleMeta = document.createElement("meta");
+    ogTitleMeta.setAttribute("property", "og:title");
+    ogTitleMeta.setAttribute("content", "default og title");
+    document.head.appendChild(ogTitleMeta);
+
+    const ogDescriptionMeta = document.createElement("meta");
+    ogDescriptionMeta.setAttribute("property", "og:description");
+    ogDescriptionMeta.setAttribute("content", "default og description");
+    document.head.appendChild(ogDescriptionMeta);
+
+    const ogUrlMeta = document.createElement("meta");
+    ogUrlMeta.setAttribute("property", "og:url");
+    ogUrlMeta.setAttribute("content", "https://boardenthusiasts.com/");
+    document.head.appendChild(ogUrlMeta);
+
+    const twitterTitleMeta = document.createElement("meta");
+    twitterTitleMeta.setAttribute("name", "twitter:title");
+    twitterTitleMeta.setAttribute("content", "default twitter title");
+    document.head.appendChild(twitterTitleMeta);
+
+    const twitterDescriptionMeta = document.createElement("meta");
+    twitterDescriptionMeta.setAttribute("name", "twitter:description");
+    twitterDescriptionMeta.setAttribute("content", "default twitter description");
+    document.head.appendChild(twitterDescriptionMeta);
+
+    const canonicalLink = document.createElement("link");
+    canonicalLink.setAttribute("rel", "canonical");
+    canonicalLink.setAttribute("href", "https://boardenthusiasts.com/");
+    document.head.appendChild(canonicalLink);
+
+    renderApp("/privacy");
+
+    expect(await screen.findByRole("heading", { name: "BE Privacy Snapshot" })).toBeVisible();
+    expect(document.title).toBe("BE Privacy Snapshot | For Board Players and Builders");
+    expect(descriptionMeta.getAttribute("content")).toBe(
+      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+    );
+    expect(ogTitleMeta.getAttribute("content")).toBe("BE Privacy Snapshot | For Board Players and Builders");
+    expect(ogDescriptionMeta.getAttribute("content")).toBe(
+      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+    );
+    expect(ogUrlMeta.getAttribute("content")).toBe("https://boardenthusiasts.com/privacy");
+    expect(twitterTitleMeta.getAttribute("content")).toBe("BE Privacy Snapshot | For Board Players and Builders");
+    expect(twitterDescriptionMeta.getAttribute("content")).toBe(
+      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+    );
+    expect(canonicalLink.getAttribute("href")).toBe("https://boardenthusiasts.com/privacy");
+    expect(screen.getByText(/create and secure accounts, run the live library and workspace flows/i)).toBeVisible();
 
     descriptionMeta.remove();
     ogTitleMeta.remove();

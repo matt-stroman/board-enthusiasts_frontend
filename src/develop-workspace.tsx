@@ -19,6 +19,8 @@ import { useEffect, useId, useMemo, useState, type Dispatch, type FormEvent, typ
 import { useSearchParams } from "react-router-dom";
 import {
   addDeveloperTitleReportMessage,
+  activateTitle,
+  archiveTitle,
   activateTitleMetadataVersion,
   activateTitleRelease,
   createStudio,
@@ -41,7 +43,9 @@ import {
   listManagedStudios,
   listStudioLinks,
   listStudioTitles,
-  publishTitleRelease,
+  deleteTitle,
+  unarchiveTitle,
+  verifyCurrentUserPassword as verifyCurrentUserPasswordApi,
   updateTitle,
   updateTitleRelease,
   updateStudio,
@@ -50,7 +54,6 @@ import {
   uploadTitleMediaAsset,
   upsertTitleMediaAsset,
   upsertTitleMetadata,
-  withdrawTitleRelease,
 } from "./api";
 import { useAuth } from "./auth";
 import { readAppConfig } from "./config";
@@ -64,8 +67,11 @@ import {
   validateReleaseInput,
   validateStudioInput,
   validateTitleFormInput,
-  validateTitleOverviewInput,
 } from "./develop-validation";
+import {
+  formatMediaUploadGuidance,
+  normalizeImageUpload,
+} from "./media-upload";
 
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";
@@ -89,8 +95,7 @@ type Workflow =
   | "titles-metadata"
   | "titles-reports"
   | "releases-create"
-  | "releases-overview"
-  | "releases-publish";
+  | "releases-overview";
 
 type WorkspaceState = {
   domain: Domain;
@@ -103,6 +108,14 @@ type WorkspaceState = {
 type StudioMediaDraft = {
   url: string;
   previewUrl: string;
+  fileName: string | null;
+  file: File | null;
+};
+
+type TitleMediaDraft = {
+  url: string;
+  previewUrl: string;
+  altText: string;
   fileName: string | null;
   file: File | null;
 };
@@ -121,8 +134,8 @@ type TitleDraft = {
   displayName: string;
   slug: string;
   contentKind: "game" | "app";
-  lifecycleStatus: "draft" | "testing" | "published" | "archived";
-  visibility: "private" | "unlisted" | "listed";
+  lifecycleStatus: "draft" | "active" | "archived";
+  visibility: "unlisted" | "listed";
   genres: string[];
   genreInput: string;
   ageRatingAuthorityInput: string;
@@ -133,19 +146,12 @@ type TitleDraft = {
   ageRatingAuthority: string;
   ageRatingValue: string;
   minAgeYears: number;
-  media: Record<"card" | "hero" | "logo", { url: string; altText: string; file: File | null }>;
-};
-
-type TitleOverviewDraft = {
-  slug: string;
-  contentKind: "game" | "app";
-  lifecycleStatus: "draft" | "testing" | "published" | "archived";
-  visibility: "private" | "unlisted" | "listed";
+  media: Record<"card" | "hero" | "logo", TitleMediaDraft>;
 };
 
 type ReleaseDraft = {
   version: string;
-  metadataRevisionNumber: number;
+  status: "testing" | "production";
   acquisitionUrl: string;
 };
 
@@ -156,8 +162,13 @@ type PersistedStudioDraft = Omit<StudioDraft, "avatar" | "logo" | "banner"> & {
 };
 
 type PersistedTitleDraft = Omit<TitleDraft, "media"> & {
-  media: Record<"card" | "hero" | "logo", { url: string; altText: string }>;
+  media: Record<"card" | "hero" | "logo", { url: string; previewUrl?: string; altText: string; fileName?: string | null }>;
 };
+
+type PersistedTitleMediaDraft = PersistedTitleDraft["media"][keyof PersistedTitleDraft["media"]];
+type PersistedStudioMediaDraft = PersistedStudioDraft["avatar"];
+type TitleMediaErrors = Record<"card" | "hero" | "logo", string | null>;
+type StudioMediaErrors = Record<"avatar" | "logo" | "banner", string | null>;
 
 type PersistedState = {
   workspace: WorkspaceState;
@@ -165,7 +176,6 @@ type PersistedState = {
   studioCreateTouched: Record<string, boolean>;
   studioOverview?: { studioId: string; draft: PersistedStudioDraft; touched: Record<string, boolean>; editing: boolean };
   titleCreate?: { studioId: string; draft: PersistedTitleDraft; touched: Record<string, boolean> };
-  titleOverview?: { titleId: string; draft: TitleOverviewDraft; touched: Record<string, boolean>; editing: boolean };
   titleMetadata?: { titleId: string; draft: PersistedTitleDraft; touched: Record<string, boolean>; editing: boolean };
   releaseCreate?: { titleId: string; draft: ReleaseDraft; touched: Record<string, boolean> };
   releaseOverview?: { releaseId: string; draft: ReleaseDraft; touched: Record<string, boolean> };
@@ -197,57 +207,6 @@ function createStudioMediaDraft(url: string | null | undefined): StudioMediaDraf
 
 function getStudioMediaPreview(media: StudioMediaDraft): string {
   return media.previewUrl || media.url;
-}
-
-function formatAcceptedMimeTypes(mimeTypes: readonly string[]): string {
-  return mimeTypes
-    .map((mimeType) => {
-      switch (mimeType) {
-        case "image/jpeg":
-          return "JPEG";
-        case "image/png":
-          return "PNG";
-        case "image/webp":
-          return "WEBP";
-        case "image/svg+xml":
-          return "SVG";
-        default:
-          return mimeType;
-      }
-    })
-    .join(", ");
-}
-
-function assertSelectedMediaFile(
-  file: File,
-  policy: { acceptedMimeTypes: readonly string[]; maxUploadBytes: number },
-  label: string,
-): void {
-  if (!policy.acceptedMimeTypes.some((mimeType) => mimeType === file.type)) {
-    throw new Error(`Uploaded ${label} must be ${formatAcceptedMimeTypes(policy.acceptedMimeTypes)}.`);
-  }
-  if (file.size > policy.maxUploadBytes) {
-    throw new Error(`Uploaded ${label} must be ${Math.round(policy.maxUploadBytes / 1024)} KB or smaller.`);
-  }
-}
-
-async function readImageDataUrl(file: File, readErrorMessage: string): Promise<{ dataUrl: string; fileName: string }> {
-  const reader = new FileReader();
-  const result = await new Promise<string>((resolve, reject) => {
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(new Error(readErrorMessage));
-    reader.readAsDataURL(file);
-  });
-
-  return {
-    dataUrl: result,
-    fileName: file.name,
-  };
-}
-
-async function readStudioMediaUpload(file: File, mediaRole: "avatar" | "logo" | "banner"): Promise<{ dataUrl: string; fileName: string }> {
-  assertSelectedMediaFile(file, studioMediaUploadPolicies[mediaRole], mediaRole === "avatar" ? "avatar" : `studio ${mediaRole} image`);
-  return readImageDataUrl(file, "Studio media upload could not be read.");
 }
 
 function parseGenreTags(value: string | null | undefined): string[] {
@@ -334,7 +293,7 @@ function createTitleDraft(title?: DeveloperTitle | null, mediaAssets: TitleMedia
     slug: title?.slug ?? "title",
     contentKind: title?.contentKind ?? "game",
     lifecycleStatus: title?.lifecycleStatus ?? "draft",
-    visibility: title?.visibility ?? "private",
+    visibility: title?.visibility ?? "unlisted",
     genres: title?.genreSlugs?.length ? title.genreSlugs : parseGenreTags(title?.genreDisplay),
     genreInput: "",
     ageRatingAuthorityInput: "",
@@ -346,93 +305,136 @@ function createTitleDraft(title?: DeveloperTitle | null, mediaAssets: TitleMedia
     ageRatingValue: title?.ageRatingValue ?? "E10+",
     minAgeYears: title?.minAgeYears ?? 10,
     media: {
-      card: { url: mediaByRole.card?.sourceUrl ?? "", altText: mediaByRole.card?.altText ?? "", file: null },
-      hero: { url: mediaByRole.hero?.sourceUrl ?? "", altText: mediaByRole.hero?.altText ?? "", file: null },
-      logo: { url: mediaByRole.logo?.sourceUrl ?? "", altText: mediaByRole.logo?.altText ?? "", file: null },
+      card: { url: mediaByRole.card?.sourceUrl ?? "", previewUrl: mediaByRole.card?.sourceUrl ?? "", altText: mediaByRole.card?.altText ?? "", fileName: null, file: null },
+      hero: { url: mediaByRole.hero?.sourceUrl ?? "", previewUrl: mediaByRole.hero?.sourceUrl ?? "", altText: mediaByRole.hero?.altText ?? "", fileName: null, file: null },
+      logo: { url: mediaByRole.logo?.sourceUrl ?? "", previewUrl: mediaByRole.logo?.sourceUrl ?? "", altText: mediaByRole.logo?.altText ?? "", fileName: null, file: null },
     },
   };
 }
 
-function createTitleOverviewDraft(title?: DeveloperTitle | null): TitleOverviewDraft {
-  return {
-    slug: title?.slug ?? "title",
-    contentKind: title?.contentKind ?? "game",
-    lifecycleStatus: title?.lifecycleStatus ?? "draft",
-    visibility: title?.visibility ?? "private",
-  };
-}
-
-function createReleaseDraft(release?: TitleRelease | null, revision = 1): ReleaseDraft {
+function createReleaseDraft(release?: TitleRelease | null): ReleaseDraft {
   return {
     version: release?.version ?? "1.0.0",
-    metadataRevisionNumber: release?.metadataRevisionNumber ?? revision,
+    status: release?.status ?? "testing",
     acquisitionUrl: release?.acquisitionUrl ?? "",
   };
 }
 
-function toPersistedStudioDraft(draft: StudioDraft): PersistedStudioDraft {
+function fromPersistedReleaseDraft(draft: Partial<ReleaseDraft> | null | undefined): ReleaseDraft {
   return {
-    ...draft,
-    avatar: {
-      url: draft.avatar.url,
-      previewUrl: draft.avatar.previewUrl,
-      fileName: draft.avatar.fileName,
-    },
-    logo: {
-      url: draft.logo.url,
-      previewUrl: draft.logo.previewUrl,
-      fileName: draft.logo.fileName,
-    },
-    banner: {
-      url: draft.banner.url,
-      previewUrl: draft.banner.previewUrl,
-      fileName: draft.banner.fileName,
-    },
+    version: draft?.version ?? "1.0.0",
+    status: draft?.status === "production" ? "production" : "testing",
+    acquisitionUrl: draft?.acquisitionUrl ?? "",
+  };
+}
+
+function toPersistedStudioDraft(draft: StudioDraft): PersistedStudioDraft {
+  const normalizeMedia = (media: StudioMediaDraft): PersistedStudioMediaDraft => ({
+    url: media.url ?? "",
+    previewUrl: media.previewUrl ?? media.url ?? "",
+    fileName: media.fileName ?? null,
+  });
+
+  return {
+    displayName: draft.displayName ?? "",
+    slug: draft.slug ?? "",
+    description: draft.description ?? "",
+    links: Array.isArray(draft.links) ? draft.links.map((link) => ({ id: link.id, label: link.label ?? "", url: link.url ?? "" })) : [{ label: "", url: "" }],
+    avatar: normalizeMedia(draft.avatar),
+    logo: normalizeMedia(draft.logo),
+    banner: normalizeMedia(draft.banner),
   };
 }
 
 function fromPersistedStudioDraft(draft: PersistedStudioDraft): StudioDraft {
+  const fallback = createStudioDraft();
+  const restoreMedia = (media: Partial<PersistedStudioMediaDraft> | null | undefined): StudioMediaDraft => ({
+    url: media?.url ?? "",
+    previewUrl: media?.previewUrl ?? media?.url ?? "",
+    fileName: media?.fileName ?? null,
+    file: null,
+  });
+
   return {
-    ...draft,
-    avatar: {
-      url: draft.avatar?.url ?? "",
-      previewUrl: draft.avatar?.previewUrl ?? draft.avatar?.url ?? "",
-      fileName: draft.avatar?.fileName ?? null,
-      file: null,
-    },
-    logo: {
-      url: draft.logo.url,
-      previewUrl: draft.logo.previewUrl,
-      fileName: draft.logo.fileName,
-      file: null,
-    },
-    banner: {
-      url: draft.banner.url,
-      previewUrl: draft.banner.previewUrl,
-      fileName: draft.banner.fileName,
-      file: null,
-    },
+    displayName: draft?.displayName ?? fallback.displayName,
+    slug: draft?.slug ?? fallback.slug,
+    description: draft?.description ?? fallback.description,
+    avatar: restoreMedia(draft?.avatar),
+    logo: restoreMedia(draft?.logo),
+    banner: restoreMedia(draft?.banner),
+    links:
+      Array.isArray(draft?.links) && draft.links.length > 0
+        ? draft.links.map((link) => ({ id: link.id, label: link.label ?? "", url: link.url ?? "" }))
+        : fallback.links,
   };
 }
 
 function toPersistedTitleDraft(draft: TitleDraft): PersistedTitleDraft {
+  const normalizeMedia = (media: TitleDraft["media"][keyof TitleDraft["media"]]): PersistedTitleMediaDraft => ({
+    url: media?.url ?? "",
+    previewUrl: media?.previewUrl ?? media?.url ?? "",
+    altText: media?.altText ?? "",
+    fileName: media?.fileName ?? null,
+  });
+
   return {
-    ...draft,
+    displayName: draft.displayName ?? "",
+    slug: draft.slug ?? "",
+    contentKind: draft.contentKind,
+    lifecycleStatus: draft.lifecycleStatus,
+    visibility: draft.visibility,
+    genres: Array.isArray(draft.genres) ? draft.genres.filter((value): value is string => typeof value === "string") : [],
+    genreInput: draft.genreInput ?? "",
+    ageRatingAuthorityInput: draft.ageRatingAuthorityInput ?? "",
+    shortDescription: draft.shortDescription ?? "",
+    description: draft.description ?? "",
+    minPlayers: Number.isFinite(draft.minPlayers) ? draft.minPlayers : 1,
+    maxPlayers: Number.isFinite(draft.maxPlayers) ? draft.maxPlayers : 4,
+    ageRatingAuthority: draft.ageRatingAuthority ?? "",
+    ageRatingValue: draft.ageRatingValue ?? "",
+    minAgeYears: Number.isFinite(draft.minAgeYears) ? draft.minAgeYears : 0,
     media: {
-      card: { url: draft.media.card.url, altText: draft.media.card.altText },
-      hero: { url: draft.media.hero.url, altText: draft.media.hero.altText },
-      logo: { url: draft.media.logo.url, altText: draft.media.logo.altText },
+      card: normalizeMedia(draft.media.card),
+      hero: normalizeMedia(draft.media.hero),
+      logo: normalizeMedia(draft.media.logo),
     },
   };
 }
 
 function fromPersistedTitleDraft(draft: PersistedTitleDraft): TitleDraft {
+  const fallback = createTitleDraft();
+  const restoreMedia = (media: Partial<PersistedTitleMediaDraft> | null | undefined): TitleDraft["media"][keyof TitleDraft["media"]] => ({
+    url: media?.url ?? "",
+    previewUrl: media?.previewUrl ?? media?.url ?? "",
+    altText: media?.altText ?? "",
+    fileName: media?.fileName ?? null,
+    file: null,
+  });
+  const contentKind = draft?.contentKind === "app" ? "app" : "game";
+  const lifecycleStatus = draft?.lifecycleStatus === "active" || draft?.lifecycleStatus === "archived" ? draft.lifecycleStatus : "draft";
+  const visibility = draft?.visibility === "listed" ? "listed" : "unlisted";
+
   return {
-    ...draft,
+    ...fallback,
+    displayName: draft?.displayName ?? fallback.displayName,
+    slug: draft?.slug ?? fallback.slug,
+    contentKind,
+    lifecycleStatus,
+    visibility,
+    genres: Array.isArray(draft?.genres) ? draft.genres.filter((value): value is string => typeof value === "string") : fallback.genres,
+    genreInput: draft?.genreInput ?? fallback.genreInput,
+    ageRatingAuthorityInput: draft?.ageRatingAuthorityInput ?? fallback.ageRatingAuthorityInput,
+    shortDescription: draft?.shortDescription ?? fallback.shortDescription,
+    description: draft?.description ?? fallback.description,
+    minPlayers: typeof draft?.minPlayers === "number" ? draft.minPlayers : fallback.minPlayers,
+    maxPlayers: typeof draft?.maxPlayers === "number" ? draft.maxPlayers : fallback.maxPlayers,
+    ageRatingAuthority: draft?.ageRatingAuthority ?? fallback.ageRatingAuthority,
+    ageRatingValue: draft?.ageRatingValue ?? fallback.ageRatingValue,
+    minAgeYears: typeof draft?.minAgeYears === "number" ? draft.minAgeYears : fallback.minAgeYears,
     media: {
-      card: { url: draft.media.card.url, altText: draft.media.card.altText, file: null },
-      hero: { url: draft.media.hero.url, altText: draft.media.hero.altText, file: null },
-      logo: { url: draft.media.logo.url, altText: draft.media.logo.altText, file: null },
+      card: restoreMedia(draft?.media?.card),
+      hero: restoreMedia(draft?.media?.hero),
+      logo: restoreMedia(draft?.media?.logo),
     },
   };
 }
@@ -458,7 +460,7 @@ function isWorkflowAllowedForDomain(domain: Domain, workflow: Workflow): boolean
     return workflow === "titles-overview" || workflow === "titles-create" || workflow === "titles-metadata" || workflow === "titles-reports";
   }
 
-  return workflow === "releases-overview" || workflow === "releases-create" || workflow === "releases-publish";
+  return workflow === "releases-overview" || workflow === "releases-create";
 }
 
 function createDefaultWorkspace(): WorkspaceState {
@@ -489,8 +491,7 @@ function loadWorkspaceState(searchParams: URLSearchParams, persisted: PersistedS
       workflow === "titles-metadata" ||
       workflow === "titles-reports" ||
       workflow === "releases-create" ||
-      workflow === "releases-overview" ||
-      workflow === "releases-publish")
+      workflow === "releases-overview")
       ? workflow
       : fallback.workflow;
 
@@ -527,11 +528,11 @@ function formatContentKind(value: "game" | "app"): string {
   return value === "game" ? "Game" : "App";
 }
 
-function formatLifecycleStatus(value: TitleOverviewDraft["lifecycleStatus"]): string {
+function formatLifecycleStatus(value: TitleDraft["lifecycleStatus"]): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function formatVisibility(value: TitleOverviewDraft["visibility"]): string {
+function formatVisibility(value: "unlisted" | "listed"): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -539,8 +540,83 @@ function formatMinimumAge(value: number): string {
   return value >= 18 ? "18+" : String(value);
 }
 
-function previewMediaUrl(media: { url: string; file: File | null }): string {
-  return media.url;
+function createEmptyStudioMediaErrors(): StudioMediaErrors {
+  return {
+    avatar: null,
+    logo: null,
+    banner: null,
+  };
+}
+
+function createEmptyTitleMediaErrors(): TitleMediaErrors {
+  return {
+    card: null,
+    hero: null,
+    logo: null,
+  };
+}
+
+function previewMediaUrl(media: Pick<TitleMediaDraft, "previewUrl" | "url">): string {
+  return media.previewUrl || media.url;
+}
+
+function titleCanBeActivated(title: DeveloperTitle | null): boolean {
+  return Boolean(title) && title!.lifecycleStatus === "draft";
+}
+
+function titleCanBeUnarchived(title: DeveloperTitle | null): boolean {
+  return Boolean(title) && title!.lifecycleStatus === "archived";
+}
+
+function titleVisibilityCanBeChanged(title: DeveloperTitle | null): boolean {
+  return Boolean(title) && title!.lifecycleStatus === "active";
+}
+
+function formatTitleActionsError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("titles_draft_private")) {
+    return "Your local title rules are out of date. Apply the latest database migrations, then try again.";
+  }
+
+  return message;
+}
+
+function titleVisibilityDescription(title: DeveloperTitle): string {
+  if (title.lifecycleStatus === "archived") {
+    return "Archived titles are hidden from players. Unarchive the title before making any other changes.";
+  }
+
+  if (title.lifecycleStatus === "draft") {
+    return "Draft titles stay hidden from players until you activate them.";
+  }
+
+  return title.visibility === "listed"
+    ? "Listed titles appear in browse and search so players can discover them."
+    : "Unlisted titles stay out of browse and search, but players who already saved them can still find them in their library or wishlist.";
+}
+
+function titleVisibilityToggleTooltip(title: DeveloperTitle | null, saving: boolean): string | null {
+  if (!title) {
+    return null;
+  }
+
+  if (saving) {
+    return "Please wait for the current update to finish.";
+  }
+
+  if (title.lifecycleStatus === "archived") {
+    return "Unarchive this title before changing whether players can find it.";
+  }
+
+  if (title.lifecycleStatus === "draft" && !title.currentRelease) {
+    return "Create a release first, then activate the title before you list it.";
+  }
+
+  if (title.lifecycleStatus === "draft") {
+    return "Activate this title before changing whether players can find it.";
+  }
+
+  return null;
 }
 
 function WorkflowButton({
@@ -737,6 +813,8 @@ function ImageField({
   label,
   state,
   previewUrl,
+  guidance,
+  error,
   accept,
   disabled,
   onUrlChange,
@@ -745,8 +823,10 @@ function ImageField({
   onRemove,
 }: {
   label: string;
-  state: { url: string; altText: string; file: File | null };
+  state: TitleMediaDraft;
   previewUrl: string;
+  guidance: string;
+  error?: string | null;
   accept: string;
   disabled: boolean;
   onUrlChange: (value: string) => void;
@@ -754,6 +834,8 @@ function ImageField({
   onFileChange: (file: File | null) => void;
   onRemove: () => void;
 }) {
+  const hasSelection = Boolean(previewUrl || state.file);
+
   return (
     <section className="surface-panel-strong rounded-[1rem] p-4">
       <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{label}</div>
@@ -772,11 +854,14 @@ function ImageField({
         Upload image
         <input className="sr-only" type="file" accept={accept} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
       </label>
-      {previewUrl ? (
+      <p className="mt-2 text-xs text-slate-400">{guidance}</p>
+      {state.fileName ? <p className="mt-2 text-sm text-slate-400">{state.fileName}</p> : null}
+      {hasSelection ? (
         <button className="secondary-button mt-3" type="button" onClick={onRemove} disabled={disabled}>
           Remove media
         </button>
       ) : null}
+      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
     </section>
   );
 }
@@ -784,6 +869,8 @@ function ImageField({
 function StudioImageField({
   label,
   state,
+  guidance,
+  error,
   accept,
   disabled,
   onUrlChange,
@@ -792,6 +879,8 @@ function StudioImageField({
 }: {
   label: string;
   state: StudioMediaDraft;
+  guidance: string;
+  error?: string | null;
   accept: string;
   disabled: boolean;
   onUrlChange: (value: string) => void;
@@ -822,6 +911,8 @@ function StudioImageField({
           </button>
         ) : null}
       </div>
+      <p className="mt-2 text-xs text-slate-400">{guidance}</p>
+      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
     </section>
   );
 }
@@ -879,6 +970,172 @@ function StudioPreviewModal({ studio, onClose }: { studio: StudioDraft; onClose:
   );
 }
 
+function WorkspaceModal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+      <section className="app-panel w-full max-w-2xl p-0" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+          <h2 className="text-3xl font-semibold text-white">{title}</h2>
+          <button className="text-slate-400 transition hover:text-white" type="button" onClick={onClose} aria-label="Close dialog">
+            <svg viewBox="0 0 24 24" className="h-7 w-7" aria-hidden="true">
+              <path fill="currentColor" d="m18.3 5.71-1.41-1.42L12 9.17 7.11 4.29 5.7 5.71 10.59 10.6 5.7 15.49l1.41 1.42L12 12l4.89 4.91 1.41-1.42-4.89-4.89Z" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+function TitleActivationPromptModal({
+  title,
+  saving,
+  onActivate,
+  onSkip,
+}: {
+  title: DeveloperTitle;
+  saving: boolean;
+  onActivate: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <WorkspaceModal title="Activate Title?" onClose={onSkip}>
+      <div className="space-y-5">
+        <div className="rounded-[1.25rem] border border-emerald-300/20 bg-emerald-400/10 p-5 text-sm leading-7 text-emerald-50">
+          <div className="text-lg font-semibold text-white">{title.displayName} now has its first release.</div>
+          <p className="mt-3">
+            You can activate the title now to make it active and listed, then set this release as the current release. You can change the title&apos;s active and listed state later from the title overview.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button className="primary-button" type="button" onClick={onActivate} disabled={saving}>
+            {saving ? "Activating..." : "Activate and List Title"}
+          </button>
+          <button className="secondary-button" type="button" onClick={onSkip} disabled={saving}>
+            Not right now
+          </button>
+        </div>
+      </div>
+    </WorkspaceModal>
+  );
+}
+
+function DeleteTitlePasswordModal({
+  title,
+  currentPassword,
+  error,
+  saving,
+  onCurrentPasswordChange,
+  onContinue,
+  onClose,
+}: {
+  title: DeveloperTitle;
+  currentPassword: string;
+  error: string | null;
+  saving: boolean;
+  onCurrentPasswordChange: (value: string) => void;
+  onContinue: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <WorkspaceModal title={`Delete ${title.displayName}`} onClose={onClose}>
+      <form
+        className="space-y-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onContinue();
+        }}
+      >
+        <div className="rounded-[1.25rem] border border-rose-400/35 bg-rose-500/10 p-5">
+          <div className="text-2xl font-semibold text-white">This action cannot be undone.</div>
+          <p className="mt-3 text-base leading-8 text-rose-50/90">
+            Deleting this title will permanently remove the title and all of its associated data.
+          </p>
+        </div>
+        <Field label="Current password" error={error ?? undefined}>
+          <input type="password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.currentTarget.value)} placeholder="Enter your password" autoFocus />
+        </Field>
+        <div className="flex flex-wrap gap-3">
+          <button className="danger-button" type="submit" disabled={saving || currentPassword.trim().length === 0}>
+            Continue
+          </button>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </WorkspaceModal>
+  );
+}
+
+function DeleteTitleConfirmationModal({
+  title,
+  confirmationName,
+  currentPassword,
+  error,
+  saving,
+  onConfirmationNameChange,
+  onBack,
+  onDelete,
+  onClose,
+}: {
+  title: DeveloperTitle;
+  confirmationName: string;
+  currentPassword: string;
+  error: string | null;
+  saving: boolean;
+  onConfirmationNameChange: (value: string) => void;
+  onBack: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <WorkspaceModal title={`Confirm deletion of ${title.displayName}`} onClose={onClose}>
+      <form
+        className="space-y-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onDelete();
+        }}
+      >
+        <div className="rounded-[1.25rem] border border-rose-400/35 bg-rose-500/10 p-5">
+          <div className="text-2xl font-semibold text-white">Delete this title permanently.</div>
+          <p className="mt-3 text-base leading-8 text-rose-50/90">
+            This permanently deletes the title and all of its associated data.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Type this title name exactly to confirm.</p>
+          <p className="text-xl font-bold text-white">{title.displayName}</p>
+        </div>
+        <Field label="Title name" error={error ?? undefined}>
+          <input value={confirmationName} onChange={(event) => onConfirmationNameChange(event.currentTarget.value)} placeholder={title.displayName} autoFocus />
+        </Field>
+        <div className="flex flex-wrap gap-3">
+          <button className="danger-button" type="submit" disabled={saving || currentPassword.trim().length === 0 || confirmationName.trim() !== title.displayName}>
+            {saving ? "Deleting..." : "I Understand, Delete Title"}
+          </button>
+          <button className="secondary-button" type="button" onClick={onBack} disabled={saving}>
+            Back
+          </button>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </WorkspaceModal>
+  );
+}
+
 export function DevelopWorkspacePage() {
   const { session, currentUser } = useAuth();
   const accessToken = session?.access_token ?? "";
@@ -907,23 +1164,31 @@ export function DevelopWorkspacePage() {
   const [studioOverviewTouched, setStudioOverviewTouched] = useState<Record<string, boolean>>(persistedState?.studioOverview?.touched ?? {});
   const [studioOverviewEditing, setStudioOverviewEditing] = useState(persistedState?.studioOverview?.editing ?? false);
   const [studioOverviewContextId, setStudioOverviewContextId] = useState<string | null>(persistedState?.studioOverview?.studioId ?? null);
+  const [studioCreateMediaErrors, setStudioCreateMediaErrors] = useState<StudioMediaErrors>(() => createEmptyStudioMediaErrors());
+  const [studioOverviewMediaErrors, setStudioOverviewMediaErrors] = useState<StudioMediaErrors>(() => createEmptyStudioMediaErrors());
   const [titleCreateDraft, setTitleCreateDraft] = useState<TitleDraft>(persistedState?.titleCreate ? fromPersistedTitleDraft(persistedState.titleCreate.draft) : createTitleDraft());
   const [titleCreateTouched, setTitleCreateTouched] = useState<Record<string, boolean>>(persistedState?.titleCreate?.touched ?? {});
   const [titleCreateContextStudioId, setTitleCreateContextStudioId] = useState<string | null>(persistedState?.titleCreate?.studioId ?? null);
-  const [titleOverviewDraft, setTitleOverviewDraft] = useState<TitleOverviewDraft>(persistedState?.titleOverview?.draft ?? createTitleOverviewDraft());
-  const [titleOverviewTouched, setTitleOverviewTouched] = useState<Record<string, boolean>>(persistedState?.titleOverview?.touched ?? {});
-  const [titleOverviewEditing, setTitleOverviewEditing] = useState(persistedState?.titleOverview?.editing ?? false);
-  const [titleOverviewContextId, setTitleOverviewContextId] = useState<string | null>(persistedState?.titleOverview?.titleId ?? null);
+  const [titleCreateMediaErrors, setTitleCreateMediaErrors] = useState<TitleMediaErrors>(() => createEmptyTitleMediaErrors());
   const [metadataDraft, setMetadataDraft] = useState<TitleDraft>(persistedState?.titleMetadata ? fromPersistedTitleDraft(persistedState.titleMetadata.draft) : createTitleDraft());
   const [metadataTouched, setMetadataTouched] = useState<Record<string, boolean>>(persistedState?.titleMetadata?.touched ?? {});
   const [metadataEditing, setMetadataEditing] = useState(persistedState?.titleMetadata?.editing ?? false);
   const [metadataContextId, setMetadataContextId] = useState<string | null>(persistedState?.titleMetadata?.titleId ?? null);
-  const [releaseCreateDraft, setReleaseCreateDraft] = useState<ReleaseDraft>(persistedState?.releaseCreate?.draft ?? createReleaseDraft());
+  const [metadataMediaErrors, setMetadataMediaErrors] = useState<TitleMediaErrors>(() => createEmptyTitleMediaErrors());
+  const [releaseCreateDraft, setReleaseCreateDraft] = useState<ReleaseDraft>(fromPersistedReleaseDraft(persistedState?.releaseCreate?.draft));
   const [releaseCreateTouched, setReleaseCreateTouched] = useState<Record<string, boolean>>(persistedState?.releaseCreate?.touched ?? {});
   const [releaseCreateContextTitleId, setReleaseCreateContextTitleId] = useState<string | null>(persistedState?.releaseCreate?.titleId ?? null);
-  const [releaseDraft, setReleaseDraft] = useState<ReleaseDraft>(persistedState?.releaseOverview?.draft ?? createReleaseDraft());
+  const [releaseDraft, setReleaseDraft] = useState<ReleaseDraft>(fromPersistedReleaseDraft(persistedState?.releaseOverview?.draft));
   const [releaseTouched, setReleaseTouched] = useState<Record<string, boolean>>(persistedState?.releaseOverview?.touched ?? {});
   const [releaseContextId, setReleaseContextId] = useState<string | null>(persistedState?.releaseOverview?.releaseId ?? null);
+  const [activationPromptReleaseId, setActivationPromptReleaseId] = useState<string | null>(null);
+  const [deletePasswordModalOpen, setDeletePasswordModalOpen] = useState(false);
+  const [deleteConfirmationModalOpen, setDeleteConfirmationModalOpen] = useState(false);
+  const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState("");
+  const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
+  const [titleActionsError, setTitleActionsError] = useState<string | null>(null);
+  const [titleOverviewError, setTitleOverviewError] = useState<string | null>(null);
   const [previewStudio, setPreviewStudio] = useState(false);
   const [loading, setLoading] = useState(true);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
@@ -946,7 +1211,6 @@ export function DevelopWorkspacePage() {
   const studioOverviewValidation = useMemo(() => validateStudioInput(studioOverviewDraft, { existingSlugs: studios.map((studio) => studio.slug), currentSlug: activeStudio?.slug ?? null }), [activeStudio?.slug, studioOverviewDraft, studios]);
   const titleCreateValidation = useMemo(() => validateTitleFormInput(titleCreateDraft, { existingSlugs: titles.map((title) => title.slug) }), [titleCreateDraft, titles]);
   const metadataValidation = useMemo(() => validateTitleFormInput(metadataDraft, { existingSlugs: titles.map((title) => title.slug), currentSlug: activeTitle?.slug ?? null }), [activeTitle?.slug, metadataDraft, titles]);
-  const titleOverviewValidation = useMemo(() => validateTitleOverviewInput(titleOverviewDraft, { existingSlugs: titles.map((title) => title.slug), currentSlug: activeTitle?.slug ?? null }), [activeTitle?.slug, titleOverviewDraft, titles]);
   const releaseCreateValidation = useMemo(() => validateReleaseInput(releaseCreateDraft), [releaseCreateDraft]);
   const releaseValidation = useMemo(() => validateReleaseInput(releaseDraft), [releaseDraft]);
 
@@ -974,7 +1238,6 @@ export function DevelopWorkspacePage() {
           ? { studioId: activeStudio.id, draft: toPersistedStudioDraft(studioOverviewDraft), touched: studioOverviewTouched, editing: studioOverviewEditing }
           : undefined,
       titleCreate: workspace.studioId && titleCreateContextStudioId === workspace.studioId ? { studioId: workspace.studioId, draft: toPersistedTitleDraft(titleCreateDraft), touched: titleCreateTouched } : undefined,
-      titleOverview: activeTitle && titleOverviewContextId === activeTitle.id ? { titleId: activeTitle.id, draft: titleOverviewDraft, touched: titleOverviewTouched, editing: titleOverviewEditing } : undefined,
       titleMetadata: activeTitle && metadataContextId === activeTitle.id ? { titleId: activeTitle.id, draft: toPersistedTitleDraft(metadataDraft), touched: metadataTouched, editing: metadataEditing } : undefined,
       releaseCreate: workspace.titleId && releaseCreateContextTitleId === workspace.titleId ? { titleId: workspace.titleId, draft: releaseCreateDraft, touched: releaseCreateTouched } : undefined,
       releaseOverview: activeRelease && releaseContextId === activeRelease.id ? { releaseId: activeRelease.id, draft: releaseDraft, touched: releaseTouched } : undefined,
@@ -1007,12 +1270,16 @@ export function DevelopWorkspacePage() {
     titleCreateContextStudioId,
     titleCreateDraft,
     titleCreateTouched,
-    titleOverviewContextId,
-    titleOverviewDraft,
-    titleOverviewEditing,
-    titleOverviewTouched,
     workspace,
   ]);
+
+  useEffect(() => {
+    setTitleActionsError(null);
+  }, [workspace.workflow, workspace.titleId]);
+
+  useEffect(() => {
+    setTitleOverviewError(null);
+  }, [workspace.workflow, workspace.titleId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1255,6 +1522,7 @@ export function DevelopWorkspacePage() {
       setStudioOverviewContextId(null);
       setStudioOverviewEditing(false);
       setStudioOverviewTouched({});
+      setStudioOverviewMediaErrors(createEmptyStudioMediaErrors());
       return;
     }
 
@@ -1271,28 +1539,18 @@ export function DevelopWorkspacePage() {
     setStudioOverviewDraft(persistedDraft ? fromPersistedStudioDraft(persistedDraft.draft) : nextDraft);
     setStudioOverviewTouched(persistedDraft?.touched ?? {});
     setStudioOverviewEditing(persistedDraft?.editing ?? false);
+    setStudioOverviewMediaErrors(createEmptyStudioMediaErrors());
     setStudioOverviewContextId(activeStudio.id);
   }, [activeStudio, links, linksStudioId, persistedState, studioOverviewContextId, studioOverviewEditing]);
 
   useEffect(() => {
     if (!activeTitle) {
-      setTitleOverviewDraft(createTitleOverviewDraft());
-      setTitleOverviewTouched({});
-      setTitleOverviewEditing(false);
-      setTitleOverviewContextId(null);
       setMetadataDraft(createTitleDraft());
       setMetadataTouched({});
       setMetadataEditing(false);
       setMetadataContextId(null);
+      setMetadataMediaErrors(createEmptyTitleMediaErrors());
       return;
-    }
-
-    if (titleOverviewContextId !== activeTitle.id) {
-      const persistedOverview = persistedState?.titleOverview?.titleId === activeTitle.id ? persistedState.titleOverview : null;
-      setTitleOverviewDraft(persistedOverview?.draft ?? createTitleOverviewDraft(activeTitle));
-      setTitleOverviewTouched(persistedOverview?.touched ?? {});
-      setTitleOverviewEditing(persistedOverview?.editing ?? false);
-      setTitleOverviewContextId(activeTitle.id);
     }
 
     if (metadataContextId !== activeTitle.id) {
@@ -1300,13 +1558,14 @@ export function DevelopWorkspacePage() {
       setMetadataDraft(persistedMetadata ? fromPersistedTitleDraft(persistedMetadata.draft) : createTitleDraft(activeTitle, mediaAssets));
       setMetadataTouched(persistedMetadata?.touched ?? {});
       setMetadataEditing(persistedMetadata?.editing ?? false);
+      setMetadataMediaErrors(createEmptyTitleMediaErrors());
       setMetadataContextId(activeTitle.id);
     }
-  }, [activeTitle, mediaAssets, metadataContextId, persistedState, titleOverviewContextId]);
+  }, [activeTitle, mediaAssets, metadataContextId, persistedState]);
 
   useEffect(() => {
     if (!activeRelease) {
-      setReleaseDraft(createReleaseDraft(undefined, developerTitle?.currentMetadataRevision ?? 1));
+      setReleaseDraft(createReleaseDraft(undefined));
       setReleaseTouched({});
       setReleaseContextId(null);
       return;
@@ -1314,11 +1573,11 @@ export function DevelopWorkspacePage() {
 
     if (releaseContextId !== activeRelease.id) {
       const persistedRelease = persistedState?.releaseOverview?.releaseId === activeRelease.id ? persistedState.releaseOverview : null;
-      setReleaseDraft(persistedRelease?.draft ?? createReleaseDraft(activeRelease, developerTitle?.currentMetadataRevision ?? 1));
+      setReleaseDraft(persistedRelease ? fromPersistedReleaseDraft(persistedRelease.draft) : createReleaseDraft(activeRelease));
       setReleaseTouched(persistedRelease?.touched ?? {});
       setReleaseContextId(activeRelease.id);
     }
-  }, [activeRelease, developerTitle?.currentMetadataRevision, persistedState, releaseContextId]);
+  }, [activeRelease, persistedState, releaseContextId]);
 
   function setWorkspaceState(next: Partial<WorkspaceState>): void {
     setWorkspace((current) => {
@@ -1363,36 +1622,72 @@ export function DevelopWorkspacePage() {
     setStudioOverviewDraft(updater);
   }
 
+  function setStudioMediaError(target: "create" | "overview", mediaRole: "avatar" | "logo" | "banner", value: string | null): void {
+    const updater = (current: StudioMediaErrors): StudioMediaErrors => ({
+      ...current,
+      [mediaRole]: value,
+    });
+    if (target === "create") {
+      setStudioCreateMediaErrors(updater);
+      return;
+    }
+
+    setStudioOverviewMediaErrors(updater);
+  }
+
   async function handleStudioMediaUpload(target: "create" | "overview", mediaRole: "avatar" | "logo" | "banner", file: File | null): Promise<void> {
     if (!file) {
       return;
     }
 
     try {
-      const upload = await readStudioMediaUpload(file, mediaRole);
+      const upload = await normalizeImageUpload(file, studioMediaUploadPolicies[mediaRole], {
+        label: mediaRole === "avatar" ? "avatar" : `studio ${mediaRole} image`,
+        readErrorMessage: "Studio media upload could not be read.",
+      });
       updateStudioMedia(target, mediaRole, {
         url: "",
         previewUrl: upload.dataUrl,
         fileName: upload.fileName,
-        file,
+        file: upload.file,
       });
+      setStudioMediaError(target, mediaRole, null);
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setStudioMediaError(target, mediaRole, nextError instanceof Error ? nextError.message : String(nextError));
+      setError(null);
     }
   }
 
-  function handleTitleMediaUpload(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", file: File | null): void {
+  function setTitleMediaError(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", value: string | null): void {
+    const updater = (current: TitleMediaErrors): TitleMediaErrors => ({
+      ...current,
+      [mediaRole]: value,
+    });
+    if (target === "create") {
+      setTitleCreateMediaErrors(updater);
+      return;
+    }
+
+    setMetadataMediaErrors(updater);
+  }
+
+  async function handleTitleMediaUpload(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", file: File | null): Promise<void> {
     if (!file) {
       return;
     }
 
     try {
-      assertSelectedMediaFile(file, titleMediaUploadPolicies[mediaRole], `${mediaRole} image`);
-      updateTitleMedia(target, mediaRole, { file, url: "" });
+      const upload = await normalizeImageUpload(file, titleMediaUploadPolicies[mediaRole], {
+        label: `${mediaRole} image`,
+        readErrorMessage: "Title media upload could not be read.",
+      });
+      updateTitleMedia(target, mediaRole, { file: upload.file, fileName: upload.fileName, previewUrl: upload.dataUrl, url: "" });
+      setTitleMediaError(target, mediaRole, null);
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setTitleMediaError(target, mediaRole, nextError instanceof Error ? nextError.message : String(nextError));
+      setError(null);
     }
   }
 
@@ -1485,7 +1780,7 @@ export function DevelopWorkspacePage() {
     setMetadataDraft((current) => ({ ...current, minAgeYears: nextAge }));
   }
 
-  function updateTitleMedia(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", patch: Partial<{ url: string; altText: string; file: File | null }>): void {
+  function updateTitleMedia(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", patch: Partial<TitleMediaDraft>): void {
     const apply = (current: TitleDraft): TitleDraft => ({
       ...current,
       media: {
@@ -1596,6 +1891,7 @@ export function DevelopWorkspacePage() {
   function openStudioCreate(): void {
     setStudioCreateDraft(createStudioDraft());
     setStudioCreateTouched({});
+    setStudioCreateMediaErrors(createEmptyStudioMediaErrors());
     setWorkspaceState({ domain: "studios", workflow: "studios-create", titleId: "", releaseId: "" });
   }
 
@@ -1606,6 +1902,7 @@ export function DevelopWorkspacePage() {
       setTitleCreateDraft(persistedDraft ? fromPersistedTitleDraft(persistedDraft.draft) : createTitleDraft());
       setTitleCreateTouched(persistedDraft?.touched ?? {});
     }
+    setTitleCreateMediaErrors(createEmptyTitleMediaErrors());
     setWorkspaceState({ domain: "titles", workflow: "titles-create", titleId: "", releaseId: "" });
   }
 
@@ -1613,7 +1910,7 @@ export function DevelopWorkspacePage() {
     setReleaseCreateContextTitleId(workspace.titleId);
     if (releaseCreateContextTitleId !== workspace.titleId) {
       const persistedDraft = persistedState?.releaseCreate?.titleId === workspace.titleId ? persistedState.releaseCreate : null;
-      setReleaseCreateDraft(persistedDraft?.draft ?? createReleaseDraft(undefined, developerTitle?.currentMetadataRevision ?? 1));
+      setReleaseCreateDraft(persistedDraft ? fromPersistedReleaseDraft(persistedDraft.draft) : createReleaseDraft(undefined));
       setReleaseCreateTouched(persistedDraft?.touched ?? {});
     }
     setWorkspaceState({ domain: "releases", workflow: "releases-create", releaseId: "" });
@@ -1760,10 +2057,7 @@ export function DevelopWorkspacePage() {
     setSaving(true);
     try {
       const response = await createTitle(appConfig.apiBaseUrl, accessToken, activeStudio.id, {
-        slug: titleCreateDraft.slug,
         contentKind: titleCreateDraft.contentKind,
-        lifecycleStatus: "draft",
-        visibility: "private",
         metadata: {
           displayName: titleCreateDraft.displayName.trim(),
           shortDescription: titleCreateDraft.shortDescription.trim(),
@@ -1791,37 +2085,27 @@ export function DevelopWorkspacePage() {
     }
   }
 
-  async function handleSaveTitleOverview(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (!activeTitle) {
+  async function handleToggleTitleVisibility(): Promise<void> {
+    if (!activeTitle || !titleVisibilityCanBeChanged(activeTitle)) {
       return;
     }
 
-    if (!titleOverviewEditing) {
-      setTitleOverviewEditing(true);
-      return;
-    }
-
-    if (!titleOverviewValidation.isValid) {
-      setTitleOverviewTouched({ slug: true, contentKind: true, lifecycleStatus: true, visibility: true });
-      return;
-    }
+    const nextVisibility = activeTitle.visibility === "listed" ? "unlisted" : "listed";
 
     setSaving(true);
     try {
+      setTitleOverviewError(null);
+      setError(null);
       await updateTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id, {
-        slug: titleOverviewDraft.slug,
-        contentKind: titleOverviewDraft.contentKind,
-        lifecycleStatus: titleOverviewDraft.lifecycleStatus,
-        visibility: titleOverviewDraft.lifecycleStatus === "draft" || titleOverviewDraft.lifecycleStatus === "archived" ? "private" : titleOverviewDraft.visibility,
+        contentKind: activeTitle.contentKind,
+        visibility: nextVisibility,
       });
       await refreshStudioScope(activeTitle.id);
-      await refreshTitleWorkspace(activeTitle.id);
-      setTitleOverviewEditing(false);
-      setMessage("Title overview saved.");
+      await refreshTitleWorkspace(activeTitle.id, activeRelease?.id ?? "");
+      setMessage(nextVisibility === "listed" ? "Title is now listed." : "Title is now unlisted.");
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setTitleOverviewError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setSaving(false);
     }
@@ -1886,7 +2170,7 @@ export function DevelopWorkspacePage() {
     try {
       await activateTitleMetadataVersion(appConfig.apiBaseUrl, accessToken, workspace.titleId, revisionNumber);
       await refreshTitleWorkspace(workspace.titleId);
-      setMessage(`Revision ${revisionNumber} activated.`);
+      setMessage(null);
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -1902,19 +2186,25 @@ export function DevelopWorkspacePage() {
     }
 
     if (!releaseCreateValidation.isValid) {
-      setReleaseCreateTouched({ version: true, metadataRevisionNumber: true });
+      setReleaseCreateTouched({ version: true, status: true, acquisitionUrl: true });
       return;
     }
 
     setSaving(true);
     try {
+      const shouldPromptForActivation = activeTitle?.lifecycleStatus === "draft" && releases.length === 0;
       const response = await createTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, {
         version: releaseCreateDraft.version.trim(),
-        metadataRevisionNumber: releaseCreateDraft.metadataRevisionNumber,
-        acquisitionUrl: null,
+        status: releaseCreateDraft.status,
+        acquisitionUrl: releaseCreateDraft.acquisitionUrl.trim() || null,
       });
       await refreshTitleWorkspace(workspace.titleId, response.release.id);
       setWorkspaceState({ domain: "releases", workflow: "releases-overview", releaseId: response.release.id });
+      setReleaseCreateDraft(createReleaseDraft(undefined));
+      setReleaseCreateTouched({});
+      if (shouldPromptForActivation) {
+        setActivationPromptReleaseId(response.release.id);
+      }
       setMessage("Release created.");
       setError(null);
     } catch (nextError) {
@@ -1930,7 +2220,7 @@ export function DevelopWorkspacePage() {
     }
 
     if (!releaseValidation.isValid) {
-      setReleaseTouched({ version: true, metadataRevisionNumber: true, acquisitionUrl: true });
+      setReleaseTouched({ version: true, status: true, acquisitionUrl: true });
       return;
     }
 
@@ -1938,7 +2228,7 @@ export function DevelopWorkspacePage() {
     try {
       await updateTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, activeRelease.id, {
         version: releaseDraft.version.trim(),
-        metadataRevisionNumber: releaseDraft.metadataRevisionNumber,
+        status: releaseDraft.status,
         acquisitionUrl: releaseDraft.acquisitionUrl.trim() || null,
       });
       await refreshTitleWorkspace(workspace.titleId, activeRelease.id);
@@ -1951,25 +2241,147 @@ export function DevelopWorkspacePage() {
     }
   }
 
-  async function handleReleaseAction(action: "publish" | "activate" | "withdraw"): Promise<void> {
+  async function handleMakeReleaseCurrent(releaseId: string): Promise<void> {
     if (!workspace.titleId || !activeRelease) {
       return;
     }
 
     setSaving(true);
     try {
-      if (action === "publish") {
-        await publishTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, activeRelease.id);
-      } else if (action === "activate") {
-        await activateTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, activeRelease.id);
-      } else {
-        await withdrawTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, activeRelease.id);
-      }
-      await refreshTitleWorkspace(workspace.titleId, activeRelease.id);
-      setMessage(`Release ${action}ed.`);
+      await activateTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, releaseId);
+      await refreshTitleWorkspace(workspace.titleId, releaseId);
+      setMessage("Current release updated.");
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleActivateCurrentTitleAndRelease(): Promise<void> {
+    if (!activeTitle || !activationPromptReleaseId) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await activateTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id);
+      await activateTitleRelease(appConfig.apiBaseUrl, accessToken, activeTitle.id, activationPromptReleaseId);
+      await refreshTitleWorkspace(activeTitle.id, activationPromptReleaseId);
+      setActivationPromptReleaseId(null);
+      setMessage("Title activated and listed.");
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleActivateTitleLifecycle(): Promise<void> {
+    if (!activeTitle) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      setTitleActionsError(null);
+      setError(null);
+      await activateTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id);
+      await refreshTitleWorkspace(activeTitle.id, activeRelease?.id ?? "");
+      setMessage("Title is now active and listed.");
+      setError(null);
+    } catch (nextError) {
+      setTitleActionsError(formatTitleActionsError(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleArchiveActiveTitle(): Promise<void> {
+    if (!activeTitle) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      setTitleActionsError(null);
+      setError(null);
+      await archiveTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id);
+      await refreshTitleWorkspace(activeTitle.id, activeRelease?.id ?? "");
+      setMessage("Title archived and unlisted.");
+      setError(null);
+    } catch (nextError) {
+      setTitleActionsError(formatTitleActionsError(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnarchiveActiveTitle(): Promise<void> {
+    if (!activeTitle) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      setTitleActionsError(null);
+      setError(null);
+      await unarchiveTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id);
+      await refreshTitleWorkspace(activeTitle.id, activeRelease?.id ?? "");
+      setMessage("Title moved back to draft.");
+      setError(null);
+    } catch (nextError) {
+      setTitleActionsError(formatTitleActionsError(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteActiveTitle(): Promise<void> {
+    if (!activeTitle) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await deleteTitle(appConfig.apiBaseUrl, accessToken, activeTitle.id, {
+        currentPassword: deleteCurrentPassword,
+        confirmationTitleName: deleteConfirmationName,
+      });
+      setDeletePasswordModalOpen(false);
+      setDeleteConfirmationModalOpen(false);
+      setDeleteCurrentPassword("");
+      setDeleteConfirmationName("");
+      setDeleteModalError(null);
+      await refreshStudioScope();
+      setWorkspaceState({ domain: "titles", workflow: "titles-overview", titleId: "", releaseId: "" });
+      setMessage("Title deleted.");
+      setError(null);
+    } catch (nextError) {
+      setDeleteModalError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleConfirmDeletePassword(): Promise<void> {
+    if (!deleteCurrentPassword.trim()) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await verifyCurrentUserPasswordApi(appConfig.apiBaseUrl, accessToken, {
+        currentPassword: deleteCurrentPassword,
+      });
+
+      setDeleteModalError(null);
+      setDeletePasswordModalOpen(false);
+      setDeleteConfirmationModalOpen(true);
+    } catch (nextError) {
+      setDeleteModalError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setSaving(false);
     }
@@ -2067,7 +2479,7 @@ export function DevelopWorkspacePage() {
             value={draft.displayName}
             helper={
               <>
-                Slug: <span className="lowercase">{titleOverviewDraft.slug}</span>
+                Slug: <span className="lowercase">{draft.slug}</span>
               </>
             }
           />
@@ -2251,29 +2663,53 @@ export function DevelopWorkspacePage() {
           <StudioImageField
             label="Avatar"
             state={draft.avatar}
+            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.avatar, { optional: true })}
+            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).avatar}
             accept={studioMediaUploadPolicies.avatar.acceptedMimeTypes.join(",")}
             disabled={!editing}
-            onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", { url: value, previewUrl: value, file: null, fileName: null })}
+            onUrlChange={(value) => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", { url: value, previewUrl: value, file: null, fileName: null });
+              setStudioMediaError(mode === "create" ? "create" : "overview", "avatar", null);
+            }}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "avatar", file)}
-            onRemove={() => updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", createStudioMediaDraft(""))}
+            onRemove={() => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", createStudioMediaDraft(""));
+              setStudioMediaError(mode === "create" ? "create" : "overview", "avatar", null);
+            }}
           />
           <StudioImageField
             label="Logo"
             state={draft.logo}
+            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.logo, { optional: true })}
+            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).logo}
             accept={studioMediaUploadPolicies.logo.acceptedMimeTypes.join(",")}
             disabled={!editing}
-            onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "logo", { url: value, previewUrl: value, file: null, fileName: null })}
+            onUrlChange={(value) => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "logo", { url: value, previewUrl: value, file: null, fileName: null });
+              setStudioMediaError(mode === "create" ? "create" : "overview", "logo", null);
+            }}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "logo", file)}
-            onRemove={() => updateStudioMedia(mode === "create" ? "create" : "overview", "logo", createStudioMediaDraft(""))}
+            onRemove={() => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "logo", createStudioMediaDraft(""));
+              setStudioMediaError(mode === "create" ? "create" : "overview", "logo", null);
+            }}
           />
           <StudioImageField
             label="Banner"
             state={draft.banner}
+            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.banner, { optional: true })}
+            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).banner}
             accept={studioMediaUploadPolicies.banner.acceptedMimeTypes.join(",")}
             disabled={!editing}
-            onUrlChange={(value) => updateStudioMedia(mode === "create" ? "create" : "overview", "banner", { url: value, previewUrl: value, file: null, fileName: null })}
+            onUrlChange={(value) => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "banner", { url: value, previewUrl: value, file: null, fileName: null });
+              setStudioMediaError(mode === "create" ? "create" : "overview", "banner", null);
+            }}
             onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "banner", file)}
-            onRemove={() => updateStudioMedia(mode === "create" ? "create" : "overview", "banner", createStudioMediaDraft(""))}
+            onRemove={() => {
+              updateStudioMedia(mode === "create" ? "create" : "overview", "banner", createStudioMediaDraft(""));
+              setStudioMediaError(mode === "create" ? "create" : "overview", "banner", null);
+            }}
           />
         </div>
 
@@ -2388,7 +2824,7 @@ export function DevelopWorkspacePage() {
                 disabled={!editable}
               />
               <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                Slug: <span className="lowercase">{mode === "create" ? draft.slug : titleOverviewDraft.slug}</span>
+                Slug: <span className="lowercase">{draft.slug}</span>
               </p>
               {mode === "create" && touched.displayName && validation.errors.slug ? <p className="mt-2 text-sm text-rose-300">{validation.errors.slug}</p> : null}
             </div>
@@ -2465,15 +2901,52 @@ export function DevelopWorkspacePage() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Field label="Short description" required error={touched.shortDescription ? validation.errors.shortDescription : undefined} counter={renderCharacterCounter(draft.shortDescription, TITLE_SHORT_DESCRIPTION_MAX_LENGTH)}>
-            <input value={draft.shortDescription} onChange={(event) => (mode === "create" ? setTitleCreateDraft((current) => ({ ...current, shortDescription: event.currentTarget.value })) : setMetadataDraft((current) => ({ ...current, shortDescription: event.currentTarget.value })))} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "shortDescription")} disabled={!editable} />
+            <input
+              value={draft.shortDescription}
+              onChange={(event) => {
+                const shortDescription = event.currentTarget.value;
+                if (mode === "create") {
+                  setTitleCreateDraft((current) => ({ ...current, shortDescription }));
+                } else {
+                  setMetadataDraft((current) => ({ ...current, shortDescription }));
+                }
+              }}
+              onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "shortDescription")}
+              disabled={!editable}
+            />
           </Field>
           <Field label="Age rating value" required error={touched.ageRatingValue ? validation.errors.ageRatingValue : undefined}>
-            <input value={draft.ageRatingValue} onChange={(event) => (mode === "create" ? setTitleCreateDraft((current) => ({ ...current, ageRatingValue: event.currentTarget.value })) : setMetadataDraft((current) => ({ ...current, ageRatingValue: event.currentTarget.value })))} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "ageRatingValue")} disabled={!editable} />
+            <input
+              value={draft.ageRatingValue}
+              onChange={(event) => {
+                const ageRatingValue = event.currentTarget.value;
+                if (mode === "create") {
+                  setTitleCreateDraft((current) => ({ ...current, ageRatingValue }));
+                } else {
+                  setMetadataDraft((current) => ({ ...current, ageRatingValue }));
+                }
+              }}
+              onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "ageRatingValue")}
+              disabled={!editable}
+            />
           </Field>
         </div>
 
         <Field label="Description" required error={touched.description ? validation.errors.description : undefined} counter={renderCharacterCounter(draft.description, TITLE_DESCRIPTION_MAX_LENGTH)}>
-          <textarea rows={6} value={draft.description} onChange={(event) => (mode === "create" ? setTitleCreateDraft((current) => ({ ...current, description: event.currentTarget.value })) : setMetadataDraft((current) => ({ ...current, description: event.currentTarget.value })))} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "description")} disabled={!editable} />
+          <textarea
+            rows={6}
+            value={draft.description}
+            onChange={(event) => {
+              const description = event.currentTarget.value;
+              if (mode === "create") {
+                setTitleCreateDraft((current) => ({ ...current, description }));
+              } else {
+                setMetadataDraft((current) => ({ ...current, description }));
+              }
+            }}
+            onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "description")}
+            disabled={!editable}
+          />
         </Field>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -2495,12 +2968,20 @@ export function DevelopWorkspacePage() {
               label={mediaRole}
               state={draft.media[mediaRole]}
               previewUrl={previewMediaUrl(draft.media[mediaRole])}
+              guidance={formatMediaUploadGuidance(titleMediaUploadPolicies[mediaRole], { optional: true })}
+              error={(mode === "create" ? titleCreateMediaErrors : metadataMediaErrors)[mediaRole]}
               accept={titleMediaUploadPolicies[mediaRole].acceptedMimeTypes.join(",")}
               disabled={!editable}
-              onUrlChange={(value) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: value, file: null })}
+              onUrlChange={(value) => {
+                updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: value, previewUrl: value, file: null, fileName: null });
+                setTitleMediaError(mode === "create" ? "create" : "metadata", mediaRole, null);
+              }}
               onAltTextChange={(value) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { altText: value })}
-              onFileChange={(file) => handleTitleMediaUpload(mode === "create" ? "create" : "metadata", mediaRole, file)}
-              onRemove={() => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: "", altText: "", file: null })}
+              onFileChange={(file) => void handleTitleMediaUpload(mode === "create" ? "create" : "metadata", mediaRole, file)}
+              onRemove={() => {
+                updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: "", previewUrl: "", altText: "", file: null, fileName: null });
+                setTitleMediaError(mode === "create" ? "create" : "metadata", mediaRole, null);
+              }}
             />
           ))}
         </div>
@@ -2584,113 +3065,144 @@ export function DevelopWorkspacePage() {
 
     if (workspace.workflow === "titles-overview") {
       return activeTitle ? (
-        titleOverviewEditing ? (
-          <form className="space-y-6" onSubmit={handleSaveTitleOverview}>
-            <header className="surface-panel-strong rounded-[1.25rem] p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio?.displayName ?? activeTitle.studioSlug}</div>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">{activeTitle.displayName}</h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">{activeTitle.shortDescription}</p>
+        <div className="space-y-6">
+          <header className="surface-panel-strong rounded-[1.25rem] p-5">
+            <div>
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio?.displayName ?? activeTitle.studioSlug}</div>
+              <h2 className="mt-2 text-2xl font-semibold text-white">{activeTitle.displayName}</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">{activeTitle.shortDescription}</p>
+            </div>
+          </header>
+
+          <section className="grid gap-4 xl:grid-cols-3">
+            <div className="develop-stat-card p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Active metadata revision</div>
+              <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentMetadataRevision}</div>
+            </div>
+            <div className="develop-stat-card p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Current release</div>
+              <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentRelease?.version ?? "None"}</div>
+            </div>
+            <div className="develop-stat-card p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Title status</div>
+              <div className="mt-2 text-lg font-semibold text-white">{formatLifecycleStatus(activeTitle.lifecycleStatus)}</div>
+            </div>
+          </section>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <ReadOnlyField label="Content kind" value={formatContentKind(activeTitle.contentKind)} />
+            <section className="surface-panel-strong rounded-[1rem] p-4">
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Visibility</div>
+              {(() => {
+                const visibilityTooltip = titleVisibilityToggleTooltip(activeTitle, saving);
+                return (
+              <div className="mt-4 flex flex-wrap items-center gap-4">
+                <div className="group relative inline-flex">
+                  <button
+                    aria-label="Title visibility"
+                    aria-checked={activeTitle.visibility === "listed"}
+                    className={`relative inline-flex h-12 w-24 items-center rounded-full border transition ${
+                      activeTitle.visibility === "listed"
+                        ? "border-cyan-300/45 bg-cyan-300/20"
+                        : "border-white/10 bg-slate-950/45"
+                    } ${titleVisibilityCanBeChanged(activeTitle) && !saving ? "hover:border-cyan-300/60" : "cursor-not-allowed opacity-60"}`}
+                    role="switch"
+                    type="button"
+                    disabled={!titleVisibilityCanBeChanged(activeTitle) || saving}
+                    onClick={() => void handleToggleTitleVisibility()}
+                  >
+                    <span
+                      className={`absolute left-1 h-10 w-10 rounded-full bg-white shadow-[0_0_24px_rgba(74,222,128,0.2)] transition-transform ${
+                        activeTitle.visibility === "listed" ? "translate-x-12" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                  {visibilityTooltip ? (
+                    <div className="pointer-events-none absolute left-0 top-full z-10 mt-3 hidden w-72 rounded-[1rem] border border-cyan-300/30 bg-slate-950/95 px-4 py-3 text-sm leading-6 text-slate-200 shadow-[0_18px_44px_rgba(0,0,0,0.45)] group-hover:block">
+                      {visibilityTooltip}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="develop-stat-card p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Revision</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentMetadataRevision}</div>
-                  </div>
-                  <div className="develop-stat-card p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Current release</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentRelease?.version ?? "None"}</div>
-                  </div>
+                <div>
+                  <div className="text-base font-semibold text-white">{formatVisibility(activeTitle.visibility)}</div>
+                  <p className="mt-1 text-sm leading-7 text-slate-400">
+                    {titleVisibilityCanBeChanged(activeTitle)
+                      ? activeTitle.visibility === "listed"
+                        ? "Players can discover this title in browse and search."
+                        : "This title stays out of browse and search until you list it."
+                      : titleVisibilityDescription(activeTitle)}
+                  </p>
                 </div>
               </div>
-            </header>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Title slug" required error={titleOverviewTouched.slug ? titleOverviewValidation.errors.slug : undefined}>
-                <input value={titleOverviewDraft.slug} onChange={(event) => setTitleOverviewDraft((current) => ({ ...current, slug: slugifyValue(event.currentTarget.value) }))} onBlur={() => touchField(setTitleOverviewTouched, "slug")} />
-              </Field>
-              <Field label="Content kind" required error={titleOverviewTouched.contentKind ? titleOverviewValidation.errors.contentKind : undefined}>
-                <select value={titleOverviewDraft.contentKind} onChange={(event) => setTitleOverviewDraft((current) => ({ ...current, contentKind: event.currentTarget.value as "game" | "app" }))} onBlur={() => touchField(setTitleOverviewTouched, "contentKind")}>
-                  <option value="game">Game</option>
-                  <option value="app">App</option>
-                </select>
-              </Field>
-              <Field label="Lifecycle status" required error={titleOverviewTouched.lifecycleStatus ? titleOverviewValidation.errors.lifecycleStatus : undefined}>
-                <select value={titleOverviewDraft.lifecycleStatus} onChange={(event) => setTitleOverviewDraft((current) => ({ ...current, lifecycleStatus: event.currentTarget.value as TitleOverviewDraft["lifecycleStatus"] }))} onBlur={() => touchField(setTitleOverviewTouched, "lifecycleStatus")}>
-                  <option value="draft">Draft</option>
-                  <option value="testing">Testing</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </Field>
-              <Field label="Visibility" required error={titleOverviewTouched.visibility ? titleOverviewValidation.errors.visibility : undefined}>
-                <select value={titleOverviewDraft.visibility} onChange={(event) => setTitleOverviewDraft((current) => ({ ...current, visibility: event.currentTarget.value as TitleOverviewDraft["visibility"] }))} onBlur={() => touchField(setTitleOverviewTouched, "visibility")}>
-                  <option value="private">Private</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="listed">Listed</option>
-                </select>
-              </Field>
+                );
+              })()}
+              {titleOverviewError ? <p className="error-text mt-4">{titleOverviewError}</p> : null}
+            </section>
+          </div>
+          <section className="surface-panel-strong rounded-[1.25rem] p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Title actions</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Manage when players can find this title and which release they should see next.
+            </p>
+            <p className="mt-2 text-sm leading-7 text-slate-400">
+              {titleVisibilityDescription(activeTitle)}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {titleCanBeUnarchived(activeTitle) ? (
+                <button className="secondary-button" type="button" onClick={() => void handleUnarchiveActiveTitle()} disabled={saving}>
+                  Unarchive title
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      setWorkspaceState({
+                        domain: "releases",
+                        workflow: activeTitle.currentRelease ? "releases-overview" : "releases-create",
+                        releaseId: activeTitle.currentRelease?.id ?? releases[0]?.id ?? "",
+                      })
+                    }
+                  >
+                    {activeTitle.currentRelease ? "Open current release" : releases.length > 0 ? "Open releases" : "Create release"}
+                  </button>
+                  {titleCanBeActivated(activeTitle) && activeTitle.currentRelease ? (
+                    <button className="secondary-button" type="button" onClick={() => void handleActivateTitleLifecycle()} disabled={saving}>
+                      Activate and list title
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button className="primary-button" type="submit" disabled={!titleOverviewValidation.isValid || saving}>
-                {saving ? "Saving..." : "Save overview"}
-              </button>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => {
-                  setTitleOverviewEditing(false);
-                  setTitleOverviewDraft(createTitleOverviewDraft(activeTitle));
-                  setTitleOverviewTouched({});
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="space-y-6">
-            <header className="surface-panel-strong rounded-[1.25rem] p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio?.displayName ?? activeTitle.studioSlug}</div>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">{activeTitle.displayName}</h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">{activeTitle.shortDescription}</p>
-                </div>
-                <button className="secondary-button" type="button" onClick={() => setTitleOverviewEditing(true)}>
-                  Edit overview
+            {activeTitle.lifecycleStatus === "archived" ? (
+              <p className="mt-4 text-sm leading-7 text-slate-400">Unarchive this title before you manage releases or change whether players can discover it.</p>
+            ) : titleCanBeActivated(activeTitle) && !activeTitle.currentRelease ? (
+              <p className="mt-4 text-sm leading-7 text-slate-400">Create a release next so you can activate this title when you are ready.</p>
+            ) : null}
+            {titleActionsError ? <p className="error-text mt-4">{titleActionsError}</p> : null}
+            {!titleCanBeUnarchived(activeTitle) ? (
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <button className="caution-button" type="button" onClick={() => void handleArchiveActiveTitle()} disabled={saving}>
+                  Archive title
                 </button>
               </div>
-            </header>
-
-            <section className="grid gap-4 xl:grid-cols-3">
-              <div className="develop-stat-card p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Active Metadta Revision</div>
-                <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentMetadataRevision}</div>
-              </div>
-              <div className="develop-stat-card p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Current release</div>
-                <div className="mt-2 text-lg font-semibold text-white">{activeTitle.currentRelease?.version ?? "None"}</div>
-              </div>
-            </section>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <ReadOnlyField label="Title slug" value={titleOverviewDraft.slug} />
-              <ReadOnlyField label="Content kind" value={formatContentKind(titleOverviewDraft.contentKind)} />
-              <ReadOnlyField label="Lifecycle status" value={formatLifecycleStatus(titleOverviewDraft.lifecycleStatus)} />
-              <ReadOnlyField label="Visibility" value={formatVisibility(titleOverviewDraft.visibility)} />
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button className="secondary-button" type="button" onClick={() => setWorkspaceState({ workflow: "titles-metadata" })}>
-                Open metadata
-              </button>
-              <button className="secondary-button" type="button" onClick={() => setWorkspaceState({ domain: "releases", workflow: activeTitle.currentRelease ? "releases-overview" : "releases-create", releaseId: activeTitle.currentRelease?.id ?? "" })}>
-                {activeTitle.currentRelease ? "Open current release" : "Create release"}
+            ) : null}
+          </section>
+          <section className="rounded-[1.25rem] border border-rose-400/30 bg-rose-500/8 p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-rose-200/85">Danger zone</div>
+            <h3 className="mt-3 text-xl font-semibold text-white">Delete title</h3>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-rose-50/90">
+              Permanently remove this title, its releases, saved metadata, media, and related report history.
+            </p>
+            <div className="mt-5">
+              <button className="danger-button" type="button" onClick={() => { setDeleteCurrentPassword(""); setDeleteConfirmationName(""); setDeleteModalError(null); setDeletePasswordModalOpen(true); setDeleteConfirmationModalOpen(false); }} disabled={saving || activeTitle.lifecycleStatus === "archived"}>
+                Delete title
               </button>
             </div>
-          </div>
-        )
+          </section>
+        </div>
       ) : (
         <EmptyState title="No title selected" detail="Create or select a title to manage its overview." />
       );
@@ -2755,21 +3267,43 @@ export function DevelopWorkspacePage() {
         <form className="space-y-6" onSubmit={handleCreateRelease}>
           <header className="surface-panel-strong rounded-[1.25rem] p-5">
             <h2 className="text-2xl font-semibold text-white">Create Release</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Create a new release for {activeTitle.displayName} and select the metadata revision it should ship with. Acquisition is configured later from Publish.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Create a testing or production release for {activeTitle.displayName}, select the metadata revision it should ship with, and add the acquisition URL players should use.</p>
           </header>
           <section className="panel inset-panel space-y-5">
             <div className="grid gap-4 lg:grid-cols-2">
               <Field label="Version" required error={releaseCreateTouched.version ? releaseCreateValidation.errors.version : undefined}>
-                <input value={releaseCreateDraft.version} onChange={(event) => setReleaseCreateDraft((current) => ({ ...current, version: event.currentTarget.value }))} onBlur={() => touchField(setReleaseCreateTouched, "version")} />
+                <input
+                  value={releaseCreateDraft.version}
+                  onChange={(event) => {
+                    const version = event.currentTarget.value;
+                    setReleaseCreateDraft((current) => ({ ...current, version }));
+                  }}
+                  onBlur={() => touchField(setReleaseCreateTouched, "version")}
+                />
               </Field>
-              <Field label="Metadata revision" required error={releaseCreateTouched.metadataRevisionNumber ? releaseCreateValidation.errors.metadataRevisionNumber : undefined}>
-                <select value={releaseCreateDraft.metadataRevisionNumber} onChange={(event) => setReleaseCreateDraft((current) => ({ ...current, metadataRevisionNumber: Number(event.currentTarget.value) }))} onBlur={() => touchField(setReleaseCreateTouched, "metadataRevisionNumber")}>
-                  {metadataVersions.map((version) => (
-                    <option key={version.revisionNumber} value={version.revisionNumber}>
-                    Revision {version.revisionNumber}
-                  </option>
-                ))}
+              <Field label="Release type" required error={releaseCreateTouched.status ? releaseCreateValidation.errors.status : undefined}>
+                <select
+                  value={releaseCreateDraft.status}
+                  onChange={(event) => {
+                    const status = event.currentTarget.value as ReleaseDraft["status"];
+                    setReleaseCreateDraft((current) => ({ ...current, status }));
+                  }}
+                  onBlur={() => touchField(setReleaseCreateTouched, "status")}
+                >
+                  <option value="testing">Testing</option>
+                  <option value="production">Production</option>
                 </select>
+              </Field>
+              <Field label="Acquisition URL" error={releaseCreateTouched.acquisitionUrl ? releaseCreateValidation.errors.acquisitionUrl : undefined}>
+                <input
+                  value={releaseCreateDraft.acquisitionUrl}
+                  onChange={(event) => {
+                    const acquisitionUrl = event.currentTarget.value;
+                    setReleaseCreateDraft((current) => ({ ...current, acquisitionUrl }));
+                  }}
+                  onBlur={() => touchField(setReleaseCreateTouched, "acquisitionUrl")}
+                  placeholder="https://..."
+                />
               </Field>
             </div>
             <button className="primary-button" type="submit" disabled={!releaseCreateValidation.isValid || saving}>
@@ -2790,11 +3324,11 @@ export function DevelopWorkspacePage() {
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeTitle?.displayName ?? "Selected title"}</div>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Release Overview</h2>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Update the selected release basics, then move to Publish for the release-specific delivery settings.</p>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Update the selected release details and set whether this release should be the current release shown on the title page.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="develop-stat-card p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Status</div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Release type</div>
                   <div className="mt-2 text-lg font-semibold text-white">{formatReleaseStatus(activeRelease.status)}</div>
                 </div>
                 <div className="develop-stat-card p-4">
@@ -2811,25 +3345,49 @@ export function DevelopWorkspacePage() {
           <section className="panel inset-panel space-y-5">
             <div className="grid gap-4 lg:grid-cols-2">
               <Field label="Version" required error={releaseTouched.version ? releaseValidation.errors.version : undefined}>
-                <input value={releaseDraft.version} onChange={(event) => setReleaseDraft((current) => ({ ...current, version: event.currentTarget.value }))} onBlur={() => touchField(setReleaseTouched, "version")} disabled={activeRelease.status === "withdrawn"} />
+                <input
+                  value={releaseDraft.version}
+                  onChange={(event) => {
+                    const version = event.currentTarget.value;
+                    setReleaseDraft((current) => ({ ...current, version }));
+                  }}
+                  onBlur={() => touchField(setReleaseTouched, "version")}
+                />
               </Field>
-              <Field label="Metadata revision" required error={releaseTouched.metadataRevisionNumber ? releaseValidation.errors.metadataRevisionNumber : undefined}>
-                <select value={releaseDraft.metadataRevisionNumber} onChange={(event) => setReleaseDraft((current) => ({ ...current, metadataRevisionNumber: Number(event.currentTarget.value) }))} onBlur={() => touchField(setReleaseTouched, "metadataRevisionNumber")} disabled={activeRelease.status === "withdrawn"}>
-                  {metadataVersions.map((version) => (
-                    <option key={version.revisionNumber} value={version.revisionNumber}>
-                    Revision {version.revisionNumber}
-                  </option>
-                ))}
+              <Field label="Release type" required error={releaseTouched.status ? releaseValidation.errors.status : undefined}>
+                <select
+                  value={releaseDraft.status}
+                  onChange={(event) => {
+                    const status = event.currentTarget.value as ReleaseDraft["status"];
+                    setReleaseDraft((current) => ({ ...current, status }));
+                  }}
+                  onBlur={() => touchField(setReleaseTouched, "status")}
+                >
+                  <option value="testing">Testing</option>
+                  <option value="production">Production</option>
                 </select>
+              </Field>
+              <Field label="Acquisition URL" error={releaseTouched.acquisitionUrl ? releaseValidation.errors.acquisitionUrl : undefined}>
+                <input
+                  value={releaseDraft.acquisitionUrl}
+                  onChange={(event) => {
+                    const acquisitionUrl = event.currentTarget.value;
+                    setReleaseDraft((current) => ({ ...current, acquisitionUrl }));
+                  }}
+                  onBlur={() => touchField(setReleaseTouched, "acquisitionUrl")}
+                  placeholder="https://..."
+                />
               </Field>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button className="primary-button" type="button" onClick={() => void handleSaveRelease()} disabled={!releaseValidation.isValid || saving || activeRelease.status === "withdrawn"}>
+              <button className="primary-button" type="button" onClick={() => void handleSaveRelease()} disabled={!releaseValidation.isValid || saving}>
                 {saving ? "Saving..." : "Save release"}
               </button>
-              <button className="secondary-button" type="button" onClick={() => setWorkspaceState({ workflow: "releases-publish" })}>
-                Open publish
-              </button>
+              {!activeRelease.isCurrent ? (
+                <button className="secondary-button" type="button" onClick={() => void handleMakeReleaseCurrent(activeRelease.id)} disabled={saving}>
+                  Make Current Release
+                </button>
+              ) : null}
             </div>
           </section>
         </div>
@@ -2838,41 +3396,7 @@ export function DevelopWorkspacePage() {
       );
     }
 
-    return activeRelease ? (
-      <div className="space-y-6">
-        <header className="surface-panel-strong rounded-[1.25rem] p-5">
-          <h2 className="text-2xl font-semibold text-white">Publish</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Set the player-facing acquisition URL for this release and control its publish lifecycle.</p>
-        </header>
-        <section className="panel inset-panel space-y-5">
-          <Field label="Acquisition URL" error={releaseTouched.acquisitionUrl ? releaseValidation.errors.acquisitionUrl : undefined}>
-            <input value={releaseDraft.acquisitionUrl} onChange={(event) => setReleaseDraft((current) => ({ ...current, acquisitionUrl: event.currentTarget.value }))} onBlur={() => touchField(setReleaseTouched, "acquisitionUrl")} placeholder="https://..." disabled={activeRelease.status === "withdrawn"} />
-          </Field>
-          <div className="flex flex-wrap gap-3">
-            <button className="primary-button" type="button" onClick={() => void handleSaveRelease()} disabled={!releaseValidation.isValid || saving || activeRelease.status === "withdrawn"}>
-              {saving ? "Saving..." : "Save publish settings"}
-            </button>
-            {activeRelease.status === "draft" ? (
-              <button className="secondary-button" type="button" onClick={() => void handleReleaseAction("publish")} disabled={saving || !releaseDraft.acquisitionUrl.trim()}>
-                Publish release
-              </button>
-            ) : null}
-            {activeRelease.status === "published" ? (
-              <>
-                <button className="secondary-button" type="button" onClick={() => void handleReleaseAction("activate")} disabled={saving || activeRelease.isCurrent}>
-                  Make current
-                </button>
-                <button className="secondary-button" type="button" onClick={() => void handleReleaseAction("withdraw")} disabled={saving}>
-                  Withdraw release
-                </button>
-              </>
-            ) : null}
-          </div>
-        </section>
-      </div>
-    ) : (
-      <EmptyState title="No release selected" detail="Select a release to manage its publish workflow." />
-    );
+    return <EmptyState title="Select a workspace section" detail="Choose a studio, title, or release workflow to continue." />;
   }
 
   if (loading) {
@@ -2913,7 +3437,6 @@ export function DevelopWorkspacePage() {
           ]
         : [
             { key: "releases-overview" as Workflow, label: "Overview", disabled: !activeRelease },
-            { key: "releases-publish" as Workflow, label: "Publish", disabled: !activeRelease },
           ];
 
   return (
@@ -3029,6 +3552,57 @@ export function DevelopWorkspacePage() {
       </section>
 
       {previewStudio ? <StudioPreviewModal studio={studioOverviewDraft} onClose={() => setPreviewStudio(false)} /> : null}
+      {activeTitle && activationPromptReleaseId ? (
+        <TitleActivationPromptModal
+          title={activeTitle}
+          saving={saving}
+          onActivate={() => void handleActivateCurrentTitleAndRelease()}
+          onSkip={() => setActivationPromptReleaseId(null)}
+        />
+      ) : null}
+      {activeTitle && deletePasswordModalOpen ? (
+        <DeleteTitlePasswordModal
+          title={activeTitle}
+          currentPassword={deleteCurrentPassword}
+          error={deleteModalError}
+          saving={saving}
+          onCurrentPasswordChange={(value) => {
+            setDeleteCurrentPassword(value);
+            if (deleteModalError) {
+              setDeleteModalError(null);
+            }
+          }}
+          onContinue={() => void handleConfirmDeletePassword()}
+          onClose={() => {
+            setDeletePasswordModalOpen(false);
+            setDeleteCurrentPassword("");
+            setDeleteModalError(null);
+          }}
+        />
+      ) : null}
+      {activeTitle && deleteConfirmationModalOpen ? (
+        <DeleteTitleConfirmationModal
+          title={activeTitle}
+          confirmationName={deleteConfirmationName}
+          currentPassword={deleteCurrentPassword}
+          error={deleteModalError}
+          saving={saving}
+          onConfirmationNameChange={setDeleteConfirmationName}
+          onBack={() => {
+            setDeleteModalError(null);
+            setDeleteConfirmationModalOpen(false);
+            setDeleteCurrentPassword("");
+            setDeletePasswordModalOpen(true);
+          }}
+          onDelete={() => void handleDeleteActiveTitle()}
+          onClose={() => {
+            setDeleteConfirmationModalOpen(false);
+            setDeleteCurrentPassword("");
+            setDeleteConfirmationName("");
+            setDeleteModalError(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

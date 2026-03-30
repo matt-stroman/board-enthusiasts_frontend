@@ -7,6 +7,7 @@ import type {
   CatalogTitleListResponse,
   CatalogTitleResponse,
   CreateDeveloperTitleRequest,
+  DeleteDeveloperTitleRequest,
   CreatePlayerTitleReportRequest,
   CurrentUserResponse,
   DeveloperTitleListResponse,
@@ -41,6 +42,8 @@ import type {
   UpsertTitleMediaAssetRequest,
   UpsertTitleMetadataRequest,
   UpsertTitleReleaseRequest,
+  VerifyCurrentUserPasswordRequest,
+  VerifyCurrentUserPasswordResponse,
   UserNameAvailabilityResponse,
   UserProfileResponse,
   VerifiedDeveloperRoleStateResponse
@@ -51,17 +54,20 @@ export interface ProblemDetails {
   status: number;
   detail?: string;
   code?: string;
+  errors?: Record<string, string[]>;
 }
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly errors?: Record<string, string[]>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, errors?: Record<string, string[]>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.errors = errors;
   }
 }
 
@@ -124,6 +130,7 @@ export async function apiFetch<T>(
   try {
     response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${path}`, {
       ...init,
+      cache: "no-store",
       headers
     });
   } catch (error) {
@@ -136,15 +143,28 @@ export async function apiFetch<T>(
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     let code: string | undefined;
+    let structuredError: ApiError | null = null;
     try {
       const payload = (await response.json()) as ProblemDetails;
-      detail = payload.detail ?? payload.title ?? detail;
+      const validationMessage = payload.errors
+        ? Object.values(payload.errors)
+            .flat()
+            .find((message) => typeof message === "string" && message.trim().length > 0)
+        : undefined;
+      detail = validationMessage ?? payload.detail ?? payload.title ?? detail;
       code = payload.code;
+      structuredError = new ApiError(detail, response.status, code, payload.errors);
     } catch {
-      const text = await response.text();
-      if (text.trim()) {
-        detail = text.trim();
+      if (!structuredError) {
+        const text = await response.text();
+        if (text.trim()) {
+          detail = text.trim();
+        }
       }
+    }
+
+    if (structuredError) {
+      throw structuredError;
     }
 
     throw new ApiError(detail, response.status, code);
@@ -191,8 +211,8 @@ export function listCatalogTitles(apiBaseUrl: string, query: CatalogTitleListQue
   return apiFetch<CatalogTitleListResponse>(apiBaseUrl, `/catalog?${searchParams.toString()}`);
 }
 
-export function getCatalogTitle(apiBaseUrl: string, studioSlug: string, titleSlug: string): Promise<CatalogTitleResponse> {
-  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioSlug}/${titleSlug}`);
+export function getCatalogTitle(apiBaseUrl: string, studioSlug: string, titleSlug: string, accessToken?: string | null): Promise<CatalogTitleResponse> {
+  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioSlug}/${titleSlug}`, {}, accessToken ?? undefined);
 }
 
 export function listGenres(apiBaseUrl: string): Promise<GenreListResponse> {
@@ -448,6 +468,46 @@ export function updateTitle(apiBaseUrl: string, accessToken: string, titleId: st
   );
 }
 
+export function verifyCurrentUserPassword(
+  apiBaseUrl: string,
+  accessToken: string,
+  request: VerifyCurrentUserPasswordRequest
+): Promise<VerifyCurrentUserPasswordResponse> {
+  return apiFetch<VerifyCurrentUserPasswordResponse>(
+    apiBaseUrl,
+    "/identity/me/password/verify",
+    {
+      method: "POST",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function activateTitle(apiBaseUrl: string, accessToken: string, titleId: string): Promise<DeveloperTitleResponse> {
+  return apiFetch<DeveloperTitleResponse>(apiBaseUrl, `/developer/titles/${titleId}/activate`, { method: "POST" }, accessToken);
+}
+
+export function archiveTitle(apiBaseUrl: string, accessToken: string, titleId: string): Promise<DeveloperTitleResponse> {
+  return apiFetch<DeveloperTitleResponse>(apiBaseUrl, `/developer/titles/${titleId}/archive`, { method: "POST" }, accessToken);
+}
+
+export function unarchiveTitle(apiBaseUrl: string, accessToken: string, titleId: string): Promise<DeveloperTitleResponse> {
+  return apiFetch<DeveloperTitleResponse>(apiBaseUrl, `/developer/titles/${titleId}/unarchive`, { method: "POST" }, accessToken);
+}
+
+export function deleteTitle(apiBaseUrl: string, accessToken: string, titleId: string, request: DeleteDeveloperTitleRequest): Promise<void> {
+  return apiFetch<void>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/delete`,
+    {
+      method: "POST",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
 export function upsertTitleMetadata(apiBaseUrl: string, accessToken: string, titleId: string, request: UpsertTitleMetadataRequest): Promise<DeveloperTitleResponse> {
   return apiFetch<DeveloperTitleResponse>(
     apiBaseUrl,
@@ -578,16 +638,8 @@ export function updateTitleRelease(apiBaseUrl: string, accessToken: string, titl
   );
 }
 
-export function publishTitleRelease(apiBaseUrl: string, accessToken: string, titleId: string, releaseId: string): Promise<TitleReleaseResponse> {
-  return apiFetch<TitleReleaseResponse>(apiBaseUrl, `/developer/titles/${titleId}/releases/${releaseId}/publish`, { method: "POST" }, accessToken);
-}
-
 export function activateTitleRelease(apiBaseUrl: string, accessToken: string, titleId: string, releaseId: string): Promise<DeveloperTitleResponse> {
   return apiFetch<DeveloperTitleResponse>(apiBaseUrl, `/developer/titles/${titleId}/releases/${releaseId}/activate`, { method: "POST" }, accessToken);
-}
-
-export function withdrawTitleRelease(apiBaseUrl: string, accessToken: string, titleId: string, releaseId: string): Promise<TitleReleaseResponse> {
-  return apiFetch<TitleReleaseResponse>(apiBaseUrl, `/developer/titles/${titleId}/releases/${releaseId}/withdraw`, { method: "POST" }, accessToken);
 }
 
 export function searchModerationDevelopers(

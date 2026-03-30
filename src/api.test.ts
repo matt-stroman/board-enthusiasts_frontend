@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createMarketingSignup, createSupportIssueReport, listAgeRatingAuthorities, listCatalogTitles, listGenres } from "./api";
+import { createMarketingSignup, createSupportIssueReport, listAgeRatingAuthorities, listCatalogTitles, listGenres, verifyCurrentUserPassword } from "./api";
 
 describe("catalog API helpers", () => {
   afterEach(() => {
@@ -20,6 +20,7 @@ describe("catalog API helpers", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8787/catalog?pageNumber=1&pageSize=48&studioSlug=blue-harbor-games",
       expect.objectContaining({
+        cache: "no-store",
         headers: expect.any(Headers),
       }),
     );
@@ -186,6 +187,37 @@ describe("catalog API helpers", () => {
           screenWidth: 1440,
           screenHeight: 900,
         }),
+      }),
+    );
+  });
+
+  it("surfaces the first validation error message from API validation payloads", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      statusText: "Unprocessable Entity",
+      json: async () => ({
+        title: "One or more validation errors occurred.",
+        status: 422,
+        errors: {
+          currentPassword: ["Current password is incorrect."],
+        },
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      verifyCurrentUserPassword("http://127.0.0.1:8787", "developer-token", {
+        currentPassword: "wrong-password",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        message: "Current password is incorrect.",
+        status: 422,
+        errors: {
+          currentPassword: ["Current password is incorrect."],
+        },
       }),
     );
   });
