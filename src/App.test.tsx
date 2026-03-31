@@ -1704,6 +1704,26 @@ describe("App", () => {
     expect(screen.queryByText('new row for relation "titles" violates check constraint "titles_draft_private"')).not.toBeInTheDocument();
   });
 
+  it("shows duplicate release version errors under the create action in plain language", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.createTitleRelease.mockRejectedValue(new Error('duplicate key value violates unique constraint "title_releases_title_version_unique"'));
+
+    renderApp("/develop?domain=releases&workflow=releases-create&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Create Release" })).toBeVisible();
+
+    const createReleaseButton = screen.getByText("Create release", { selector: "button" });
+    const releaseCreateSection = createReleaseButton.closest("section");
+    expect(releaseCreateSection).not.toBeNull();
+
+    await userEvent.click(createReleaseButton);
+
+    expect(
+      await within(releaseCreateSection as HTMLElement).findByText("This title already has a release with version 1.0.0. Choose a different version and try again."),
+    ).toBeVisible();
+    expect(screen.queryByText('duplicate key value violates unique constraint "title_releases_title_version_unique"')).not.toBeInTheDocument();
+  });
+
   it("restores the release overview without the old publish workflow", async () => {
     seedDeveloperWorkspace();
 
@@ -1714,6 +1734,65 @@ describe("App", () => {
     expect(screen.getByLabelText(/Release type/i)).toBeVisible();
     expect(screen.getByLabelText(/Acquisition URL/i)).toBeVisible();
     expect(screen.queryByLabelText(/Metadata revision/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Release" })).toBeVisible();
+    expect(screen.getByLabelText(/Version/i)).toBeDisabled();
+    expect(screen.getByLabelText(/Release type/i)).toBeDisabled();
+    expect(screen.getByLabelText(/Acquisition URL/i)).toBeDisabled();
+  });
+
+  it("unlocks the release overview for editing only after the user clicks edit, then saves", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.updateTitleRelease.mockResolvedValue({
+      release: {
+        id: "release-1",
+        version: "1.0.1",
+        status: "testing",
+        isCurrent: true,
+        createdAt: "2026-03-08T12:00:00Z",
+        publishedAt: "2026-03-08T12:30:00Z",
+        updatedAt: "2026-03-09T12:30:00Z",
+      },
+    });
+
+    renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
+
+    expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
+
+    const versionInput = screen.getByLabelText(/Version/i);
+    const releaseTypeSelect = screen.getByLabelText(/Release type/i);
+    const acquisitionUrlInput = screen.getByLabelText(/Acquisition URL/i);
+
+    expect(versionInput).toBeDisabled();
+    expect(releaseTypeSelect).toBeDisabled();
+    expect(acquisitionUrlInput).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit Release" }));
+
+    expect(versionInput).toBeEnabled();
+    expect(releaseTypeSelect).toBeEnabled();
+    expect(acquisitionUrlInput).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Release" })).toBeVisible();
+
+    await userEvent.clear(versionInput);
+    await userEvent.type(versionInput, "1.0.1");
+    await userEvent.selectOptions(releaseTypeSelect, "testing");
+    await userEvent.clear(acquisitionUrlInput);
+    await userEvent.type(acquisitionUrlInput, "https://example.com/titles/lantern-drift/v1-0-1");
+    await userEvent.click(screen.getByRole("button", { name: "Save Release" }));
+
+    await waitFor(() => {
+      expect(apiMocks.updateTitleRelease).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "title-1", "release-1", {
+        version: "1.0.1",
+        status: "testing",
+        acquisitionUrl: "https://example.com/titles/lantern-drift/v1-0-1",
+      });
+    });
+
+    expect(await screen.findByText("Release saved.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit Release" })).toBeVisible();
+    expect(versionInput).toBeDisabled();
+    expect(releaseTypeSelect).toBeDisabled();
+    expect(acquisitionUrlInput).toBeDisabled();
   });
 
   it("keeps older releases selectable after a newer release is created", async () => {

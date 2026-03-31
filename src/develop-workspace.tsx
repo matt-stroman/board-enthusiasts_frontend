@@ -178,7 +178,7 @@ type PersistedState = {
   titleCreate?: { studioId: string; draft: PersistedTitleDraft; touched: Record<string, boolean> };
   titleMetadata?: { titleId: string; draft: PersistedTitleDraft; touched: Record<string, boolean>; editing: boolean };
   releaseCreate?: { titleId: string; draft: ReleaseDraft; touched: Record<string, boolean> };
-  releaseOverview?: { releaseId: string; draft: ReleaseDraft; touched: Record<string, boolean> };
+  releaseOverview?: { releaseId: string; draft: ReleaseDraft; touched: Record<string, boolean>; editing: boolean };
   selectedReportId: string | null;
   reportReply: string;
 };
@@ -572,10 +572,26 @@ function titleVisibilityCanBeChanged(title: DeveloperTitle | null): boolean {
   return Boolean(title) && title!.lifecycleStatus === "active";
 }
 
-function formatTitleActionsError(error: unknown): string {
+function formatWorkspaceActionError(
+  error: unknown,
+  options?: {
+    releaseVersion?: string;
+  },
+): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("titles_draft_private")) {
     return "Your local title rules are out of date. Apply the latest database migrations, then try again.";
+  }
+
+  if (message.includes("title_releases_title_version_unique")) {
+    const version = options?.releaseVersion?.trim();
+    return version
+      ? `This title already has a release with version ${version}. Choose a different version and try again.`
+      : "This title already has a release with that version. Choose a different version and try again.";
+  }
+
+  if (message.includes("duplicate key value violates unique constraint")) {
+    return "That information is already in use. Change it and try again.";
   }
 
   return message;
@@ -1180,6 +1196,7 @@ export function DevelopWorkspacePage() {
   const [releaseCreateContextTitleId, setReleaseCreateContextTitleId] = useState<string | null>(persistedState?.releaseCreate?.titleId ?? null);
   const [releaseDraft, setReleaseDraft] = useState<ReleaseDraft>(fromPersistedReleaseDraft(persistedState?.releaseOverview?.draft));
   const [releaseTouched, setReleaseTouched] = useState<Record<string, boolean>>(persistedState?.releaseOverview?.touched ?? {});
+  const [releaseEditing, setReleaseEditing] = useState(persistedState?.releaseOverview?.editing ?? false);
   const [releaseContextId, setReleaseContextId] = useState<string | null>(persistedState?.releaseOverview?.releaseId ?? null);
   const [activationPromptReleaseId, setActivationPromptReleaseId] = useState<string | null>(null);
   const [deletePasswordModalOpen, setDeletePasswordModalOpen] = useState(false);
@@ -1189,6 +1206,8 @@ export function DevelopWorkspacePage() {
   const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
   const [titleActionsError, setTitleActionsError] = useState<string | null>(null);
   const [titleOverviewError, setTitleOverviewError] = useState<string | null>(null);
+  const [releaseCreateError, setReleaseCreateError] = useState<string | null>(null);
+  const [releaseOverviewError, setReleaseOverviewError] = useState<string | null>(null);
   const [previewStudio, setPreviewStudio] = useState(false);
   const [loading, setLoading] = useState(true);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
@@ -1240,7 +1259,7 @@ export function DevelopWorkspacePage() {
       titleCreate: workspace.studioId && titleCreateContextStudioId === workspace.studioId ? { studioId: workspace.studioId, draft: toPersistedTitleDraft(titleCreateDraft), touched: titleCreateTouched } : undefined,
       titleMetadata: activeTitle && metadataContextId === activeTitle.id ? { titleId: activeTitle.id, draft: toPersistedTitleDraft(metadataDraft), touched: metadataTouched, editing: metadataEditing } : undefined,
       releaseCreate: workspace.titleId && releaseCreateContextTitleId === workspace.titleId ? { titleId: workspace.titleId, draft: releaseCreateDraft, touched: releaseCreateTouched } : undefined,
-      releaseOverview: activeRelease && releaseContextId === activeRelease.id ? { releaseId: activeRelease.id, draft: releaseDraft, touched: releaseTouched } : undefined,
+      releaseOverview: activeRelease && releaseContextId === activeRelease.id ? { releaseId: activeRelease.id, draft: releaseDraft, touched: releaseTouched, editing: releaseEditing } : undefined,
       selectedReportId,
       reportReply,
     });
@@ -1257,6 +1276,7 @@ export function DevelopWorkspacePage() {
     releaseCreateDraft,
     releaseCreateTouched,
     releaseDraft,
+    releaseEditing,
     releaseTouched,
     reportReply,
     selectedReportId,
@@ -1280,6 +1300,14 @@ export function DevelopWorkspacePage() {
   useEffect(() => {
     setTitleOverviewError(null);
   }, [workspace.workflow, workspace.titleId]);
+
+  useEffect(() => {
+    setReleaseCreateError(null);
+  }, [workspace.workflow, workspace.titleId]);
+
+  useEffect(() => {
+    setReleaseOverviewError(null);
+  }, [workspace.workflow, workspace.releaseId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1567,6 +1595,7 @@ export function DevelopWorkspacePage() {
     if (!activeRelease) {
       setReleaseDraft(createReleaseDraft(undefined));
       setReleaseTouched({});
+      setReleaseEditing(false);
       setReleaseContextId(null);
       return;
     }
@@ -1575,6 +1604,7 @@ export function DevelopWorkspacePage() {
       const persistedRelease = persistedState?.releaseOverview?.releaseId === activeRelease.id ? persistedState.releaseOverview : null;
       setReleaseDraft(persistedRelease ? fromPersistedReleaseDraft(persistedRelease.draft) : createReleaseDraft(activeRelease));
       setReleaseTouched(persistedRelease?.touched ?? {});
+      setReleaseEditing(persistedRelease?.editing ?? false);
       setReleaseContextId(activeRelease.id);
     }
   }, [activeRelease, persistedState, releaseContextId]);
@@ -1913,6 +1943,7 @@ export function DevelopWorkspacePage() {
       setReleaseCreateDraft(persistedDraft ? fromPersistedReleaseDraft(persistedDraft.draft) : createReleaseDraft(undefined));
       setReleaseCreateTouched(persistedDraft?.touched ?? {});
     }
+    setReleaseCreateError(null);
     setWorkspaceState({ domain: "releases", workflow: "releases-create", releaseId: "" });
   }
 
@@ -2191,6 +2222,7 @@ export function DevelopWorkspacePage() {
     }
 
     setSaving(true);
+    setReleaseCreateError(null);
     try {
       const shouldPromptForActivation = activeTitle?.lifecycleStatus === "draft" && releases.length === 0;
       const response = await createTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, {
@@ -2208,7 +2240,9 @@ export function DevelopWorkspacePage() {
       setMessage("Release created.");
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+      setError(null);
+      setReleaseCreateError(formatWorkspaceActionError(nextError, { releaseVersion: releaseCreateDraft.version }));
     } finally {
       setSaving(false);
     }
@@ -2219,12 +2253,21 @@ export function DevelopWorkspacePage() {
       return;
     }
 
+    if (!releaseEditing) {
+      setReleaseEditing(true);
+      setReleaseOverviewError(null);
+      setMessage(null);
+      setError(null);
+      return;
+    }
+
     if (!releaseValidation.isValid) {
       setReleaseTouched({ version: true, status: true, acquisitionUrl: true });
       return;
     }
 
     setSaving(true);
+    setReleaseOverviewError(null);
     try {
       await updateTitleRelease(appConfig.apiBaseUrl, accessToken, workspace.titleId, activeRelease.id, {
         version: releaseDraft.version.trim(),
@@ -2232,10 +2275,13 @@ export function DevelopWorkspacePage() {
         acquisitionUrl: releaseDraft.acquisitionUrl.trim() || null,
       });
       await refreshTitleWorkspace(workspace.titleId, activeRelease.id);
+      setReleaseEditing(false);
       setMessage("Release saved.");
       setError(null);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+      setError(null);
+      setReleaseOverviewError(formatWorkspaceActionError(nextError, { releaseVersion: releaseDraft.version }));
     } finally {
       setSaving(false);
     }
@@ -2293,7 +2339,7 @@ export function DevelopWorkspacePage() {
       setMessage("Title is now active and listed.");
       setError(null);
     } catch (nextError) {
-      setTitleActionsError(formatTitleActionsError(nextError));
+      setTitleActionsError(formatWorkspaceActionError(nextError));
     } finally {
       setSaving(false);
     }
@@ -2313,7 +2359,7 @@ export function DevelopWorkspacePage() {
       setMessage("Title archived and unlisted.");
       setError(null);
     } catch (nextError) {
-      setTitleActionsError(formatTitleActionsError(nextError));
+      setTitleActionsError(formatWorkspaceActionError(nextError));
     } finally {
       setSaving(false);
     }
@@ -2333,7 +2379,7 @@ export function DevelopWorkspacePage() {
       setMessage("Title moved back to draft.");
       setError(null);
     } catch (nextError) {
-      setTitleActionsError(formatTitleActionsError(nextError));
+      setTitleActionsError(formatWorkspaceActionError(nextError));
     } finally {
       setSaving(false);
     }
@@ -3309,6 +3355,7 @@ export function DevelopWorkspacePage() {
             <button className="primary-button" type="submit" disabled={!releaseCreateValidation.isValid || saving}>
               {saving ? "Creating..." : "Create release"}
             </button>
+            {releaseCreateError ? <p className="error-text">{releaseCreateError}</p> : null}
           </section>
         </form>
       ) : (
@@ -3352,6 +3399,7 @@ export function DevelopWorkspacePage() {
                     setReleaseDraft((current) => ({ ...current, version }));
                   }}
                   onBlur={() => touchField(setReleaseTouched, "version")}
+                  disabled={!releaseEditing || saving}
                 />
               </Field>
               <Field label="Release type" required error={releaseTouched.status ? releaseValidation.errors.status : undefined}>
@@ -3362,6 +3410,7 @@ export function DevelopWorkspacePage() {
                     setReleaseDraft((current) => ({ ...current, status }));
                   }}
                   onBlur={() => touchField(setReleaseTouched, "status")}
+                  disabled={!releaseEditing || saving}
                 >
                   <option value="testing">Testing</option>
                   <option value="production">Production</option>
@@ -3376,19 +3425,38 @@ export function DevelopWorkspacePage() {
                   }}
                   onBlur={() => touchField(setReleaseTouched, "acquisitionUrl")}
                   placeholder="https://..."
+                  disabled={!releaseEditing || saving}
                 />
               </Field>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button className="primary-button" type="button" onClick={() => void handleSaveRelease()} disabled={!releaseValidation.isValid || saving}>
-                {saving ? "Saving..." : "Save release"}
+              <button className={releaseEditing ? "primary-button" : "secondary-button"} type="button" onClick={() => void handleSaveRelease()} disabled={saving || (releaseEditing && !releaseValidation.isValid)}>
+                {saving ? "Saving..." : releaseEditing ? "Save Release" : "Edit Release"}
               </button>
+              {releaseEditing ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => {
+                    setReleaseDraft(createReleaseDraft(activeRelease));
+                    setReleaseTouched({});
+                    setReleaseEditing(false);
+                    setReleaseOverviewError(null);
+                    setMessage(null);
+                    setError(null);
+                  }}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+              ) : null}
               {!activeRelease.isCurrent ? (
                 <button className="secondary-button" type="button" onClick={() => void handleMakeReleaseCurrent(activeRelease.id)} disabled={saving}>
                   Make Current Release
                 </button>
               ) : null}
             </div>
+            {releaseOverviewError ? <p className="error-text">{releaseOverviewError}</p> : null}
           </section>
         </div>
       ) : (
