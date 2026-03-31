@@ -2270,6 +2270,97 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "Player Workspace" })).not.toBeInTheDocument();
   });
 
+  it("holds the sign-in page open for MFA step-up after password authentication succeeds", async () => {
+    const signIn = vi.fn(async (email: string, _password: string) => {
+      authState.value = {
+        ...authState.value,
+        session: { access_token: "player-token", user: { email } },
+        currentUser: {
+          subject: "user-1",
+          displayName: "Olivia Bennett",
+          email,
+          emailVerified: true,
+          identityProvider: "email",
+          roles: ["player"],
+          avatarUrl: null,
+        },
+      };
+    });
+
+    authState.value = {
+      session: null,
+      currentUser: null,
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal2" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: {
+                all: [{ id: "factor-1", factor_type: "totp", status: "verified", friendly_name: "Authenticator app" }],
+                totp: [{ id: "factor-1", factor_type: "totp", status: "verified", friendly_name: "Authenticator app" }],
+              },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn,
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Olivia Bennett",
+        userName: "olivia.bennett",
+        firstName: "Olivia",
+        lastName: "Bennett",
+        email: "olivia.bennett@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "OB",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/auth/signin?returnTo=%2Fplayer");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    await userEvent.type(screen.getByLabelText("Email"), "olivia.bennett@boardtpl.local");
+    await userEvent.type(screen.getByLabelText("Password"), "Player!123");
+    await userEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    expect(await screen.findByRole("dialog", { name: "Complete sign-in" })).toBeVisible();
+    expect(screen.getByText("Enter the code from your authenticator app to finish signing in.")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "My Games" })).not.toBeInTheDocument();
+  });
+
   it("renders the restored signed-in shell account menu links", async () => {
     authState.value = {
       session: { access_token: "player-token" },
@@ -2780,6 +2871,224 @@ describe("App", () => {
       });
     });
     expect(await screen.findByText("Password updated.")).toBeVisible();
+  });
+
+  it.each([
+    [
+      "raw svg markup",
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#fff"/><path d="M1 1h2v2H1z" fill="#000"/></svg>',
+      'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%208%22%3E%3Crect%20width%3D%228%22%20height%3D%228%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M1%201h2v2H1z%22%20fill%3D%22%23000%22%2F%3E%3C%2Fsvg%3E',
+    ],
+    [
+      "a data url",
+      "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%208%22%3E%3Crect%20width%3D%228%22%20height%3D%228%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M1%201h2v2H1z%22%20fill%3D%22%23000%22%2F%3E%3C%2Fsvg%3E",
+      "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%208%22%3E%3Crect%20width%3D%228%22%20height%3D%228%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M1%201h2v2H1z%22%20fill%3D%22%23000%22%2F%3E%3C%2Fsvg%3E",
+    ],
+  ])("renders the MFA enrollment QR code when Supabase returns %s", async (_label, qrCode, expectedSrc) => {
+    const enroll = vi.fn().mockResolvedValue({
+      data: {
+        id: "factor-1",
+        friendly_name: "Board Enthusiasts Authenticator",
+        totp: {
+          qr_code: qrCode,
+          secret: "KOCQLDVBGA6YKLRL43NDRM2XWIAW74NJ",
+        },
+      },
+      error: null,
+    });
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll,
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-settings");
+
+    await screen.findByRole("heading", { name: "Account Settings" });
+    await userEvent.click(screen.getByRole("button", { name: "Set Up Authenticator App" }));
+
+    const qrCodeImage = await screen.findByRole("img", { name: "Authenticator QR code" });
+    expect(qrCodeImage).toHaveAttribute("src", expectedSrc);
+    expect(enroll).toHaveBeenCalledWith({
+      factorType: "totp",
+      friendlyName: "Board Enthusiasts Authenticator",
+      issuer: "Board Enthusiasts",
+    });
+  });
+
+  it("lets the user restart MFA setup when a stale unverified factor exists", async () => {
+    const unenroll = vi.fn().mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    const enroll = vi.fn().mockResolvedValue({
+      data: {
+        id: "factor-2",
+        friendly_name: "Board Enthusiasts Authenticator",
+        totp: {
+          qr_code: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#fff"/><path d="M1 1h2v2H1z" fill="#000"/></svg>',
+          secret: "KOCQLDVBGA6YKLRL43NDRM2XWIAW74NJ",
+        },
+      },
+      error: null,
+    });
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: {
+                all: [{ id: "factor-stale", factor_type: "totp", status: "unverified", friendly_name: "Board Enthusiasts Authenticator" }],
+                totp: [{ id: "factor-stale", factor_type: "totp", status: "unverified", friendly_name: "Board Enthusiasts Authenticator" }],
+              },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll,
+            unenroll,
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-settings");
+
+    await screen.findByRole("heading", { name: "Account Settings" });
+    expect(await screen.findByText("Authenticator setup incomplete")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Restart Authenticator Setup" }));
+
+    await screen.findByRole("img", { name: "Authenticator QR code" });
+    expect(unenroll).toHaveBeenCalledWith({ factorId: "factor-stale" });
+    expect(enroll).toHaveBeenCalledWith({
+      factorType: "totp",
+      friendlyName: "Board Enthusiasts Authenticator",
+      issuer: "Board Enthusiasts",
+    });
   });
 
   it("keeps developer-only report messages visible to moderators", async () => {

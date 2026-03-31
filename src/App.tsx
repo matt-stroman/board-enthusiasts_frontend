@@ -1819,6 +1819,23 @@ function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" | "toolk
   );
 }
 
+function getMfaQrCodeImageSource(qrCode: string): string {
+  const normalized = qrCode.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    normalized.startsWith("data:image/") ||
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://")
+  ) {
+    return normalized;
+  }
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(normalized)}`;
+}
+
 function buildLandingSupportIssuePayload(firstName: string, email: string, errorMessage: string) {
   const globalNavigator = typeof navigator === "undefined" ? null : navigator;
   const globalScreen = typeof window !== "undefined" ? window.screen : null;
@@ -5136,7 +5153,7 @@ function SignInPage() {
   const captchaRequired = captchaMode !== "disabled";
 
   const returnTo = searchParams.get("returnTo") || "/player";
-  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen || mfaChallengeOpen;
+  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen || mfaChallengeOpen || submitting;
 
   useEffect(() => {
     if (session && currentUser && !suppressAuthenticatedRedirect) {
@@ -6506,6 +6523,13 @@ function PlayerPage() {
   async function handleStartMfaEnrollment(): Promise<void> {
     setSaving(true);
     try {
+      if (mfaTotpFactor?.status === "unverified") {
+        const unenrollResponse = await client.auth.mfa.unenroll({ factorId: mfaTotpFactor.id });
+        if (unenrollResponse.error) {
+          throw new Error(unenrollResponse.error.message);
+        }
+      }
+
       const response = await client.auth.mfa.enroll({
         factorType: "totp",
         friendlyName: "Board Enthusiasts Authenticator",
@@ -6997,18 +7021,26 @@ function PlayerPage() {
                   <div className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
                     <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Multi-factor authentication</div>
                     <div className="mt-3 text-base text-white">
-                      {mfaTotpFactor?.status === "verified" ? "Authenticator app enabled" : mfaPendingEnrollment ? "Finish authenticator setup" : "Authenticator app not enabled"}
+                      {mfaTotpFactor?.status === "verified"
+                        ? "Authenticator app enabled"
+                        : mfaPendingEnrollment
+                          ? "Finish authenticator setup"
+                          : mfaTotpFactor?.status === "unverified"
+                            ? "Authenticator setup incomplete"
+                            : "Authenticator app not enabled"}
                     </div>
                     <p className="mt-3 text-sm leading-7 text-slate-300">
                       {mfaTotpFactor?.status === "verified"
-                        ? `This account is protected with ${mfaTotpFactor.friendlyName ?? "an authenticator app"}. Current assurance level: ${mfaAssuranceLevel ?? "aal1"}.`
-                        : "Use an authenticator app to add a second step during sign-in."}
+                        ? `This account is protected with ${mfaTotpFactor.friendlyName ?? "an authenticator app"}.`
+                        : mfaTotpFactor?.status === "unverified"
+                          ? "A previous authenticator setup was not finished. Start setup again to generate a fresh QR code."
+                          : "Use an authenticator app to add a second step during sign-in."}
                     </p>
 
-                    {!mfaTotpFactor && !mfaPendingEnrollment ? (
+                    {(!mfaTotpFactor || mfaTotpFactor.status === "unverified") && !mfaPendingEnrollment ? (
                       <div className="mt-4">
                         <button type="button" className="secondary-button" disabled={saving} onClick={() => void handleStartMfaEnrollment()}>
-                          {saving ? "Starting..." : "Set Up Authenticator App"}
+                          {saving ? "Starting..." : mfaTotpFactor?.status === "unverified" ? "Restart Authenticator Setup" : "Set Up Authenticator App"}
                         </button>
                       </div>
                     ) : null}
@@ -7018,7 +7050,7 @@ function PlayerPage() {
                         <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
                           <div className="rounded-[1rem] border border-cyan-300/20 bg-slate-950/70 p-3">
                             <img
-                              src={`data:image/svg+xml;utf8,${encodeURIComponent(mfaPendingEnrollment.qrCode)}`}
+                              src={getMfaQrCodeImageSource(mfaPendingEnrollment.qrCode)}
                               alt="Authenticator QR code"
                               className="mx-auto h-48 w-48 rounded-lg bg-white p-2"
                             />
