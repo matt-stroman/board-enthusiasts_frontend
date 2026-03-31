@@ -518,7 +518,7 @@
   }
 
   .status-chip {
-    @apply inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100;
+    @apply inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100;
   }
 
   .field,
@@ -955,8 +955,12 @@
     @apply relative flex flex-col;
   }
 
+  .landing-value-card {
+    @apply relative;
+  }
+
   .landing-offering-card h2 {
-    @apply mt-0 pr-40;
+    @apply mt-0;
   }
 
   .landing-offering-card .card-actions {
@@ -967,11 +971,15 @@
     @apply flex items-start justify-between gap-4;
   }
 
-  .landing-offering-card-top {
-    @apply absolute right-6 top-6 flex items-start justify-end gap-4;
+  .landing-offering-heading-group {
+    @apply flex min-w-0 items-start gap-4;
   }
 
-  .landing-offering-card-top .landing-icon-badge {
+  .landing-offering-heading-group > div:last-child {
+    @apply min-w-0;
+  }
+
+  .landing-offering-heading-group .landing-icon-badge {
     @apply mb-0;
   }
 
@@ -1012,15 +1020,25 @@
     @apply text-[0.7rem] uppercase tracking-[0.16em] text-slate-500 lg:text-right;
   }
 
+  .landing-footer-disclaimer-row {
+    @apply border-t border-white/10;
+  }
+
+  .landing-footer-disclaimer {
+    @apply mx-auto max-w-[108rem] px-4 py-4 text-center text-xs leading-6 text-slate-500 sm:px-6 lg:px-8;
+  }
+
   @media (min-width: 1800px) {
     .app-main,
     .app-header-inner,
     .app-mobile-nav,
     .app-footer-inner,
+    .landing-footer-disclaimer,
     .landing-main,
     .landing-root .app-header-inner,
     .landing-root .app-mobile-nav,
-    .landing-root .app-footer-inner {
+    .landing-root .app-footer-inner,
+    .landing-root .landing-footer-disclaimer {
       max-width: 122rem;
     }
 
@@ -1153,6 +1171,14 @@
     .card-actions > * {
       flex: 1 1 100%;
       width: 100%;
+    }
+
+    .landing-offering-heading-row {
+      @apply gap-3;
+    }
+
+    .landing-offering-heading-group {
+      @apply gap-3;
     }
   }
 

@@ -644,13 +644,17 @@ describe("App", () => {
 
     renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Get Updates" }).every((link) => link.getAttribute("href") === "#signup")).toBe(true);
-    expect(screen.getByRole("heading", { name: "BE App Launcher" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Board OS Emulator" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE App Launcher for Board" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE Emulator for Board" })).toBeVisible();
+    expect(screen.getByText("For Developers")).toBeVisible();
     expect(screen.getAllByRole("link", { name: "contact@boardenthusiasts.com" }).some((link) => link.getAttribute("href") === "mailto:contact@boardenthusiasts.com")).toBe(true);
     expect(screen.getByRole("button", { name: "Join the list" })).toBeVisible();
+    expect(screen.getByRole("contentinfo")).toHaveTextContent(
+      "Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.",
+    );
     expect(screen.queryByRole("link", { name: "Browse" })).not.toBeInTheDocument();
   });
 

@@ -1739,6 +1739,11 @@ function LandingShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="landing-footer-copyright">© {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a></div>
         </div>
+        <div className="landing-footer-disclaimer-row">
+          <div className="landing-footer-disclaimer">
+            Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
+          </div>
+        </div>
       </footer>
     </div>
   );
@@ -2040,7 +2045,7 @@ function LandingPage() {
         <div className="landing-hero-column">
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
-              <h1><i>The</i> unofficial community hub for Board players and builders.</h1>
+              <h1><i>BE</i> where the Board community shows up first.</h1>
               <p>
                 Join the community forming around Board, explore useful BE resources, and get early access to the upcoming third-party library.
               </p>
@@ -2209,36 +2214,43 @@ function LandingPage() {
 
       <section className="landing-section">
         <div className="landing-section-heading">
-          <div className="eyebrow">Start here</div>
-          <h2>Use the community now. Follow the bigger launch as it grows.</h2>
+          <h2>Start now. BE part of what launches next.</h2>
           <p>Board Enthusiasts already has places to plug in today while the library and broader platform surface keep taking shape.</p>
         </div>
         <div className="landing-card-grid">
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top">
-              <div className="landing-icon-badge" aria-hidden="true">
-                <LandingGlyph kind="discord" />
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="discord" />
+                </div>
+                <div>
+                  <div className="eyebrow">Community</div>
+                  <h2>BE Discord</h2>
+                </div>
               </div>
               <span className="status-chip">Available now</span>
             </div>
-            <div className="eyebrow">Community</div>
-            <h2>Board Enthusiasts Discord</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Our main community space for Board players and developers to connect, share projects, ask questions, and help the ecosystem grow together.
+                Join early builders and players shaping the Board ecosystem. Share projects, ask questions, and help the community grow together.
             </p>
             <div className="card-actions mt-5">
               <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top">
-              <div className="landing-icon-badge" aria-hidden="true">
-                <LandingGlyph kind="spark" />
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="spark" />
+                </div>
+                <div>
+                  <div className="eyebrow">Resource</div>
+                  <h2>BE GPT</h2>
+                </div>
               </div>
               <span className="status-chip">Available now</span>
             </div>
-            <div className="eyebrow">Resource</div>
-            <h2>Board Enthusiasts GPT</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A Board-focused assistant for players and developers, with guidance drawn from official Board docs, FAQ, and troubleshooting resources.
             </p>
@@ -2247,15 +2259,17 @@ function LandingPage() {
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top">
-              <div className="landing-icon-badge" aria-hidden="true">
-                <LandingGlyph kind="library" />
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="library" />
+                </div>
+                <div>
+                  <div className="eyebrow">Utility</div>
+                  <h2>BE App Launcher for Board</h2>
+                </div>
               </div>
               <span className="status-chip">Available now</span>
-            </div>
-            <div>
-              <div className="eyebrow">Utility</div>
-              <h2>BE App Launcher</h2>
             </div>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
@@ -2265,15 +2279,17 @@ function LandingPage() {
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top">
-              <div className="landing-icon-badge" aria-hidden="true">
-                <LandingGlyph kind="toolkit" />
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="toolkit" />
+                </div>
+                <div>
+                  <div className="eyebrow">Developer tool</div>
+                  <h2>BE Emulator for Board</h2>
+                </div>
               </div>
               <span className="status-chip">Coming Soon</span>
-            </div>
-            <div>
-              <div className="eyebrow">Developer tool</div>
-              <h2>Board OS Emulator</h2>
             </div>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               An emulator for the Board OS used in the Unity editor to show the screens Board would show for SDK calls, making it easier to test titles in-editor without building and deploying to target as often.
@@ -2283,17 +2299,17 @@ function LandingPage() {
             </div>
           </article>
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top">
-              <div className="landing-icon-badge" aria-hidden="true">
-                <LandingGlyph kind="toolkit" />
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="toolkit" />
+                </div>
+                <div>
+                  <div className="eyebrow">In progress</div>
+                  <h2>BE GDK for Board</h2>
+                </div>
               </div>
               <span className="status-chip">Coming Soon</span>
-            </div>
-            <div>
-              <div>
-                <div className="eyebrow">In progress</div>
-                <h2>Board GDK</h2>
-              </div>
             </div>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A companion toolkit for the official Board SDK currently in development, with workflow helpers, editor tools, and higher-level systems designed to help developers focus on the game.
@@ -2321,21 +2337,21 @@ function LandingPage() {
           <p>BE is meant to be useful right away for supporting and growing the Board community, while also giving players and developers a reason to get involved early.</p>
         </div>
         <div className="landing-card-grid">
-          <article className="app-panel p-6 landing-offering-card">
+          <article className="app-panel p-6 landing-value-card">
             <div className="eyebrow">For Players</div>
             <h2>Follow what is being built</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
             </p>
           </article>
-          <article className="app-panel p-6 landing-offering-card">
+          <article className="app-panel p-6 landing-value-card">
             <div className="eyebrow">For Developers</div>
             <h2>Show up where the community is looking</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               Connect with players and fellow builders, share progress, explore practical resources, and be ready to register where discovery is taking shape.
             </p>
           </article>
-          <article className="app-panel p-6 landing-offering-card">
+          <article className="app-panel p-6 landing-value-card">
             <div className="eyebrow">For The Ecosystem</div>
             <h2>Community, tools, and momentum around Board</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
@@ -2764,6 +2780,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="landing-footer-copyright">
             © {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a>
+          </div>
+        </div>
+        <div className="landing-footer-disclaimer-row">
+          <div className="landing-footer-disclaimer">
+            Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
           </div>
         </div>
       </footer>
