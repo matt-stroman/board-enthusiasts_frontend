@@ -129,7 +129,7 @@ const landingMetadata = {
 const liveMetadata = {
   homeTitle: "Board Enthusiasts | For Board Players and Builders",
   homeDescription:
-    "BE is the branded front door for Board players and builders. Browse the BE Library, plug into Discord, discover current tools, and see what is shipping next.",
+    "BE is where the Board community shows up first. Browse the live BE Library, plug into Discord, discover current tools, and follow what launches next.",
   homeCanonical: "https://boardenthusiasts.com/",
   privacyTitle: "BE Privacy Snapshot | For Board Players and Builders",
   privacyDescription:
@@ -2835,7 +2835,7 @@ function HomePage() {
         <div className="landing-hero-column">
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
-              <h1><i>The</i> unofficial community hub for Board players and builders.</h1>
+              <h1>BE where the Board community shows up first.</h1>
               <p>
                 Join the community forming around Board, explore useful BE resources, and browse the live BE Library as it grows.
               </p>
@@ -2894,9 +2894,9 @@ function HomePage() {
           </article>
 
           <article className="landing-showcase-card landing-signup-card">
-            <h2>Use BE right now.</h2>
+            <h2>Start now. BE part of what launches next.</h2>
             <p>
-              Browse the BE Library, sign in when you want player or developer features, and keep the rest of the BE community tools close at hand.
+              Browse the live BE Library, plug into the community, and keep the rest of the BE toolset close while the broader platform surface keeps taking shape.
             </p>
             <div className="landing-feature-list">
               <div className="landing-feature-item">
@@ -2924,15 +2924,23 @@ function HomePage() {
 
       <section className="landing-section">
         <div className="landing-section-heading">
-          <h2>Use BE today.</h2>
-          <p>Board Enthusiasts already has places to plug in today while the BE Library and broader platform surface keep taking shape.</p>
+          <h2>Start now. BE part of what launches next.</h2>
+          <p>Board Enthusiasts already has places to plug in today while the live BE Library and broader platform surface keep taking shape.</p>
         </div>
         <div className="landing-card-grid">
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="library" />
+                </div>
+                <div>
+                  <div className="eyebrow">Library</div>
+                  <h2>BE Library</h2>
+                </div>
+              </div>
               <span className="status-chip">Available now</span>
             </div>
-            <h2 className="!mt-0">BE Library</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               The shared home for browsing third-party Board games and apps, with player and developer flows ready when you sign in.
             </p>
@@ -2942,12 +2950,20 @@ function HomePage() {
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="discord" />
+                </div>
+                <div>
+                  <div className="eyebrow">Community</div>
+                  <h2>BE Discord</h2>
+                </div>
+              </div>
               <span className="status-chip">Available now</span>
             </div>
-            <h2 className="!mt-0">BE Discord</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Our main community space for Board players and developers to connect, share projects, ask questions, and help the ecosystem grow together.
+              Join early builders and players shaping the Board ecosystem. Share projects, ask questions, and help the community grow together.
             </p>
             <div className="card-actions mt-5">
               <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
@@ -2955,10 +2971,18 @@ function HomePage() {
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="spark" />
+                </div>
+                <div>
+                  <div className="eyebrow">Resource</div>
+                  <h2>BE GPT</h2>
+                </div>
+              </div>
               <span className="status-chip">Available now</span>
             </div>
-            <h2 className="!mt-0">BE GPT</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A Board-focused assistant for players and developers, with guidance drawn from official Board docs, FAQ, and troubleshooting resources.
             </p>
@@ -2968,10 +2992,18 @@ function HomePage() {
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="library" />
+                </div>
+                <div>
+                  <div className="eyebrow">Utility</div>
+                  <h2>BE App Launcher for Board</h2>
+                </div>
+              </div>
               <span className="status-chip">Available now</span>
             </div>
-            <h2 className="!mt-0">BE App Launcher</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
             </p>
@@ -2981,28 +3013,44 @@ function HomePage() {
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="toolkit" />
+                </div>
+                <div>
+                  <div className="eyebrow">Developer tool</div>
+                  <h2>BE Emulator for Board</h2>
+                </div>
+              </div>
               <span className="status-chip">Coming Soon</span>
             </div>
-            <h2 className="!mt-0">Board OS Emulator</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               An emulator for the Board OS used in the Unity editor to show the screens Board would show for SDK calls, making it easier to test titles in-editor without building and deploying to target as often.
             </p>
             <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Follow in Discord</a>
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Get Updates</a>
             </div>
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-card-top justify-end">
+            <div className="landing-offering-heading-row">
+              <div className="landing-offering-heading-group">
+                <div className="landing-icon-badge" aria-hidden="true">
+                  <LandingGlyph kind="toolkit" />
+                </div>
+                <div>
+                  <div className="eyebrow">In progress</div>
+                  <h2>BE GDK for Board</h2>
+                </div>
+              </div>
               <span className="status-chip">Coming Soon</span>
             </div>
-            <h2 className="!mt-0">Board GDK</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               A companion toolkit for the official Board SDK currently in development, with workflow helpers, editor tools, and higher-level systems designed to help developers focus on the game.
             </p>
             <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Follow in Discord</a>
+              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Get Updates</a>
             </div>
           </article>
         </div>
@@ -3023,21 +3071,21 @@ function HomePage() {
         </div>
         <div className="landing-card-grid">
           <article className="app-panel p-6 landing-offering-card">
-            <h2>Follow what is being built</h2>
+            <h2>For Players</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
             </p>
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <h2>Show up where the community is looking</h2>
+            <h2>For Developers</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               Connect with players and fellow builders, share progress, explore practical resources, and be ready to register where discovery is taking shape.
             </p>
           </article>
 
           <article className="app-panel p-6 landing-offering-card">
-            <h2>Community, tools, and momentum around Board</h2>
+            <h2>For the Ecosystem</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               BE exists to support the growing Board community by helping players and developers connect, collaborate, and stay engaged.
             </p>

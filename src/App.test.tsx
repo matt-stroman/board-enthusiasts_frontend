@@ -581,7 +581,7 @@ describe("App", () => {
   it("renders the live BE front door and signed-out shell navigation", async () => {
     renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
     expect(screen.getByText("For Board Players And Builders")).toBeVisible();
     expect(screen.getByText(/The BE Library is live/i)).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Browse Library" }).length).toBeGreaterThan(0);
@@ -591,7 +591,7 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("heading", { name: "BE Library" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "BE Discord" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Board OS Emulator" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE Emulator for Board" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "https://mattstroman.com");
     expect(screen.getByRole("link", { name: "LinkedIn" })).toHaveAttribute("href", "https://www.linkedin.com/in/mattstromandev/");
     expect(screen.queryByRole("link", { name: "Player Sign In" })).not.toBeInTheDocument();
@@ -2295,7 +2295,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." });
+    await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." });
     await userEvent.click(screen.getByRole("button", { name: /open account/i }));
 
     expect(screen.getByRole("button", { name: "Profile" })).toBeVisible();
@@ -2348,7 +2348,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { name: "The unofficial community hub for Board players and builders." });
+    await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." });
     await userEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     expect(await screen.findByText("Moderator follow-up on your report")).toBeVisible();
