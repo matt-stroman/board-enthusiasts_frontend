@@ -10,6 +10,7 @@ const fallbackAuthClient = vi.hoisted(() => ({
   auth: {
     updateUser: vi.fn(),
     signInWithPassword: vi.fn(),
+    signInWithOAuth: vi.fn(),
     mfa: {
       getAuthenticatorAssuranceLevel: vi.fn(),
       listFactors: vi.fn(),
@@ -26,10 +27,14 @@ const authState = vi.hoisted(() => ({
     currentUser: null as CurrentUserResponse | null,
     loading: false,
     authError: null,
+    discordAuthEnabled: false,
+    githubAuthEnabled: false,
+    googleAuthEnabled: false,
     client: {
       auth: {
         updateUser: vi.fn(),
         signInWithPassword: vi.fn(),
+        signInWithOAuth: vi.fn(),
         mfa: {
           getAuthenticatorAssuranceLevel: vi.fn(),
           listFactors: vi.fn(),
@@ -40,6 +45,7 @@ const authState = vi.hoisted(() => ({
       },
     },
     signIn: vi.fn(),
+    signInWithSocialAuth: vi.fn(),
     signUp: vi.fn(),
     requestPasswordReset: vi.fn(),
     verifyEmailCode: vi.fn(),
@@ -131,6 +137,9 @@ const configState = vi.hoisted(() => ({
     supabaseUrl: "http://127.0.0.1:55421",
     supabasePublishableKey: "publishable-key",
     turnstileSiteKey: null as string | null,
+    discordAuthEnabled: false,
+    githubAuthEnabled: false,
+    googleAuthEnabled: false,
     landingMode: false,
   },
 }));
@@ -201,6 +210,7 @@ describe("App", () => {
       currentUser: null,
       loading: false,
       authError: null,
+      discordAuthEnabled: false,
       client: {
         auth: {
           updateUser: vi.fn(),
@@ -228,12 +238,16 @@ describe("App", () => {
       supabaseUrl: "http://127.0.0.1:55421",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
+      discordAuthEnabled: false,
+      githubAuthEnabled: false,
+      googleAuthEnabled: false,
       landingMode: false,
     };
 
     Object.values(apiMocks).forEach((mockFn) => mockFn.mockReset());
     fallbackAuthClient.auth.updateUser.mockReset();
     fallbackAuthClient.auth.signInWithPassword.mockReset();
+    fallbackAuthClient.auth.signInWithOAuth.mockReset();
     fallbackAuthClient.auth.mfa.getAuthenticatorAssuranceLevel.mockReset();
     fallbackAuthClient.auth.mfa.listFactors.mockReset();
     fallbackAuthClient.auth.mfa.challengeAndVerify.mockReset();
@@ -1393,8 +1407,38 @@ describe("App", () => {
     expect(screen.queryByText("Developer seed account")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderator seed account")).not.toBeInTheDocument();
     expect(screen.queryByText(/Local default:/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Register now" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Recover access" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create an account" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "I forgot my password" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Confirm email" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Back to browse" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in with Google" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in with GitHub" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in with Discord" })).not.toBeInTheDocument();
+  });
+
+  it("shows enabled social sign-in providers and stores the intended return path", async () => {
+    configState.value = {
+      ...configState.value,
+      discordAuthEnabled: true,
+      githubAuthEnabled: true,
+      googleAuthEnabled: true,
+    };
+    authState.value = {
+      ...authState.value,
+      discordAuthEnabled: true,
+      githubAuthEnabled: true,
+      googleAuthEnabled: true,
+      signInWithSocialAuth: vi.fn(),
+    };
+
+    renderApp("/auth/signin?returnTo=%2Fdevelop");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Sign in with Discord" }));
+
+    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-in");
+    expect(window.sessionStorage.getItem("signin-oauth-return-to")).toBe("/develop");
+    expect(screen.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
   });
 
   it("shows the become-a-developer workflow to signed-in players without developer access", async () => {
@@ -1950,53 +1994,31 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
 
-    const registerDialog = await screen.findByRole("dialog", { name: "Create account" });
-    expect(within(registerDialog).getByRole("heading", { name: "Create account" })).toBeVisible();
-    const createAccountButton = within(registerDialog).getByRole("button", { name: "Create account" });
+    const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
+    expect(within(registerDialog).getByRole("heading", { name: "Create your account" })).toBeVisible();
+    const createAccountButton = within(registerDialog).getByRole("button", { name: "Create an account" });
     expect(createAccountButton).toBeDisabled();
-    await userEvent.click(within(registerDialog).getByRole("button", { name: "Upload image" }));
-    expect(within(registerDialog).getByText("Optional. Recommended 512 x 512 px. Max 256 KB.")).toBeVisible();
-    await userEvent.click(within(registerDialog).getByRole("button", { name: "Avatar URL" }));
 
-    await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "new.player");
-    fireEvent.blur(within(registerDialog).getByLabelText(/Username/i));
     await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "new.player@example.com");
     fireEvent.blur(within(registerDialog).getByLabelText(/Email/i));
-    await userEvent.type(within(registerDialog).getByLabelText(/First name/i), "New");
-    await userEvent.type(within(registerDialog).getByLabelText(/Last name/i), "Player");
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "NewPlayer!123");
     fireEvent.blur(within(registerDialog).getByLabelText(/^Password/i));
-    await userEvent.type(within(registerDialog).getByLabelText(/^Confirm password/i), "NewPlayer!123");
-    fireEvent.blur(within(registerDialog).getByLabelText(/^Confirm password/i));
     await completeLocalAntiSpamCheck(within(registerDialog));
 
-    expect(await within(registerDialog).findByText("✓ Available")).toBeVisible();
     await waitFor(() => expect(createAccountButton).toBeEnabled());
     await userEvent.click(createAccountButton);
 
     expect(signUp).toHaveBeenCalledWith({
-      userName: "new.player",
       email: "new.player@example.com",
       password: "NewPlayer!123",
-      firstName: "New",
-      lastName: "Player",
-      avatarUrl: null,
-      avatarDataUrl: null,
       captchaToken: "local-development-turnstile-token",
     });
     expect(await screen.findByText(/Account created\. Check your email/i)).toBeVisible();
   });
 
-  it("validates registration fields on blur and keeps submit disabled until the username is available", async () => {
-    apiMocks.getUserNameAvailability.mockResolvedValue({
-      userNameAvailability: {
-        requestedUserName: "taken.player",
-        normalizedUserName: "taken.player",
-        available: false,
-      },
-    });
+  it("validates registration fields on blur and keeps submit disabled until the required fields are ready", async () => {
     authState.value = {
       session: null,
       currentUser: null,
@@ -2015,14 +2037,10 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
 
-    const registerDialog = await screen.findByRole("dialog", { name: "Create account" });
-    const createAccountButton = within(registerDialog).getByRole("button", { name: "Create account" });
-
-    await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "taken.player");
-    fireEvent.blur(within(registerDialog).getByLabelText(/Username/i));
-    expect(await within(registerDialog).findByText("✕ Unavailable")).toBeVisible();
+    const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
+    const createAccountButton = within(registerDialog).getByRole("button", { name: "Create an account" });
 
     await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "not-an-email");
     fireEvent.blur(within(registerDialog).getByLabelText(/Email/i));
@@ -2034,10 +2052,6 @@ describe("App", () => {
     expect(within(registerDialog).getByText("Add an uppercase letter.")).toBeVisible();
     expect(within(registerDialog).getByText("Add a number.")).toBeVisible();
     expect(within(registerDialog).getByText("Add a special character.")).toBeVisible();
-
-    await userEvent.type(within(registerDialog).getByLabelText(/^Confirm password/i), "different");
-    fireEvent.blur(within(registerDialog).getByLabelText(/^Confirm password/i));
-    expect(await within(registerDialog).findByText("Passwords must match.")).toBeVisible();
 
     expect(createAccountButton).toBeDisabled();
   });
@@ -2061,53 +2075,89 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
 
-    let registerDialog = await screen.findByRole("dialog", { name: "Create account" });
-    await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "new.player");
+    let registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
     await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "new.player@example.com");
-    await userEvent.type(within(registerDialog).getByLabelText(/First name/i), "New");
-    await userEvent.type(within(registerDialog).getByLabelText(/Last name/i), "Player");
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "NewPlayer!123");
-    await userEvent.type(within(registerDialog).getByLabelText(/^Confirm password/i), "NewPlayer!123");
-    await userEvent.type(within(registerDialog).getByLabelText(/^Avatar URL$/i), "https://example.com/avatar.png");
 
-    await userEvent.click(within(registerDialog).getByRole("button", { name: "Close" }));
+    const registerOverlay = registerDialog.parentElement?.parentElement?.parentElement;
+    expect(registerOverlay).toBeInstanceOf(HTMLElement);
+    await userEvent.click(registerOverlay as HTMLElement);
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Create account" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Create your account" })).not.toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
-    registerDialog = await screen.findByRole("dialog", { name: "Create account" });
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
+    registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
 
-    expect(within(registerDialog).getByLabelText(/Username/i)).toHaveValue("");
     expect(within(registerDialog).getByLabelText(/Email/i)).toHaveValue("");
-    expect(within(registerDialog).getByLabelText(/First name/i)).toHaveValue("");
-    expect(within(registerDialog).getByLabelText(/Last name/i)).toHaveValue("");
     expect(within(registerDialog).getByLabelText(/^Password/i)).toHaveValue("");
-    expect(within(registerDialog).getByLabelText(/^Confirm password/i)).toHaveValue("");
-    expect(within(registerDialog).getByLabelText(/^Avatar URL$/i)).toHaveValue("");
   });
 
   it("restores the registration draft after the page remounts", async () => {
     const firstRender = renderApp("/auth/signin");
 
-    await userEvent.click(screen.getByRole("button", { name: "Register now" }));
-    const registerDialog = await screen.findByRole("dialog", { name: "Create account" });
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
+    const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
 
-    await userEvent.type(within(registerDialog).getByLabelText(/Username/i), "persisted.player");
     await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "persisted.player@example.com");
-    await userEvent.type(within(registerDialog).getByLabelText(/^Avatar URL$/i), "https://example.com/persisted-avatar.png");
+    await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "Persisted!123");
 
     firstRender.unmount();
 
     renderApp("/auth/signin");
 
-    const restoredDialog = await screen.findByRole("dialog", { name: "Create account" });
-    expect(within(restoredDialog).getByLabelText(/Username/i)).toHaveValue("persisted.player");
+    expect(screen.queryByRole("dialog", { name: "Create your account" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
+    const restoredDialog = await screen.findByRole("dialog", { name: "Create your account" });
     expect(within(restoredDialog).getByLabelText(/Email/i)).toHaveValue("persisted.player@example.com");
-    expect(within(restoredDialog).getByLabelText(/^Avatar URL$/i)).toHaveValue("https://example.com/persisted-avatar.png");
+    expect(within(restoredDialog).getByLabelText(/^Password/i)).toHaveValue("Persisted!123");
+  });
+
+  it("does not reopen the registration modal automatically from stored draft state", async () => {
+    window.sessionStorage.setItem(
+      "signin-page-draft",
+      JSON.stringify({
+        registerModalOpen: true,
+        registrationEmail: "persisted.player@example.com",
+        registrationPassword: "Persisted!123",
+      }),
+    );
+
+    renderApp("/auth/signin");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    expect(screen.queryByRole("dialog", { name: "Create your account" })).not.toBeInTheDocument();
+  });
+
+  it("shows connected-account signup options at the top of the registration modal when providers are enabled", async () => {
+    configState.value = {
+      ...configState.value,
+      discordAuthEnabled: true,
+      googleAuthEnabled: true,
+    };
+    authState.value = {
+      ...authState.value,
+      discordAuthEnabled: true,
+      googleAuthEnabled: true,
+      signInWithSocialAuth: vi.fn(),
+    };
+
+    renderApp("/auth/signin");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
+
+    const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
+    expect(within(registerDialog).getByRole("button", { name: "Sign up with Google" })).toBeVisible();
+    expect(within(registerDialog).getByRole("button", { name: "Sign up with Discord" })).toBeVisible();
+    expect(within(registerDialog).getByRole("button", { name: "Login" })).toBeVisible();
+
+    await userEvent.click(within(registerDialog).getByRole("button", { name: "Sign up with Discord" }));
+    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-up");
   });
 
   it("requests password recovery from the sign-in page", async () => {
@@ -2130,13 +2180,13 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Recover access" }));
-    const recoveryDialog = await screen.findByRole("dialog", { name: "Recover access" });
-    expect(within(recoveryDialog).getByRole("heading", { name: "Recover access" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
+    expect(within(recoveryDialog).getByRole("heading", { name: "Reset your password" })).toBeVisible();
 
-    await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await userEvent.type(within(recoveryDialog).getByLabelText(/Email address/i), "new.player@example.com");
     await completeLocalAntiSpamCheck(within(recoveryDialog));
-    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send link to email" }));
 
     expect(requestPasswordReset).toHaveBeenCalledWith("new.player@example.com", "local-development-turnstile-token");
     expect(await within(recoveryDialog).findByText(/If that email matches an account/i)).toBeVisible();
@@ -2186,12 +2236,12 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Recover access" }));
-    const recoveryDialog = await screen.findByRole("dialog", { name: "Recover access" });
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
 
-    await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await userEvent.type(within(recoveryDialog).getByLabelText(/Email address/i), "new.player@example.com");
     await completeLocalAntiSpamCheck(within(recoveryDialog));
-    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send link to email" }));
     await userEvent.type(within(recoveryDialog).getByLabelText("Recovery code"), "123456");
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Confirm code" }));
 
@@ -2259,12 +2309,12 @@ describe("App", () => {
     renderApp("/auth/signin");
 
     await screen.findByRole("heading", { name: "Sign In" });
-    await userEvent.click(screen.getByRole("button", { name: "Recover access" }));
-    const recoveryDialog = await screen.findByRole("dialog", { name: "Recover access" });
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
 
-    await userEvent.type(within(recoveryDialog).getByLabelText("Email"), "new.player@example.com");
+    await userEvent.type(within(recoveryDialog).getByLabelText(/Email address/i), "new.player@example.com");
     await completeLocalAntiSpamCheck(within(recoveryDialog));
-    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send recovery email" }));
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send link to email" }));
     await userEvent.type(within(recoveryDialog).getByLabelText("Recovery code"), "123456");
     await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Confirm code" }));
     await userEvent.type(within(recoveryDialog).getByLabelText("New password"), "NewPlayer!123");
@@ -2275,6 +2325,40 @@ describe("App", () => {
     expect(signOut).toHaveBeenCalledWith({ tolerateNetworkFailure: true });
     expect(await screen.findByRole("heading", { name: "Sign In" })).toBeVisible();
     expect(screen.getByText("Password updated. Sign in with your new password.")).toBeVisible();
+  });
+
+  it("lets the recovery request step route to registration or back to sign in", async () => {
+    authState.value = {
+      session: null,
+      currentUser: null,
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    renderApp("/auth/signin");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
+
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Return to login" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Reset your password" })).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const reopenedRecoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
+    await userEvent.click(within(reopenedRecoveryDialog).getByRole("button", { name: "Create an account" }));
+
+    expect(await screen.findByRole("dialog", { name: "Create your account" })).toBeVisible();
   });
 
   it("validates empty sign-in fields before calling auth and supports password reveal", async () => {
@@ -2371,10 +2455,14 @@ describe("App", () => {
       currentUser: null,
       loading: false,
       authError: null,
+      discordAuthEnabled: false,
+      githubAuthEnabled: false,
+      googleAuthEnabled: false,
       client: {
         auth: {
           updateUser: vi.fn(),
           signInWithPassword: vi.fn(),
+          signInWithOAuth: vi.fn(),
           mfa: {
             getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
               data: { currentLevel: "aal1", nextLevel: "aal2" },
@@ -2822,16 +2910,12 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit Settings" }));
     await userEvent.clear(screen.getByRole("textbox", { name: /^email$/i }));
     await userEvent.type(screen.getByRole("textbox", { name: /^email$/i }), "ava.new@boardtpl.local");
-    await userEvent.type(screen.getByLabelText(/^Current password$/i), "Player!123");
     await userEvent.click(screen.getByRole("button", { name: "Save Settings" }));
 
     await waitFor(() => {
-      expect(signInWithPassword).toHaveBeenCalledWith({
-        email: "ava.garcia@boardtpl.local",
-        password: "Player!123",
-      });
       expect(updateUser).toHaveBeenCalledWith({ email: "ava.new@boardtpl.local" });
     });
+    expect(signInWithPassword).not.toHaveBeenCalled();
     expect(apiMocks.updateUserProfile).toHaveBeenCalledWith("http://127.0.0.1:8787", "player-token", {
       firstName: "Ava",
       lastName: "Garcia",
@@ -2934,7 +3018,7 @@ describe("App", () => {
     renderApp("/player?workflow=account-settings");
 
     await screen.findByRole("heading", { name: "Account Settings" });
-    await userEvent.type(screen.getAllByLabelText(/^Current password$/i)[1]!, "Player!123");
+    await userEvent.type(screen.getByLabelText(/^Current password$/i), "Player!123");
     await userEvent.type(screen.getByLabelText(/^New password$/i), "NewPlayer!123");
     await userEvent.type(screen.getByLabelText(/^Confirm password$/i), "NewPlayer!123");
     await userEvent.click(screen.getByRole("button", { name: "Change Password" }));
@@ -2950,6 +3034,407 @@ describe("App", () => {
       });
     });
     expect(await screen.findByText("Password updated.")).toBeVisible();
+  });
+
+  it("lets oauth-created users set a local password from account settings", async () => {
+    const getUserIdentities = vi
+      .fn()
+      .mockResolvedValue({
+        data: {
+          identities: [
+            {
+              id: "identity-discord",
+              user_id: "auth-user-1",
+              identity_id: "discord-1",
+              provider: "discord",
+              identity_data: {
+                email: "ava.garcia@boardtpl.local",
+              },
+            },
+          ],
+        },
+        error: null,
+      });
+    const updateUser = vi.fn().mockResolvedValue({
+      data: {
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      error: null,
+    });
+    const refreshCurrentUser = vi.fn();
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "discord",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          getUserIdentities,
+          updateUser,
+          signInWithPassword: vi.fn(),
+          unlinkIdentity: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser,
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-settings");
+
+    await screen.findByRole("heading", { name: "Account Settings" });
+    expect(screen.getByRole("button", { name: "Set Password" })).toBeVisible();
+    expect(screen.getByText(/does not have a Board Enthusiasts password yet/i)).toBeVisible();
+    await userEvent.type(screen.getByLabelText(/^Password$/i), "NewPlayer!123");
+    await userEvent.type(screen.getByLabelText(/^Confirm password$/i), "NewPlayer!123");
+    await userEvent.click(screen.getByRole("button", { name: "Set Password" }));
+
+    await waitFor(() => {
+      expect(updateUser).toHaveBeenCalledWith({
+        password: "NewPlayer!123",
+      });
+    });
+    expect(refreshCurrentUser).toHaveBeenCalled();
+    expect(await screen.findByText("Password set. You can now sign in with your email and password too.")).toBeVisible();
+  });
+
+  it("shows connected accounts and lets players disconnect one when another sign-in option remains", async () => {
+    const githubIdentity = {
+      id: "identity-github",
+      user_id: "auth-user-1",
+      identity_id: "github-1",
+      provider: "github",
+      identity_data: {
+        email: "ava.garcia@boardtpl.local",
+      },
+    };
+    const getUserIdentities = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          identities: [
+            {
+              id: "identity-email",
+              user_id: "auth-user-1",
+              identity_id: "email-1",
+              provider: "email",
+              identity_data: {
+                email: "ava.garcia@boardtpl.local",
+              },
+            },
+            githubIdentity,
+            {
+              id: "identity-discord",
+              user_id: "auth-user-1",
+              identity_id: "discord-1",
+              provider: "discord",
+              identity_data: {
+                email: "ava.garcia@boardtpl.local",
+              },
+            },
+          ],
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          identities: [
+            {
+              id: "identity-email",
+              user_id: "auth-user-1",
+              identity_id: "email-1",
+              provider: "email",
+              identity_data: {
+                email: "ava.garcia@boardtpl.local",
+              },
+            },
+            {
+              id: "identity-discord",
+              user_id: "auth-user-1",
+              identity_id: "discord-1",
+              provider: "discord",
+              identity_data: {
+                email: "ava.garcia@boardtpl.local",
+              },
+            },
+          ],
+        },
+        error: null,
+      });
+    const unlinkIdentity = vi.fn().mockResolvedValue({
+      data: {},
+      error: null,
+    });
+    const refreshCurrentUser = vi.fn();
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      githubAuthEnabled: true,
+      discordAuthEnabled: true,
+      client: {
+        auth: {
+          getUserIdentities,
+          unlinkIdentity,
+          linkIdentity: vi.fn(),
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser,
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-connected-accounts");
+
+    await screen.findByRole("heading", { name: "Connected Accounts" });
+    expect(screen.getByRole("button", { name: "Connected Accounts" })).toBeVisible();
+    expect(screen.getByText("Connected accounts")).toBeVisible();
+    expect(screen.getByText("GitHub")).toBeVisible();
+    expect(screen.getAllByText("Discord").length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Disconnect" })[0]!);
+
+    expect(await screen.findByRole("dialog", { name: "Disconnect GitHub?" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Disconnect Account" }));
+
+    await waitFor(() => {
+      expect(unlinkIdentity).toHaveBeenCalledWith(githubIdentity);
+    });
+    expect(refreshCurrentUser).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Disconnect GitHub?" })).not.toBeInTheDocument();
+    });
+    expect(await screen.findByText("GitHub disconnected. You can reconnect it any time.")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Connect" }).length).toBeGreaterThan(0);
+  });
+
+  it("prompts oauth-only users to set a password before disconnecting their last connected account", async () => {
+    const getUserIdentities = vi.fn().mockResolvedValue({
+      data: {
+        identities: [
+          {
+            id: "identity-discord",
+            user_id: "auth-user-1",
+            identity_id: "discord-1",
+            provider: "discord",
+            identity_data: {
+              email: "ava.garcia@boardtpl.local",
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const unlinkIdentity = vi.fn();
+
+    authState.value = {
+      session: {
+        access_token: "player-token",
+        user: {
+          email: "ava.garcia@boardtpl.local",
+        },
+      },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "discord",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          getUserIdentities,
+          unlinkIdentity,
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal1" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: { all: [], totp: [] },
+              error: null,
+            }),
+            challengeAndVerify: vi.fn(),
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getDeveloperEnrollment.mockResolvedValue({
+      developerEnrollment: {
+        developerAccessEnabled: false,
+        verifiedDeveloper: false,
+      },
+    });
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+
+    renderApp("/player?workflow=account-connected-accounts");
+
+    await screen.findByRole("heading", { name: "Connected Accounts" });
+    await userEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    expect(await screen.findByRole("dialog", { name: "Add a password first" })).toBeVisible();
+    expect(screen.getByText(/before you disconnect your last connected sign-in option/i)).toBeVisible();
+    expect(unlinkIdentity).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Go To Password" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Add a password first" })).not.toBeInTheDocument();
+    });
+    expect(await screen.findByRole("heading", { name: "Account Settings" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Set Password" })).toBeVisible();
   });
 
   it.each([
@@ -3014,6 +3499,7 @@ describe("App", () => {
         },
       },
       signIn: vi.fn(),
+      signInWithSocialAuth: vi.fn(),
       signUp: vi.fn(),
       requestPasswordReset: vi.fn(),
       verifyEmailCode: vi.fn(),
@@ -3395,10 +3881,10 @@ describe("App", () => {
       await userEvent.upload(logoUploadInput as HTMLInputElement, new File(["logo-bytes"], "studio-logo.png", { type: "image/png" }));
 
       await waitFor(() => {
-        expect(within(avatarPanel as HTMLElement).getByText("studio-avatar.png")).toBeVisible();
-        expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview").getAttribute("src")).toMatch(/^data:image\/png/);
-        expect(within(logoPanel as HTMLElement).getByText("studio-logo.png")).toBeVisible();
-        expect(within(logoPanel as HTMLElement).getByAltText("Logo preview").getAttribute("src")).toMatch(/^data:image\/png/);
+        expect(within(avatarPanel as HTMLElement).getByText("studio-avatar.webp")).toBeVisible();
+        expect(within(avatarPanel as HTMLElement).getByAltText("Avatar preview").getAttribute("src")).toMatch(/^data:image\/webp/);
+        expect(within(logoPanel as HTMLElement).getByText("studio-logo.webp")).toBeVisible();
+        expect(within(logoPanel as HTMLElement).getByAltText("Logo preview").getAttribute("src")).toMatch(/^data:image\/webp/);
       });
 
       await userEvent.click(within(createStudioForm as HTMLElement).getByRole("button", { name: "Create studio" }));
@@ -3413,51 +3899,65 @@ describe("App", () => {
     }
   });
 
-  it("rejects oversized studio logo uploads before submission", async () => {
-    seedDeveloperWorkspace();
+  it("reduces oversized studio logo uploads locally before submission", async () => {
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 1200, height: 400, blobSize: 4096, blobType: "image/webp" });
 
-    renderApp("/develop");
+    try {
+      seedDeveloperWorkspace();
 
-    await screen.findByRole("button", { name: "Studios" });
-    await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
+      renderApp("/develop");
 
-    const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
-    expect(createStudioForm).not.toBeNull();
+      await screen.findByRole("button", { name: "Studios" });
+      await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
 
-    const [, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
-    expect(logoUploadInput).not.toBeUndefined();
-    const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
-    expect(logoPanel).not.toBeNull();
+      const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
+      expect(createStudioForm).not.toBeNull();
 
-    await userEvent.upload(
-      logoUploadInput as HTMLInputElement,
-      new File([new Uint8Array(256 * 1024 + 1)], "studio-logo.png", { type: "image/png" }),
-    );
+      const [, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
+      expect(logoUploadInput).not.toBeUndefined();
+      const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+      expect(logoPanel).not.toBeNull();
 
-    expect(await within(logoPanel as HTMLElement).findByText("Uploaded studio logo image must be 256 KB or smaller.")).toBeVisible();
-    expect(apiMocks.uploadStudioMedia).not.toHaveBeenCalled();
+      await userEvent.upload(
+        logoUploadInput as HTMLInputElement,
+        new File([new Uint8Array(256 * 1024 + 1)], "studio-logo.png", { type: "image/png" }),
+      );
+
+      expect(await within(logoPanel as HTMLElement).findByText("studio-logo.webp")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).queryByText("Uploaded studio logo image must be 256 KB or smaller.")).not.toBeInTheDocument();
+      expect(apiMocks.uploadStudioMedia).not.toHaveBeenCalled();
+    } finally {
+      mockedImageProcessing.restore();
+    }
   });
 
-  it("rejects oversized title card uploads before submission", async () => {
-    seedDeveloperWorkspace();
+  it("reduces oversized title card uploads locally before submission", async () => {
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 900, height: 1280, blobSize: 4096, blobType: "image/webp" });
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    try {
+      seedDeveloperWorkspace();
 
-    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
-    expect(createTitleForm).not.toBeNull();
+      renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
 
-    const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
-    expect(cardUploadInput).not.toBeUndefined();
-    const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
-    expect(cardPanel).not.toBeNull();
+      const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+      expect(createTitleForm).not.toBeNull();
 
-    await userEvent.upload(
-      cardUploadInput as HTMLInputElement,
-      new File([new Uint8Array(1536 * 1024 + 1)], "card.png", { type: "image/png" }),
-    );
+      const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
+      expect(cardUploadInput).not.toBeUndefined();
+      const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
+      expect(cardPanel).not.toBeNull();
 
-    expect(await within(cardPanel as HTMLElement).findByText("Uploaded card image must be 1536 KB or smaller.")).toBeVisible();
-    expect(apiMocks.uploadTitleMediaAsset).not.toHaveBeenCalled();
+      await userEvent.upload(
+        cardUploadInput as HTMLInputElement,
+        new File([new Uint8Array(1536 * 1024 + 1)], "card.png", { type: "image/png" }),
+      );
+
+      expect(await within(cardPanel as HTMLElement).findByText("card.webp")).toBeVisible();
+      expect(within(cardPanel as HTMLElement).queryByText("Uploaded card image must be 1536 KB or smaller.")).not.toBeInTheDocument();
+      expect(apiMocks.uploadTitleMediaAsset).not.toHaveBeenCalled();
+    } finally {
+      mockedImageProcessing.restore();
+    }
   });
 
   it("shows the selected title card preview immediately after upload", async () => {
@@ -3521,8 +4021,8 @@ describe("App", () => {
     try {
       await userEvent.upload(cardUploadInput as HTMLInputElement, cardImage);
 
-      expect(await within(cardPanel as HTMLElement).findByAltText("card media")).toHaveAttribute("src", expect.stringMatching(/^data:image\//));
-      expect(within(cardPanel as HTMLElement).getByText("card.png")).toBeVisible();
+      expect(await within(cardPanel as HTMLElement).findByAltText("card media")).toHaveAttribute("src", expect.stringMatching(/^data:image\/webp/));
+      expect(within(cardPanel as HTMLElement).getByText("card.webp")).toBeVisible();
       expect(within(cardPanel as HTMLElement).queryByText("No media")).not.toBeInTheDocument();
     } finally {
       readAsDataURLSpy.mockRestore();
@@ -3936,6 +4436,9 @@ describe("App", () => {
       supabaseUrl: "http://127.0.0.1:55421",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
+      discordAuthEnabled: false,
+      githubAuthEnabled: false,
+      googleAuthEnabled: false,
       landingMode: true,
     };
 

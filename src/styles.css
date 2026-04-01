@@ -343,6 +343,19 @@
     @apply mt-3 text-2xl font-bold;
   }
 
+  .auth-panel-header {
+    @apply space-y-4 text-center;
+  }
+
+  .auth-panel-title {
+    font-family: var(--font-display);
+    @apply text-2xl font-semibold text-white md:text-[2.35rem];
+  }
+
+  .auth-panel-copy {
+    @apply mx-auto max-w-xl text-base leading-8 text-slate-300;
+  }
+
   .hero-panel h1 {
     @apply text-4xl font-black uppercase tracking-[0.03em] sm:text-5xl;
   }
@@ -452,6 +465,59 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.03),
       0 0 18px rgba(118, 255, 170, 0.2),
       0 0 32px rgba(118, 255, 170, 0.1);
+  }
+
+  .signin-divider {
+    @apply flex items-center gap-4;
+  }
+
+  .signin-divider-line {
+    @apply h-px flex-1;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(148, 163, 184, 0.22), rgba(255, 255, 255, 0));
+  }
+
+  .signin-divider-label {
+    @apply text-sm font-medium uppercase tracking-[0.22em] text-slate-400;
+  }
+
+  .social-auth-list {
+    @apply space-y-3;
+  }
+
+  .social-auth-button {
+    @apply flex w-full items-center gap-4 rounded-[1.25rem] border px-5 py-4 text-left text-base font-semibold text-slate-100 transition disabled:cursor-not-allowed disabled:opacity-60;
+    border-color: rgba(118, 255, 170, 0.22);
+    background:
+      radial-gradient(circle at 14% 0%, rgba(96, 255, 164, 0.1), transparent 22%),
+      linear-gradient(180deg, rgba(26, 24, 32, 0.94), rgba(17, 16, 24, 0.94));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.03),
+      0 0 12px rgba(118, 255, 170, 0.1),
+      0 0 24px rgba(118, 255, 170, 0.04);
+  }
+
+  .social-auth-button:hover {
+    border-color: rgba(124, 255, 170, 0.38);
+    color: rgb(241 245 249 / 1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 0 16px rgba(118, 255, 170, 0.14),
+      0 0 28px rgba(118, 255, 170, 0.07);
+  }
+
+  .social-auth-icon-badge {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full border;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(17, 20, 28, 0.98), rgba(10, 12, 18, 0.98));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .social-auth-copy {
+    @apply flex-1;
+  }
+
+  .signin-utility-links {
+    @apply mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-slate-300;
   }
 
   .danger-button {

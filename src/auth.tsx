@@ -8,13 +8,16 @@ import { readAppConfig } from "./config";
 export interface SignUpInput {
   email: string;
   password: string;
-  userName: string;
-  firstName: string;
-  lastName: string;
+  userName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   avatarUrl?: string | null;
   avatarDataUrl?: string | null;
   captchaToken?: string | null;
 }
+
+export type SocialAuthProvider = "discord" | "github" | "google";
+export type SocialAuthIntent = "sign-in" | "sign-up";
 
 interface AuthContextValue {
   client: SupabaseClient;
@@ -22,7 +25,11 @@ interface AuthContextValue {
   currentUser: CurrentUserResponse | null;
   loading: boolean;
   authError: string | null;
+  discordAuthEnabled: boolean;
+  githubAuthEnabled: boolean;
+  googleAuthEnabled: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithSocialAuth: (provider: SocialAuthProvider, intent?: SocialAuthIntent) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   requestPasswordReset: (email: string, captchaToken?: string | null) => Promise<void>;
   verifyEmailCode: (email: string, token: string) => Promise<void>;
@@ -156,6 +163,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentUser,
       loading,
       authError,
+      discordAuthEnabled: appConfig.discordAuthEnabled,
+      githubAuthEnabled: appConfig.githubAuthEnabled,
+      googleAuthEnabled: appConfig.googleAuthEnabled,
       async signIn(email: string, password: string): Promise<void> {
         setLoading(true);
         const result = await supabase.auth.signInWithPassword({ email, password });
@@ -168,17 +178,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshCurrentUser(result.data.session);
         setLoading(false);
       },
+      async signInWithSocialAuth(provider: SocialAuthProvider, intent: SocialAuthIntent = "sign-in"): Promise<void> {
+        const queryParams =
+          provider === "discord" && intent === "sign-in"
+            ? {
+                prompt: "none",
+              }
+            : undefined;
+        const result = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: buildAuthRedirectUrl(window.location.origin),
+            queryParams,
+          },
+        });
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+      },
       async signUp(input: SignUpInput): Promise<{ requiresEmailConfirmation: boolean }> {
+        const userName = input.userName?.trim() || null;
+        const firstName = input.firstName?.trim() || null;
+        const lastName = input.lastName?.trim() || null;
+        const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
         const result = await supabase.auth.signUp({
           email: input.email,
           password: input.password,
           options: {
             emailRedirectTo: buildAuthRedirectUrl(window.location.origin),
             data: {
-              userName: input.userName,
-              firstName: input.firstName,
-              lastName: input.lastName,
-              displayName: `${input.firstName} ${input.lastName}`.trim(),
+              userName,
+              firstName,
+              lastName,
+              displayName,
               avatarUrl: input.avatarUrl ?? null,
               avatarDataUrl: input.avatarDataUrl ?? null,
             },

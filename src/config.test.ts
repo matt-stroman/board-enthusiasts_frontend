@@ -15,6 +15,9 @@ describe("readAppConfigFromEnv", () => {
       supabaseUrl: "http://127.0.0.1:55421",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
+      discordAuthEnabled: false,
+      githubAuthEnabled: false,
+      googleAuthEnabled: false,
       landingMode: false,
     });
   });
@@ -43,6 +46,9 @@ describe("readAppConfigFromEnv", () => {
         VITE_API_BASE_URL: "https://api.boardenthusiasts.com",
         VITE_SUPABASE_URL: "https://project.supabase.co",
         VITE_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+        VITE_SUPABASE_AUTH_DISCORD_ENABLED: "true",
+        VITE_SUPABASE_AUTH_GITHUB_ENABLED: "true",
+        VITE_SUPABASE_AUTH_GOOGLE_ENABLED: "true",
         VITE_LANDING_MODE: "true",
       }),
     ).toEqual({
@@ -50,6 +56,9 @@ describe("readAppConfigFromEnv", () => {
       supabaseUrl: "https://project.supabase.co",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
+      discordAuthEnabled: true,
+      githubAuthEnabled: true,
+      googleAuthEnabled: true,
       landingMode: true,
     });
   });

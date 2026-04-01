@@ -63,7 +63,6 @@ import {
   getPlayerTitleReport,
   getPlayerTitleReports,
   getPlayerWishlist,
-  getUserNameAvailability,
   getPublicStudio,
   getTitleMediaAssets,
   getTitleMetadataVersions,
@@ -94,7 +93,8 @@ import {
   type StudioLinkMutationRequest,
   type StudioMutationRequest,
 } from "./api";
-import { hasPlatformRole, useAuth, type SignUpInput } from "./auth";
+import { hasPlatformRole, useAuth, type SignUpInput, type SocialAuthIntent, type SocialAuthProvider } from "./auth";
+import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig, type AppConfig } from "./config";
 import { DevelopWorkspacePage } from "./develop-workspace";
 import {
@@ -164,19 +164,7 @@ const PLAYER_FILTER_MIN = 1;
 const PLAYER_FILTER_MAX = 8;
 const avatarUploadPolicy = migrationMediaUploadPolicies.avatars;
 const AVATAR_UPLOAD_ACCEPT = avatarUploadPolicy.acceptedMimeTypes.join(",");
-const USER_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateUserNameInput(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "Username is required.";
-  }
-  if (!USER_NAME_PATTERN.test(trimmed)) {
-    return "Use lowercase letters, numbers, periods, underscores, or hyphens.";
-  }
-  return null;
-}
 
 function validateEmailInput(value: string): string | null {
   const trimmed = value.trim();
@@ -328,27 +316,17 @@ interface SignInPageDraftState {
   mfaCode: string;
   mfaFactorId: string | null;
   mfaFactorLabel: string;
-  registerModalOpen: boolean;
   recoveryModalOpen: boolean;
-  confirmationModalOpen: boolean;
   recoveryStep: "request" | "code" | "reset";
-  registrationUserName: string;
   registrationEmail: string;
-  registrationFirstName: string;
-  registrationLastName: string;
   registrationPassword: string;
-  registrationConfirmPassword: string;
   showRegistrationPassword: boolean;
-  showRegistrationConfirmPassword: boolean;
-  registrationAvatar: AvatarEditorState;
   recoveryEmail: string;
   recoveryCode: string;
   recoveryPassword: string;
   recoveryConfirmPassword: string;
   showRecoveryPassword: boolean;
   showRecoveryConfirmPassword: boolean;
-  confirmationEmail: string;
-  confirmationCode: string;
 }
 
 interface PlayerPageDraftState {
@@ -381,6 +359,7 @@ interface LandingSignupDraftState {
 
 const LANDING_SIGNUP_DRAFT_STORAGE_KEY = "landing-signup-draft";
 const SIGN_IN_PAGE_DRAFT_STORAGE_KEY = "signin-page-draft";
+const SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY = "signin-oauth-return-to";
 const PLAYER_PAGE_DRAFT_STORAGE_KEY = "player-page-draft";
 
 function slugifyValue(value: string): string {
@@ -458,6 +437,77 @@ function removeSessionStorageJson(key: string): void {
   } catch {
     // Ignore storage cleanup failures and keep the in-memory form state.
   }
+}
+
+type ConnectedAccountIdentity = {
+  id: string;
+  user_id: string;
+  identity_id: string;
+  provider: string;
+  identity_data?: Record<string, unknown>;
+  created_at?: string;
+  last_sign_in_at?: string;
+  updated_at?: string;
+};
+
+function sanitizeReturnToPath(value: string | null | undefined, fallback = "/player"): string {
+  const trimmed = value?.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function readSessionStorageValue(key: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const value = window.sessionStorage.getItem(key);
+    return value?.trim() ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionStorageValue(key: string, value: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // Ignore storage write failures and keep the in-memory flow moving.
+  }
+}
+
+function readAuthRedirectErrorMessage(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const candidates = [window.location.search, window.location.hash.startsWith("#") ? `?${window.location.hash.slice(1)}` : ""];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const params = new URLSearchParams(candidate);
+    const errorDescription = params.get("error_description")?.trim();
+    if (errorDescription) {
+      return errorDescription;
+    }
+
+    const errorCode = params.get("error")?.trim();
+    if (errorCode) {
+      return errorCode.replace(/_/g, " ");
+    }
+  }
+
+  return null;
 }
 
 function restoreAvatarEditorState(value: unknown): AvatarEditorState {
@@ -1773,6 +1823,99 @@ function DiscordIconButton({ className = "app-icon-button" }: { className?: stri
     <a className={className} href={landingDiscordUrl} target="_blank" rel="noreferrer" aria-label="Join the Board Enthusiasts Discord">
       <DiscordIcon className="size-5" />
     </a>
+  );
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M21.6 12.23c0-.68-.06-1.33-.18-1.95H12v3.68h5.39a4.62 4.62 0 0 1-2 3.03v2.52h3.23c1.89-1.74 2.98-4.31 2.98-7.28Z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 22c2.7 0 4.96-.89 6.62-2.41l-3.23-2.52c-.89.6-2.03.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.06v2.6A10 10 0 0 0 12 22Z"
+        fill="#34A853"
+      />
+      <path
+        d="M6.39 13.9A5.99 5.99 0 0 1 6.08 12c0-.66.11-1.31.31-1.9V7.5H3.06A10 10 0 0 0 2 12c0 1.61.39 3.13 1.06 4.5l3.33-2.6Z"
+        fill="#FBBC04"
+      />
+      <path
+        d="M12 5.97c1.47 0 2.79.5 3.83 1.48l2.87-2.87C16.96 2.96 14.7 2 12 2A10 10 0 0 0 3.06 7.5l3.33 2.6C7.18 7.73 9.39 5.97 12 5.97Z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5A12 12 0 0 0 8.2 23.9c.6.1.82-.26.82-.58v-2.03c-3.34.73-4.04-1.41-4.04-1.41-.55-1.4-1.34-1.78-1.34-1.78-1.1-.75.08-.74.08-.74 1.2.09 1.84 1.24 1.84 1.24 1.08 1.84 2.83 1.31 3.52 1 .1-.78.42-1.31.76-1.61-2.67-.31-5.47-1.34-5.47-5.94 0-1.31.47-2.39 1.24-3.23-.12-.31-.54-1.56.12-3.25 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.69.24 2.94.12 3.25.77.84 1.24 1.92 1.24 3.23 0 4.61-2.81 5.62-5.49 5.92.43.38.82 1.11.82 2.24v3.32c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" />
+    </svg>
+  );
+}
+
+function getSocialAuthProviderLabel(provider: SocialAuthProvider): string {
+  switch (provider) {
+    case "discord":
+      return "Discord";
+    case "github":
+      return "GitHub";
+    default:
+      return "Google";
+  }
+}
+
+function isSocialAuthProvider(value: string): value is SocialAuthProvider {
+  return value === "discord" || value === "github" || value === "google";
+}
+
+function getConnectedAccountSummary(identity: ConnectedAccountIdentity): string {
+  const identityData = identity.identity_data;
+  if (!identityData || typeof identityData !== "object") {
+    return "Connected sign-in option";
+  }
+
+  const preferredValue = [
+    identityData.email,
+    identityData.full_name,
+    identityData.name,
+    identityData.user_name,
+    identityData.preferred_username,
+    identityData.username,
+  ].find((candidate) => typeof candidate === "string" && candidate.trim().length > 0);
+
+  return typeof preferredValue === "string" ? preferredValue.trim() : "Connected sign-in option";
+}
+
+function SocialAuthProviderIcon({ provider }: { provider: SocialAuthProvider }) {
+  switch (provider) {
+    case "discord":
+      return <DiscordIcon className="h-5 w-5 text-[#5865F2]" />;
+    case "github":
+      return <GitHubIcon className="h-5 w-5 text-slate-100" />;
+    default:
+      return <GoogleIcon className="h-5 w-5" />;
+  }
+}
+
+function UnderlineActionLink({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="font-semibold text-cyan-100 underline decoration-cyan-100/35 underline-offset-4 transition hover:text-white hover:decoration-white/60"
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -5056,7 +5199,21 @@ function CaptchaWidget({
 }
 
 function SignInPage() {
-  const { client, session, currentUser, signIn, signUp, requestPasswordReset, verifyEmailCode, verifyRecoveryCode, updatePassword, signOut } = useAuth();
+  const {
+    client,
+    session,
+    currentUser,
+    discordAuthEnabled,
+    githubAuthEnabled,
+    googleAuthEnabled,
+    signIn,
+    signInWithSocialAuth,
+    signUp,
+    requestPasswordReset,
+    verifyRecoveryCode,
+    updatePassword,
+    signOut,
+  } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const recoveryMode = searchParams.get("mode") === "recovery";
@@ -5071,27 +5228,17 @@ function SignInPage() {
       mfaCode: storedDraft?.mfaCode ?? "",
       mfaFactorId: typeof storedDraft?.mfaFactorId === "string" ? storedDraft.mfaFactorId : null,
       mfaFactorLabel: storedDraft?.mfaFactorLabel ?? "Authenticator app",
-      registerModalOpen: storedDraft?.registerModalOpen ?? false,
       recoveryModalOpen: storedDraft?.recoveryModalOpen ?? recoveryMode,
-      confirmationModalOpen: storedDraft?.confirmationModalOpen ?? false,
       recoveryStep: storedDraft?.recoveryStep === "code" || storedDraft?.recoveryStep === "reset" ? storedDraft.recoveryStep : recoveryMode ? "reset" : "request",
-      registrationUserName: storedDraft?.registrationUserName ?? "",
       registrationEmail: storedDraft?.registrationEmail ?? "",
-      registrationFirstName: storedDraft?.registrationFirstName ?? "",
-      registrationLastName: storedDraft?.registrationLastName ?? "",
       registrationPassword: storedDraft?.registrationPassword ?? "",
-      registrationConfirmPassword: storedDraft?.registrationConfirmPassword ?? "",
       showRegistrationPassword: storedDraft?.showRegistrationPassword ?? false,
-      showRegistrationConfirmPassword: storedDraft?.showRegistrationConfirmPassword ?? false,
-      registrationAvatar: restoreAvatarEditorState(storedDraft?.registrationAvatar),
       recoveryEmail: storedDraft?.recoveryEmail ?? "",
       recoveryCode: storedDraft?.recoveryCode ?? "",
       recoveryPassword: storedDraft?.recoveryPassword ?? "",
       recoveryConfirmPassword: storedDraft?.recoveryConfirmPassword ?? "",
       showRecoveryPassword: storedDraft?.showRecoveryPassword ?? false,
       showRecoveryConfirmPassword: storedDraft?.showRecoveryConfirmPassword ?? false,
-      confirmationEmail: storedDraft?.confirmationEmail ?? "",
-      confirmationCode: storedDraft?.confirmationCode ?? "",
     };
   }
   const signInDraft = signInDraftRef.current;
@@ -5105,30 +5252,17 @@ function SignInPage() {
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [socialSubmitting, setSocialSubmitting] = useState<SocialAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
-  const [registerModalOpen, setRegisterModalOpen] = useState(signInDraft.registerModalOpen);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [recoveryModalOpen, setRecoveryModalOpen] = useState(signInDraft.recoveryModalOpen);
-  const [confirmationModalOpen, setConfirmationModalOpen] = useState(signInDraft.confirmationModalOpen);
   const [recoveryStep, setRecoveryStep] = useState<"request" | "code" | "reset">(signInDraft.recoveryStep);
-  const [registrationUserName, setRegistrationUserName] = useState(signInDraft.registrationUserName);
   const [registrationEmail, setRegistrationEmail] = useState(signInDraft.registrationEmail);
-  const [registrationFirstName, setRegistrationFirstName] = useState(signInDraft.registrationFirstName);
-  const [registrationLastName, setRegistrationLastName] = useState(signInDraft.registrationLastName);
   const [registrationPassword, setRegistrationPassword] = useState(signInDraft.registrationPassword);
-  const [registrationConfirmPassword, setRegistrationConfirmPassword] = useState(signInDraft.registrationConfirmPassword);
   const [showRegistrationPassword, setShowRegistrationPassword] = useState(signInDraft.showRegistrationPassword);
-  const [showRegistrationConfirmPassword, setShowRegistrationConfirmPassword] = useState(signInDraft.showRegistrationConfirmPassword);
-  const registrationUserNameCheckRequest = useRef(0);
-  const [registrationUserNameError, setRegistrationUserNameError] = useState<string | null>(null);
-  const [registrationUserNameAvailability, setRegistrationUserNameAvailability] = useState<{
-    status: "idle" | "checking" | "available" | "unavailable";
-    value: string;
-  }>({ status: "idle", value: "" });
   const [registrationEmailError, setRegistrationEmailError] = useState<string | null>(null);
   const [registrationPasswordErrors, setRegistrationPasswordErrors] = useState<string[]>([]);
-  const [registrationConfirmPasswordError, setRegistrationConfirmPasswordError] = useState<string | null>(null);
-  const [registrationAvatar, setRegistrationAvatar] = useState<AvatarEditorState>(signInDraft.registrationAvatar);
   const [registrationCaptchaToken, setRegistrationCaptchaToken] = useState<string | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState(signInDraft.recoveryEmail);
   const [recoveryCaptchaToken, setRecoveryCaptchaToken] = useState<string | null>(null);
@@ -5137,29 +5271,49 @@ function SignInPage() {
   const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState(signInDraft.recoveryConfirmPassword);
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(signInDraft.showRecoveryPassword);
   const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(signInDraft.showRecoveryConfirmPassword);
-  const [confirmationEmail, setConfirmationEmail] = useState(signInDraft.confirmationEmail);
-  const [confirmationCode, setConfirmationCode] = useState(signInDraft.confirmationCode);
   const [registering, setRegistering] = useState(false);
   const [requestingRecovery, setRequestingRecovery] = useState(false);
   const [verifyingRecoveryCode, setVerifyingRecoveryCode] = useState(false);
-  const [confirmingEmail, setConfirmingEmail] = useState(false);
   const [completingRecovery, setCompletingRecovery] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveryStatusMessage, setRecoveryStatusMessage] = useState<string | null>(null);
-  const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const [passwordRecoveryError, setPasswordRecoveryError] = useState<string | null>(null);
   const captchaMode = getCaptchaMode(appConfig.turnstileSiteKey);
   const captchaRequired = captchaMode !== "disabled";
 
-  const returnTo = searchParams.get("returnTo") || "/player";
-  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen || mfaChallengeOpen || submitting;
+  const returnTo = sanitizeReturnToPath(searchParams.get("returnTo") ?? readSessionStorageValue(SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY));
+  const enabledSocialAuthProviders = ([
+    { provider: "google", enabled: googleAuthEnabled },
+    { provider: "github", enabled: githubAuthEnabled },
+    { provider: "discord", enabled: discordAuthEnabled },
+  ] as const).filter((entry) => entry.enabled);
+  const socialAuthEnabled = enabledSocialAuthProviders.length > 0;
+  const suppressAuthenticatedRedirect = recoveryMode || recoveryModalOpen || mfaChallengeOpen || submitting || Boolean(socialSubmitting);
+
+  function clearPendingOAuthReturnTo(): void {
+    removeSessionStorageJson(SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY);
+  }
 
   useEffect(() => {
     if (session && currentUser && !suppressAuthenticatedRedirect) {
+      clearPendingOAuthReturnTo();
       navigate(returnTo, { replace: true });
     }
   }, [currentUser, navigate, returnTo, session, suppressAuthenticatedRedirect]);
+
+  useEffect(() => {
+    const redirectError = readAuthRedirectErrorMessage();
+    if (!redirectError) {
+      return;
+    }
+
+    setError(redirectError);
+    clearPendingOAuthReturnTo();
+    if (typeof window !== "undefined" && window.location.hash.includes("error")) {
+      window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (recoveryMode) {
@@ -5177,23 +5331,13 @@ function SignInPage() {
       password.length > 0 ||
       mfaChallengeOpen ||
       mfaCode.trim().length > 0 ||
-      registerModalOpen ||
       recoveryModalOpen ||
-      confirmationModalOpen ||
-      registrationUserName.trim().length > 0 ||
       registrationEmail.trim().length > 0 ||
-      registrationFirstName.trim().length > 0 ||
-      registrationLastName.trim().length > 0 ||
       registrationPassword.length > 0 ||
-      registrationConfirmPassword.length > 0 ||
-      registrationAvatar.url.trim().length > 0 ||
-      Boolean(registrationAvatar.dataUrl) ||
       recoveryEmail.trim().length > 0 ||
       recoveryCode.trim().length > 0 ||
       recoveryPassword.length > 0 ||
-      recoveryConfirmPassword.length > 0 ||
-      confirmationEmail.trim().length > 0 ||
-      confirmationCode.trim().length > 0;
+      recoveryConfirmPassword.length > 0;
 
     if (!hasDraft) {
       removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
@@ -5208,32 +5352,19 @@ function SignInPage() {
       mfaCode,
       mfaFactorId,
       mfaFactorLabel,
-      registerModalOpen,
       recoveryModalOpen,
-      confirmationModalOpen,
       recoveryStep,
-      registrationUserName,
       registrationEmail,
-      registrationFirstName,
-      registrationLastName,
       registrationPassword,
-      registrationConfirmPassword,
       showRegistrationPassword,
-      showRegistrationConfirmPassword,
-      registrationAvatar,
       recoveryEmail,
       recoveryCode,
       recoveryPassword,
       recoveryConfirmPassword,
       showRecoveryPassword,
       showRecoveryConfirmPassword,
-      confirmationEmail,
-      confirmationCode,
     } satisfies SignInPageDraftState);
   }, [
-    confirmationCode,
-    confirmationEmail,
-    confirmationModalOpen,
     email,
     mfaFactorId,
     mfaFactorLabel,
@@ -5246,35 +5377,13 @@ function SignInPage() {
     recoveryModalOpen,
     recoveryPassword,
     recoveryStep,
-    registerModalOpen,
-    registrationAvatar,
-    registrationConfirmPassword,
     registrationEmail,
-    registrationFirstName,
-    registrationLastName,
     registrationPassword,
-    registrationUserName,
     showRecoveryConfirmPassword,
     showRecoveryPassword,
-    showRegistrationConfirmPassword,
     showRegistrationPassword,
     showSignInPassword,
   ]);
-
-  const registrationUserNameHint =
-    registrationUserNameAvailability.status === "available"
-      ? "✓ Available"
-      : registrationUserNameAvailability.status === "unavailable"
-        ? "✕ Unavailable"
-        : registrationUserNameAvailability.status === "checking"
-          ? "Checking availability..."
-          : registrationUserNameError;
-  const registrationUserNameHintTone =
-    registrationUserNameAvailability.status === "available"
-      ? "success"
-      : registrationUserNameAvailability.status === "unavailable" || registrationUserNameError
-        ? "error"
-        : "default";
   const registrationPasswordHint = registrationPasswordErrors.length > 0 ? (
     <ul className="field-hint-list">
       {registrationPasswordErrors.map((message) => (
@@ -5284,50 +5393,10 @@ function SignInPage() {
   ) : undefined;
   const registrationPasswordHintTone = registrationPasswordErrors.length > 0 ? "error" : "default";
   const registrationCanSubmit =
-    registrationUserName.trim().length > 0 &&
     registrationEmail.trim().length > 0 &&
-    registrationFirstName.trim().length > 0 &&
-    registrationLastName.trim().length > 0 &&
     registrationPassword.length > 0 &&
-    registrationConfirmPassword.length > 0 &&
-    registrationUserNameAvailability.status === "available" &&
-    !registrationUserNameError &&
     !registrationEmailError &&
-    registrationPasswordErrors.length === 0 &&
-    !registrationConfirmPasswordError &&
     (!captchaRequired || Boolean(registrationCaptchaToken));
-
-  async function validateRegistrationUserName(): Promise<boolean> {
-    const trimmed = registrationUserName.trim();
-    const nextError = validateUserNameInput(trimmed);
-    setRegistrationUserNameError(nextError);
-    if (nextError) {
-      setRegistrationUserNameAvailability({ status: "idle", value: trimmed });
-      return false;
-    }
-
-    const requestId = registrationUserNameCheckRequest.current + 1;
-    registrationUserNameCheckRequest.current = requestId;
-    setRegistrationUserNameAvailability({ status: "checking", value: trimmed });
-    try {
-      const response = await getUserNameAvailability(appConfig.apiBaseUrl, trimmed);
-      if (registrationUserNameCheckRequest.current !== requestId) {
-        return false;
-      }
-      setRegistrationUserNameAvailability({
-        status: response.userNameAvailability.available ? "available" : "unavailable",
-        value: trimmed,
-      });
-      return response.userNameAvailability.available;
-    } catch (error) {
-      if (registrationUserNameCheckRequest.current !== requestId) {
-        return false;
-      }
-      setRegistrationUserNameAvailability({ status: "idle", value: trimmed });
-      setRegistrationUserNameError(error instanceof Error ? error.message : "We couldn't verify username availability.");
-      return false;
-    }
-  }
 
   function validateRegistrationEmail(): boolean {
     const nextError = validateEmailInput(registrationEmail);
@@ -5341,34 +5410,18 @@ function SignInPage() {
     return nextErrors.length === 0;
   }
 
-  function validateRegistrationConfirmPassword(): boolean {
-    const nextError = validatePasswordConfirmation(registrationPassword, registrationConfirmPassword);
-    setRegistrationConfirmPasswordError(nextError);
-    return !nextError;
-  }
-
   function resetRegistrationForm(): void {
-    setRegistrationUserName("");
     setRegistrationEmail("");
-    setRegistrationFirstName("");
-    setRegistrationLastName("");
     setRegistrationPassword("");
-    setRegistrationConfirmPassword("");
     setShowRegistrationPassword(false);
-    setShowRegistrationConfirmPassword(false);
-    registrationUserNameCheckRequest.current = 0;
-    setRegistrationUserNameError(null);
-    setRegistrationUserNameAvailability({ status: "idle", value: "" });
     setRegistrationEmailError(null);
     setRegistrationPasswordErrors([]);
-    setRegistrationConfirmPasswordError(null);
-    setRegistrationAvatar(createAvatarEditorState(null));
     setRegistrationCaptchaToken(null);
     setRegistrationError(null);
   }
 
   function openRegisterModal(): void {
-    resetRegistrationForm();
+    setRegistrationError(null);
     setRegisterModalOpen(true);
   }
 
@@ -5461,6 +5514,7 @@ function SignInPage() {
       }
 
       removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+      clearPendingOAuthReturnTo();
       navigate(returnTo, { replace: true });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -5493,6 +5547,7 @@ function SignInPage() {
       setMfaCode("");
       setMfaFactorId(null);
       removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+      clearPendingOAuthReturnTo();
       navigate(returnTo, { replace: true });
     } catch (nextError) {
       setMfaError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -5514,82 +5569,59 @@ function SignInPage() {
     setMfaError(null);
   }
 
+  async function handleSocialSignIn(provider: SocialAuthProvider, intent: SocialAuthIntent = "sign-in"): Promise<void> {
+    setSocialSubmitting(provider);
+    setError(null);
+    setPageMessage(null);
+    writeSessionStorageValue(SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY, returnTo);
+
+    try {
+      await signInWithSocialAuth(provider, intent);
+      setSocialSubmitting(null);
+    } catch (nextError) {
+      clearPendingOAuthReturnTo();
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setSocialSubmitting(null);
+    }
+  }
+
   async function handleRegister(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setRegistering(true);
     setRegistrationError(null);
     setPageMessage(null);
     try {
-      const userNameValid =
-        registrationUserNameAvailability.status === "available" && registrationUserNameAvailability.value === registrationUserName.trim()
-          ? true
-          : await validateRegistrationUserName();
       const emailValid = validateRegistrationEmail();
-      if (!registrationFirstName.trim()) {
-        throw new Error("First name is required.");
-      }
-      if (!registrationLastName.trim()) {
-        throw new Error("Last name is required.");
-      }
       const passwordValid = validateRegistrationPassword();
-      const confirmPasswordValid = validateRegistrationConfirmPassword();
-      if (!userNameValid) {
-        throw new Error("Choose an available username before creating your account.");
-      }
       if (!emailValid) {
         throw new Error("Enter a valid email address.");
       }
       if (!passwordValid) {
         throw new Error("Password does not meet the required policy.");
       }
-      if (!confirmPasswordValid) {
-        throw new Error("Password confirmation must match.");
-      }
       if (captchaRequired && !registrationCaptchaToken) {
         throw new Error("Complete the human verification challenge.");
       }
 
       const result = await signUp({
-        userName: registrationUserName.trim(),
         email: registrationEmail.trim(),
         password: registrationPassword,
-        firstName: registrationFirstName.trim(),
-        lastName: registrationLastName.trim(),
-        avatarUrl: registrationAvatar.mode === "url" ? registrationAvatar.url.trim() || null : null,
-        avatarDataUrl: registrationAvatar.mode === "upload" ? registrationAvatar.dataUrl : null,
         captchaToken: registrationCaptchaToken,
       } satisfies SignUpInput);
       if (result.requiresEmailConfirmation) {
-        setConfirmationEmail(registrationEmail.trim());
-        setConfirmationCode("");
-        setConfirmationError(null);
-        setPageMessage("Account created. Check your email to confirm the registration before signing in. You can open the email link or enter the confirmation code here.");
-        setConfirmationModalOpen(true);
+        setPageMessage("Account created. Check your email to confirm the registration, then sign in.");
       } else {
         removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+        clearPendingOAuthReturnTo();
         navigate(returnTo, { replace: true });
       }
-      closeRegisterModal();
+      setRegisterModalOpen(false);
+      resetRegistrationForm();
+      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
     } catch (nextError) {
       setRegistrationError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setRegistering(false);
-    }
-  }
-
-  async function handleRegistrationAvatarUpload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
-    const file = event.currentTarget.files?.[0] ?? null;
-    if (!file) {
-      setRegistrationAvatar((current) => ({ ...current, dataUrl: null, fileName: null }));
-      return;
-    }
-
-    try {
-      const upload = await readAvatarUpload(event);
-      setRegistrationError(null);
-      setRegistrationAvatar((current) => ({ ...current, mode: "upload", dataUrl: upload.dataUrl, fileName: upload.fileName }));
-    } catch (nextError) {
-      setRegistrationError(nextError instanceof Error ? nextError.message : String(nextError));
     }
   }
 
@@ -5604,30 +5636,6 @@ function SignInPage() {
       setRecoveryError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setRequestingRecovery(false);
-    }
-  }
-
-  async function handleConfirmEmail(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    setConfirmingEmail(true);
-    setConfirmationError(null);
-    setPageMessage(null);
-    try {
-      if (!confirmationEmail.trim()) {
-        throw new Error("Email is required.");
-      }
-      if (!confirmationCode.trim()) {
-        throw new Error("Confirmation code is required.");
-      }
-
-      await verifyEmailCode(confirmationEmail.trim(), confirmationCode.trim());
-      setConfirmationModalOpen(false);
-      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
-      navigate(returnTo, { replace: true });
-    } catch (nextError) {
-      setConfirmationError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setConfirmingEmail(false);
     }
   }
 
@@ -5687,10 +5695,13 @@ function SignInPage() {
 
   return (
     <div className="page-grid narrow">
-      <section className="mx-auto w-full max-w-2xl app-panel p-8 text-center">
-        <h1 className="app-page-title">Sign In</h1>
+      <section className="mx-auto w-full max-w-xl app-panel p-8 md:p-10">
+        <div className="auth-panel-header">
+          <h1 className="auth-panel-title">Sign In</h1>
+          <p className="auth-panel-copy">Use your email and password to sign in.</p>
+        </div>
 
-        <form className="mt-6 stack-form text-left" onSubmit={handleSubmit}>
+        <form className="mt-8 stack-form text-left" onSubmit={handleSubmit}>
           <Field label="Email">
             <input value={email} onChange={(event) => setEmail(event.currentTarget.value)} autoComplete="email" />
           </Field>
@@ -5704,90 +5715,101 @@ function SignInPage() {
           />
 
           {error ? <p className="error-text">{error}</p> : null}
+          {pageMessage ? <p className="success-text">{pageMessage}</p> : null}
 
-          <div className="mt-4 flex flex-col justify-center gap-3 sm:flex-row">
-            <button type="submit" className="primary-button" disabled={submitting}>
-              {submitting ? "Signing in..." : "Sign In"}
-            </button>
-            <Link to="/browse" className="secondary-button">
-              Back to browse
-            </Link>
-          </div>
+          <button type="submit" className="primary-button mt-2 w-full" disabled={submitting || Boolean(socialSubmitting)}>
+            {submitting ? "Signing in..." : "Sign In"}
+          </button>
 
-          {pageMessage ? <p className="mt-4 text-center text-sm text-cyan-100">{pageMessage}</p> : null}
-
-          <div className="mt-6 space-y-2 text-center text-sm text-slate-300">
-            <p>
-              No account?{" "}
-              <button
-                type="button"
-                className="font-semibold text-cyan-100 transition hover:text-white"
-                onClick={openRegisterModal}
-              >
-                Register now
-              </button>
-            </p>
-            <p>
-              Forgot your email or password?{" "}
-              <button
-                type="button"
-                className="font-semibold text-cyan-100 transition hover:text-white"
-                onClick={() => {
-                  openRecoveryModal();
-                }}
-              >
-                Recover access
-              </button>
-            </p>
-            <p>
-              Have a confirmation code?{" "}
-              <button
-                type="button"
-                className="font-semibold text-cyan-100 transition hover:text-white"
-                onClick={() => {
-                  setConfirmationError(null);
-                  setConfirmationModalOpen(true);
-                }}
-              >
-                Confirm email
-              </button>
-            </p>
-          </div>
+          {socialAuthEnabled ? (
+            <div className="mt-6 space-y-4">
+              <div className="signin-divider" aria-hidden="true">
+                <div className="signin-divider-line" />
+                <span className="signin-divider-label">Or</span>
+                <div className="signin-divider-line" />
+              </div>
+              <div className="social-auth-list">
+                {enabledSocialAuthProviders.map(({ provider }) => {
+                  const providerLabel = getSocialAuthProviderLabel(provider);
+                  const isSubmitting = socialSubmitting === provider;
+                  return (
+                    <button
+                      key={provider}
+                      type="button"
+                      className="social-auth-button"
+                      disabled={Boolean(socialSubmitting)}
+                      onClick={() => void handleSocialSignIn(provider, "sign-in")}
+                    >
+                      <span className="social-auth-icon-badge">
+                        <SocialAuthProviderIcon provider={provider} />
+                      </span>
+                      <span className="social-auth-copy">{isSubmitting ? `Connecting to ${providerLabel}...` : `Sign in with ${providerLabel}`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </form>
+
+        <div className="signin-utility-links">
+          <UnderlineActionLink onClick={openRegisterModal}>
+            Create an account
+          </UnderlineActionLink>
+          <UnderlineActionLink
+            onClick={() => {
+              openRecoveryModal();
+            }}
+          >
+            I forgot my password
+          </UnderlineActionLink>
+        </div>
       </section>
 
       {registerModalOpen ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={closeRegisterModal}>
-          <div className="mx-auto max-w-2xl" onClick={(event) => event.stopPropagation()}>
-            <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="register-modal-title">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 id="register-modal-title" className="text-2xl font-semibold text-white">Create account</h2>
-                  <p className="mt-2 text-sm leading-7 text-slate-300">
-                    Register with Supabase auth. Your username stays with the account even if you change email later.
+          <div className="flex min-h-full items-center justify-center">
+            <div className="w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
+              <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="register-modal-title">
+                <div className="auth-panel-header">
+                  <h2 id="register-modal-title" className="auth-panel-title">Create your account</h2>
+                  <p className="auth-panel-copy">
+                    Sign up in a minute. Already have an account?{" "}
+                    <UnderlineActionLink onClick={closeRegisterModal}>Login</UnderlineActionLink>
                   </p>
                 </div>
-                <button className="secondary-button" type="button" onClick={closeRegisterModal}>Close</button>
-              </div>
 
-              <form className="stack-form text-left" onSubmit={handleRegister}>
-                <div className="form-grid">
-                  <Field label="Username" required hint={registrationUserNameHint} hintTone={registrationUserNameHintTone}>
-                    <input
-                      value={registrationUserName}
-                      onChange={(event) => {
-                        setRegistrationUserName(event.currentTarget.value);
-                        registrationUserNameCheckRequest.current += 1;
-                        setRegistrationUserNameError(null);
-                        setRegistrationUserNameAvailability({ status: "idle", value: event.currentTarget.value.trim() });
-                      }}
-                      onBlur={() => {
-                        void validateRegistrationUserName();
-                      }}
-                      autoComplete="username"
-                      aria-invalid={registrationUserNameHintTone === "error"}
-                    />
-                  </Field>
+                {socialAuthEnabled ? (
+                  <div className="space-y-4">
+                    <div className="social-auth-list">
+                      {enabledSocialAuthProviders.map(({ provider }) => {
+                        const providerLabel = getSocialAuthProviderLabel(provider);
+                        const isSubmitting = socialSubmitting === provider;
+                        return (
+                          <button
+                            key={`signup-${provider}`}
+                            type="button"
+                            className="social-auth-button"
+                            disabled={registering || Boolean(socialSubmitting)}
+                            onClick={() => void handleSocialSignIn(provider, "sign-up")}
+                          >
+                            <span className="social-auth-icon-badge">
+                              <SocialAuthProviderIcon provider={provider} />
+                            </span>
+                            <span className="social-auth-copy">{isSubmitting ? `Connecting to ${providerLabel}...` : `Sign up with ${providerLabel}`}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="signin-divider" aria-hidden="true">
+                      <div className="signin-divider-line" />
+                      <span className="signin-divider-label">Or</span>
+                      <div className="signin-divider-line" />
+                    </div>
+                  </div>
+                ) : null}
+
+                <form className="stack-form text-left" onSubmit={handleRegister}>
                   <Field label="Email" required hint={registrationEmailError} hintTone={registrationEmailError ? "error" : "default"}>
                     <input
                       value={registrationEmail}
@@ -5800,12 +5822,6 @@ function SignInPage() {
                       aria-invalid={Boolean(registrationEmailError)}
                     />
                   </Field>
-                  <Field label="First name" required>
-                    <input value={registrationFirstName} onChange={(event) => setRegistrationFirstName(event.currentTarget.value)} autoComplete="given-name" />
-                  </Field>
-                  <Field label="Last name" required>
-                    <input value={registrationLastName} onChange={(event) => setRegistrationLastName(event.currentTarget.value)} autoComplete="family-name" />
-                  </Field>
                   <PasswordField
                     label="Password"
                     value={registrationPassword}
@@ -5814,7 +5830,6 @@ function SignInPage() {
                     onChange={(value) => {
                       setRegistrationPassword(value);
                       setRegistrationPasswordErrors([]);
-                      setRegistrationConfirmPasswordError(null);
                     }}
                     onBlur={validateRegistrationPassword}
                     onToggle={() => setShowRegistrationPassword((current) => !current)}
@@ -5822,79 +5837,64 @@ function SignInPage() {
                     hintTone={registrationPasswordHintTone}
                     required
                   />
-                  <PasswordField
-                    label="Confirm password"
-                    value={registrationConfirmPassword}
-                    autoComplete="new-password"
-                    show={showRegistrationConfirmPassword}
-                    onChange={(value) => {
-                      setRegistrationConfirmPassword(value);
-                      setRegistrationConfirmPasswordError(null);
-                    }}
-                    onBlur={validateRegistrationConfirmPassword}
-                    onToggle={() => setShowRegistrationConfirmPassword((current) => !current)}
-                    hint={registrationConfirmPasswordError}
-                    hintTone={registrationConfirmPasswordError ? "error" : "default"}
-                    required
-                  />
-                </div>
 
-                <AvatarEditor
-                  state={registrationAvatar}
-                  disabled={registering}
-                  onModeChange={(mode) => setRegistrationAvatar((current) => ({ ...current, mode }))}
-                  onUrlChange={(value) => setRegistrationAvatar((current) => ({ ...current, url: value }))}
-                  onUpload={(event) => void handleRegistrationAvatarUpload(event)}
-                />
+                  {captchaRequired ? (
+                    <div className="surface-panel-strong rounded-[1rem] p-4">
+                      <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Human verification</div>
+                      <CaptchaWidget
+                        mode={captchaMode}
+                        siteKey={appConfig.turnstileSiteKey}
+                        token={registrationCaptchaToken}
+                        onTokenChange={setRegistrationCaptchaToken}
+                      />
+                    </div>
+                  ) : null}
 
-                {captchaRequired ? (
-                  <div className="surface-panel-strong rounded-[1rem] p-4">
-                    <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Human verification</div>
-                    <CaptchaWidget
-                      mode={captchaMode}
-                      siteKey={appConfig.turnstileSiteKey}
-                      token={registrationCaptchaToken}
-                      onTokenChange={setRegistrationCaptchaToken}
-                    />
-                  </div>
-                ) : null}
+                  {registrationError ? <p className="error-text">{registrationError}</p> : null}
 
-                {registrationError ? <p className="error-text">{registrationError}</p> : null}
-
-                <div className="button-row">
-                  <button type="submit" className="primary-button" disabled={registering || !registrationCanSubmit}>
-                    {registering ? "Creating account..." : "Create account"}
+                  <button type="submit" className="primary-button w-full" disabled={registering || !registrationCanSubmit || Boolean(socialSubmitting)}>
+                    {registering ? "Creating account..." : "Create an account"}
                   </button>
-                </div>
-              </form>
-            </section>
+                </form>
+              </section>
+            </div>
           </div>
         </div>
       ) : null}
 
       {recoveryModalOpen ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={closeRecoveryModal}>
-          <div className="mx-auto max-w-xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex min-h-full items-center justify-center">
+            <div className="w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
             <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="recovery-modal-title">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 id="recovery-modal-title" className="text-2xl font-semibold text-white">
-                    {recoveryStep === "reset" ? "Set new password" : "Recover access"}
+              {recoveryStep === "request" ? (
+                <div className="auth-panel-header">
+                  <h2 id="recovery-modal-title" className="auth-panel-title">
+                    Reset your password
                   </h2>
-                  <p className="mt-2 text-sm leading-7 text-slate-300">
-                    {recoveryStep === "request"
-                      ? "Enter your email address and we will send a recovery link plus a verification code."
-                      : recoveryStep === "code"
-                        ? "Enter the recovery code from your email. If the code does not work, send another and try again."
-                        : "Enter your new password to complete account recovery."}
+                  <p className="auth-panel-copy">
+                    Enter your email and we'll send you a link to reset your password.
                   </p>
                 </div>
-                <button className="secondary-button" type="button" onClick={closeRecoveryModal}>Close</button>
-              </div>
+              ) : (
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 id="recovery-modal-title" className="text-2xl font-semibold text-white">
+                      {recoveryStep === "code" ? "Recover access" : "Set new password"}
+                    </h2>
+                    <p className="mt-2 text-sm leading-7 text-slate-300">
+                      {recoveryStep === "code"
+                        ? "Enter the recovery code from your email. If the code does not work, send another and try again."
+                        : "Enter your new password to complete account recovery."}
+                    </p>
+                  </div>
+                  <button className="secondary-button" type="button" onClick={closeRecoveryModal}>Close</button>
+                </div>
+              )}
 
               {recoveryStep === "request" ? (
-                <form className="stack-form text-left" onSubmit={handleRequestRecovery}>
-                  <Field label="Email">
+                <form className="stack-form mt-2 text-left" onSubmit={handleRequestRecovery}>
+                  <Field label="Email address" required>
                     <input value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.currentTarget.value)} autoComplete="email" />
                   </Field>
 
@@ -5910,10 +5910,20 @@ function SignInPage() {
                     </div>
                   ) : null}
 
-                  <div className="button-row">
-                    <button type="submit" className="primary-button" disabled={requestingRecovery}>
-                      {requestingRecovery ? "Sending..." : "Send recovery email"}
-                    </button>
+                  <button type="submit" className="primary-button w-full" disabled={requestingRecovery}>
+                    {requestingRecovery ? "Sending..." : "Send link to email"}
+                  </button>
+
+                  <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 pt-2 text-sm text-slate-300">
+                    <UnderlineActionLink
+                      onClick={() => {
+                        closeRecoveryModal();
+                        openRegisterModal();
+                      }}
+                    >
+                      Create an account
+                    </UnderlineActionLink>
+                    <UnderlineActionLink onClick={closeRecoveryModal}>Return to login</UnderlineActionLink>
                   </div>
                 </form>
               ) : null}
@@ -5977,41 +5987,7 @@ function SignInPage() {
               {recoveryStatusMessage ? <p className="text-sm text-cyan-100">{recoveryStatusMessage}</p> : null}
               {recoveryError ? <p className="error-text">{recoveryError}</p> : null}
             </section>
-          </div>
-        </div>
-      ) : null}
-
-      {confirmationModalOpen ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={() => setConfirmationModalOpen(false)}>
-          <div className="mx-auto max-w-xl" onClick={(event) => event.stopPropagation()}>
-            <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="confirmation-modal-title">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 id="confirmation-modal-title" className="text-2xl font-semibold text-white">Confirm email</h2>
-                  <p className="mt-2 text-sm leading-7 text-slate-300">
-                    Enter the confirmation code from your email if you do not want to open the verification link.
-                  </p>
-                </div>
-                <button className="secondary-button" type="button" onClick={() => setConfirmationModalOpen(false)}>Close</button>
-              </div>
-
-              <form className="stack-form text-left" onSubmit={handleConfirmEmail}>
-                <Field label="Email">
-                  <input value={confirmationEmail} onChange={(event) => setConfirmationEmail(event.currentTarget.value)} autoComplete="email" />
-                </Field>
-                <Field label="Confirmation code">
-                  <input value={confirmationCode} onChange={(event) => setConfirmationCode(event.currentTarget.value)} autoComplete="one-time-code" />
-                </Field>
-
-                {confirmationError ? <p className="error-text">{confirmationError}</p> : null}
-
-                <div className="button-row">
-                  <button type="submit" className="primary-button" disabled={confirmingEmail}>
-                    {confirmingEmail ? "Confirming..." : "Confirm email"}
-                  </button>
-                </div>
-              </form>
-            </section>
+            </div>
           </div>
         </div>
       ) : null}
@@ -6078,13 +6054,15 @@ function SignOutPage() {
 }
 
 function PlayerPage() {
-  const { client, session, currentUser, refreshCurrentUser } = useAuth();
+  const { client, session, currentUser, discordAuthEnabled, githubAuthEnabled, googleAuthEnabled, refreshCurrentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedReportId = searchParams.get("reportId");
   const accessToken = session?.access_token ?? "";
   const authSubject = currentUser?.subject ?? "";
+  const passwordSectionRef = useRef<HTMLDivElement | null>(null);
+  const pendingPasswordSectionFocusRef = useRef(false);
   const playerDraftRef = useRef<PlayerPageDraftState | null>(null);
   if (playerDraftRef.current === null) {
     const storedDraft = readSessionStorageJson<Partial<PlayerPageDraftState>>(PLAYER_PAGE_DRAFT_STORAGE_KEY);
@@ -6143,6 +6121,13 @@ function PlayerPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingEmailChange, setPendingEmailChange] = useState<string | null>(null);
+  const [connectedAccountIdentities, setConnectedAccountIdentities] = useState<ConnectedAccountIdentity[] | null>(null);
+  const [connectedAccountsLoading, setConnectedAccountsLoading] = useState(false);
+  const [connectedAccountsError, setConnectedAccountsError] = useState<string | null>(null);
+  const [connectedAccountActionProvider, setConnectedAccountActionProvider] = useState<SocialAuthProvider | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<ConnectedAccountIdentity | null>(null);
+  const [passwordRequiredDisconnectTarget, setPasswordRequiredDisconnectTarget] = useState<ConnectedAccountIdentity | null>(null);
+  const [disconnectModalError, setDisconnectModalError] = useState<string | null>(null);
 
   useEffect(() => {
     const nextPendingEmail =
@@ -6162,6 +6147,59 @@ function PlayerPage() {
       }
 
       throw nextError;
+    }
+  }
+
+  async function loadConnectedAccountIdentities(): Promise<ConnectedAccountIdentity[]> {
+    if (!client.auth.getUserIdentities) {
+      const fallbackIdentities =
+        currentUser?.identityProvider && currentUser.identityProvider !== "email"
+          ? [
+              {
+                id: `${currentUser.subject}-${currentUser.identityProvider}`,
+                user_id: currentUser.subject,
+                identity_id: `${currentUser.subject}-${currentUser.identityProvider}`,
+                provider: currentUser.identityProvider,
+                identity_data: {
+                  email: currentUser.email ?? undefined,
+                },
+              } satisfies ConnectedAccountIdentity,
+            ]
+          : currentUser?.email
+            ? [
+                {
+                  id: `${currentUser.subject}-email`,
+                  user_id: currentUser.subject,
+                  identity_id: `${currentUser.subject}-email`,
+                  provider: "email",
+                  identity_data: {
+                    email: currentUser.email,
+                  },
+                } satisfies ConnectedAccountIdentity,
+              ]
+            : [];
+      setConnectedAccountIdentities(fallbackIdentities);
+      setConnectedAccountsError(null);
+      return fallbackIdentities;
+    }
+
+    setConnectedAccountsLoading(true);
+    try {
+      const response = await client.auth.getUserIdentities();
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const identities = (response.data?.identities ?? []) as ConnectedAccountIdentity[];
+      setConnectedAccountIdentities(identities);
+      setConnectedAccountsError(null);
+      return identities;
+    } catch (nextError) {
+      setConnectedAccountIdentities([]);
+      setConnectedAccountsError("We couldn't load your connected sign-in options right now.");
+      return [];
+    } finally {
+      setConnectedAccountsLoading(false);
     }
   }
 
@@ -6290,7 +6328,7 @@ function PlayerPage() {
           getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
         ]);
         const reportsResponse = await getPlayerTitleReports(appConfig.apiBaseUrl, accessToken);
-        const mfaState = await loadMfaState();
+        const [mfaState, identities] = await Promise.all([loadMfaState(), loadConnectedAccountIdentities()]);
         if (cancelled) {
           return;
         }
@@ -6309,6 +6347,7 @@ function PlayerPage() {
         if (mfaState.factor?.status === "verified") {
           setMfaPendingEnrollment(null);
         }
+        setConnectedAccountIdentities(identities);
         setLibraryTitles(libraryResponse.titles);
         setWishlistTitles(wishlistResponse.titles);
         setReports(reportsResponse.reports);
@@ -6335,6 +6374,70 @@ function PlayerPage() {
       cancelled = true;
     };
   }, [authSubject, pendingEmailChange, requestedReportId]);
+
+  const hasLocalPassword =
+    connectedAccountIdentities === null
+      ? currentUser?.identityProvider === "email"
+      : connectedAccountIdentities.some((identity) => identity.provider === "email");
+  const connectedSocialAccounts = (connectedAccountIdentities ?? []).filter((identity): identity is ConnectedAccountIdentity & { provider: SocialAuthProvider } =>
+    isSocialAuthProvider(identity.provider),
+  );
+  const connectedAccountIdentityByProvider = new Map(connectedSocialAccounts.map((identity) => [identity.provider, identity] as const));
+  const availableConnectedAccountProviders = (["google", "github", "discord"] as const).filter((provider) => {
+    const enabled = provider === "google" ? googleAuthEnabled : provider === "github" ? githubAuthEnabled : discordAuthEnabled;
+    return enabled || connectedAccountIdentityByProvider.has(provider);
+  });
+
+  function focusPasswordSection(): void {
+    if (activeWorkflow !== "account-settings") {
+      pendingPasswordSectionFocusRef.current = true;
+      navigate("/player?workflow=account-settings");
+      return;
+    }
+
+    if (passwordSectionRef.current && typeof passwordSectionRef.current.scrollIntoView === "function") {
+      passwordSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function requestConnectedAccountDisconnect(identity: ConnectedAccountIdentity & { provider: SocialAuthProvider }): void {
+    setMessage(null);
+    setError(null);
+    setDisconnectModalError(null);
+
+    if (!hasLocalPassword && connectedSocialAccounts.length <= 1) {
+      setPasswordRequiredDisconnectTarget(identity);
+      return;
+    }
+
+    setDisconnectTarget(identity);
+  }
+
+  async function handleConnectConnectedAccount(provider: SocialAuthProvider): Promise<void> {
+    setConnectedAccountActionProvider(provider);
+    setConnectedAccountsError(null);
+    setMessage(null);
+    setError(null);
+    try {
+      if (!client.auth.linkIdentity) {
+        throw new Error("Connected account linking is not available right now.");
+      }
+
+      writeSessionStorageValue(SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY, "/player?workflow=account-connected-accounts");
+      const response = await client.auth.linkIdentity({
+        provider,
+        options: {
+          redirectTo: buildAuthRedirectUrl(window.location.origin),
+        },
+      });
+      if (response.error) {
+        throw new Error("We couldn't start that connection right now. Please try again.");
+      }
+    } catch (nextError) {
+      setConnectedAccountsError(nextError instanceof Error ? nextError.message : String(nextError));
+      setConnectedAccountActionProvider(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -6437,7 +6540,9 @@ function PlayerPage() {
 
       let nextPendingEmail = pendingEmailChange;
       if (emailChanged) {
-        await confirmCurrentPassword(settingsCurrentPassword);
+        if (!hasLocalPassword) {
+          throw new Error("Add a password before changing your sign-in email.");
+        }
         const emailUpdate = await client.auth.updateUser({ email: normalizedEmail });
         if (emailUpdate.error) {
           throw new Error(emailUpdate.error.message);
@@ -6460,8 +6565,6 @@ function PlayerPage() {
       setLastName(response.profile.lastName ?? "");
       setEmail(nextPendingEmail ?? normalizedEmail);
       setPendingEmailChange(nextPendingEmail);
-      setSettingsCurrentPassword("");
-      setShowSettingsCurrentPassword(false);
       setSettingsEditMode(false);
       removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
       setMessage(
@@ -6482,7 +6585,8 @@ function PlayerPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      if (!settingsCurrentPassword) {
+      const requiresCurrentPassword = hasLocalPassword;
+      if (requiresCurrentPassword && !settingsCurrentPassword) {
         throw new Error("Current password is required.");
       }
       if (!newPassword) {
@@ -6497,12 +6601,18 @@ function PlayerPage() {
         throw new Error("Password confirmation must match.");
       }
 
-      await confirmCurrentPassword(settingsCurrentPassword);
-      const response = await client.auth.updateUser({ password: newPassword, current_password: settingsCurrentPassword });
+      if (requiresCurrentPassword) {
+        await confirmCurrentPassword(settingsCurrentPassword);
+      }
+      const response = await client.auth.updateUser(
+        requiresCurrentPassword ? { password: newPassword, current_password: settingsCurrentPassword } : { password: newPassword },
+      );
       if (response.error) {
         throw new Error(response.error.message);
       }
 
+      await loadConnectedAccountIdentities();
+      await refreshCurrentUser();
       setSettingsCurrentPassword("");
       setShowSettingsCurrentPassword(false);
       setNewPassword("");
@@ -6510,12 +6620,49 @@ function PlayerPage() {
       setShowNewPassword(false);
       setShowConfirmNewPassword(false);
       removeSessionStorageJson(PLAYER_PAGE_DRAFT_STORAGE_KEY);
-      setMessage("Password updated.");
+      setMessage(requiresCurrentPassword ? "Password updated." : "Password set. You can now sign in with your email and password too.");
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
       setMessage(null);
     } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnectConnectedAccount(): Promise<void> {
+    if (!disconnectTarget) {
+      return;
+    }
+
+    setSaving(true);
+    setConnectedAccountActionProvider(isSocialAuthProvider(disconnectTarget.provider) ? disconnectTarget.provider : null);
+    setDisconnectModalError(null);
+    try {
+      if (!client.auth.unlinkIdentity) {
+        throw new Error("Connected account management is not available right now.");
+      }
+
+      const response = await client.auth.unlinkIdentity(disconnectTarget);
+      if (response.error) {
+        throw new Error(response.error.message || "We couldn't disconnect that sign-in option right now. Please try again.");
+      }
+
+      const disconnectedProvider = disconnectTarget.provider as SocialAuthProvider;
+      setConnectedAccountIdentities((current) =>
+        current ? current.filter((identity) => identity.id !== disconnectTarget.id && identity.identity_id !== disconnectTarget.identity_id) : current,
+      );
+      setDisconnectTarget(null);
+      setMessage(`${getSocialAuthProviderLabel(disconnectedProvider)} disconnected. You can reconnect it any time.`);
+      setError(null);
+      void refreshCurrentUser();
+    } catch (nextError) {
+      const nextMessage = nextError instanceof Error ? nextError.message : String(nextError);
+      setDisconnectModalError(nextMessage);
+      setError(nextMessage);
+      setMessage(null);
+    } finally {
+      setConnectedAccountActionProvider(null);
       setSaving(false);
     }
   }
@@ -6680,7 +6827,7 @@ function PlayerPage() {
     }
   }
 
-  function getActiveWorkflow(): "library-games" | "library-wishlist" | "reported-titles" | "account-profile" | "account-settings" {
+  function getActiveWorkflow(): "library-games" | "library-wishlist" | "reported-titles" | "account-profile" | "account-settings" | "account-connected-accounts" {
     const workflow = searchParams.get("workflow");
     if (location.pathname.endsWith("/wishlist")) {
       return "library-wishlist";
@@ -6694,12 +6841,35 @@ function PlayerPage() {
     if (workflow === "account-settings") {
       return "account-settings";
     }
+    if (workflow === "account-connected-accounts") {
+      return "account-connected-accounts";
+    }
     return "library-games";
   }
 
   const activeWorkflow = getActiveWorkflow();
   const activeDomain = activeWorkflow.startsWith("account-") ? "account" : "library";
   const hasDeveloperRole = currentUser?.roles.includes("developer") ?? false;
+
+  useEffect(() => {
+    if (activeWorkflow !== "account-settings" || !pendingPasswordSectionFocusRef.current) {
+      return;
+    }
+
+    pendingPasswordSectionFocusRef.current = false;
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        if (passwordSectionRef.current && typeof passwordSectionRef.current.scrollIntoView === "function") {
+          passwordSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+      return;
+    }
+
+    if (passwordSectionRef.current && typeof passwordSectionRef.current.scrollIntoView === "function") {
+      passwordSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [activeWorkflow]);
 
   function navigateToWorkflow(workflow: string): void {
     switch (workflow) {
@@ -6717,6 +6887,9 @@ function PlayerPage() {
         return;
       case "account-settings":
         navigate("/player?workflow=account-settings");
+        return;
+      case "account-connected-accounts":
+        navigate("/player?workflow=account-connected-accounts");
         return;
       default:
         navigate("/player");
@@ -6755,6 +6928,7 @@ function PlayerPage() {
                 ["reported-titles", "Reported Titles"],
                 ["account-profile", "Profile"],
                 ["account-settings", "Account Settings"],
+                ["account-connected-accounts", "Connected Accounts"],
               ]
                 .filter(([key]) => (activeDomain === "library" ? !String(key).startsWith("account-") : String(key).startsWith("account-")))
                 .map(([key, label]) => (
@@ -6921,16 +7095,6 @@ function PlayerPage() {
                     <Field label="Email">
                       <input type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} disabled={!settingsEditMode || saving} />
                     </Field>
-                    <PasswordField
-                      label="Current password"
-                      value={settingsCurrentPassword}
-                      autoComplete="current-password"
-                      show={showSettingsCurrentPassword}
-                      onChange={setSettingsCurrentPassword}
-                      onToggle={() => setShowSettingsCurrentPassword((current) => !current)}
-                      disabled={!settingsEditMode || saving}
-                      hint={settingsEditMode ? "Required when you change your email address." : undefined}
-                    />
                   </div>
 
                   <div className="grid gap-4 text-sm text-slate-300 sm:grid-cols-2">
@@ -6977,22 +7141,33 @@ function PlayerPage() {
                     </div>
                   </div>
 
-                  <div className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
+                  <div ref={passwordSectionRef} className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
                     <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Password</div>
-                    <p className="mt-3 text-sm leading-7 text-slate-300">Change your password from account settings without leaving the signed-in workspace.</p>
+                    <p className="mt-3 text-sm leading-7 text-slate-300">
+                      {hasLocalPassword
+                        ? "Change your password here without leaving the signed-in workspace."
+                        : "Add a password so you can sign in directly with your email as well as any connected accounts you keep linked."}
+                    </p>
+                    {!hasLocalPassword ? (
+                      <div className="mt-4 rounded-[1.25rem] border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm leading-7 text-slate-200">
+                        You signed up with a connected account, so this profile does not have a Board Enthusiasts password yet.
+                      </div>
+                    ) : null}
                     <form className="mt-4 stack-form" onSubmit={handlePasswordChangeSubmit}>
-                      <PasswordField
-                        label="Current password"
-                        value={settingsCurrentPassword}
-                        autoComplete="current-password"
-                        show={showSettingsCurrentPassword}
-                        onChange={setSettingsCurrentPassword}
-                        onToggle={() => setShowSettingsCurrentPassword((current) => !current)}
-                        disabled={saving}
-                      />
+                      {hasLocalPassword ? (
+                        <PasswordField
+                          label="Current password"
+                          value={settingsCurrentPassword}
+                          autoComplete="current-password"
+                          show={showSettingsCurrentPassword}
+                          onChange={setSettingsCurrentPassword}
+                          onToggle={() => setShowSettingsCurrentPassword((current) => !current)}
+                          disabled={saving}
+                        />
+                      ) : null}
                       <div className="grid gap-4 sm:grid-cols-2">
                         <PasswordField
-                          label="New password"
+                          label={hasLocalPassword ? "New password" : "Password"}
                           value={newPassword}
                           autoComplete="new-password"
                           show={showNewPassword}
@@ -7012,7 +7187,7 @@ function PlayerPage() {
                       </div>
                       <div className="button-row">
                         <button type="submit" className="secondary-button" disabled={saving}>
-                          {saving ? "Updating..." : "Change Password"}
+                          {saving ? (hasLocalPassword ? "Updating..." : "Saving...") : hasLocalPassword ? "Change Password" : "Set Password"}
                         </button>
                       </div>
                     </form>
@@ -7097,9 +7272,177 @@ function PlayerPage() {
                 </div>
               </>
             ) : null}
+
+            {activeWorkflow === "account-connected-accounts" ? (
+              <>
+                <h2 className="text-2xl font-semibold text-white">Connected Accounts</h2>
+                <p className="mt-3 text-sm leading-7 text-slate-300">Choose which sign-in options stay linked to your account and connect new ones whenever it helps.</p>
+                <div className="mt-6">
+                  <div className="surface-panel-soft rounded-[1.25rem] p-4 text-sm text-slate-300">
+                    <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Connected accounts</div>
+                    <p className="mt-3 text-sm leading-7 text-slate-300">
+                      Review the sign-in options currently linked to this account and disconnect any you no longer want to use.
+                    </p>
+
+                    {connectedAccountsError ? <p className="mt-4 error-text">{connectedAccountsError}</p> : null}
+
+                    {connectedAccountsLoading ? (
+                      <div className="mt-4 space-y-3">
+                        <div className="h-20 animate-pulse rounded-[1.25rem] bg-white/10" />
+                        <div className="h-20 animate-pulse rounded-[1.25rem] bg-white/10" />
+                      </div>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        {connectedSocialAccounts.length === 0 ? (
+                          <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-300">
+                            No connected accounts yet. You can connect one of the sign-in options below whenever you want.
+                          </div>
+                        ) : null}
+
+                        {availableConnectedAccountProviders.map((provider) => {
+                          const identity = connectedAccountIdentityByProvider.get(provider) ?? null;
+                          const providerLabel = getSocialAuthProviderLabel(provider);
+                          const isDisconnecting = connectedAccountActionProvider === provider;
+                          return (
+                            <div key={provider} className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-center gap-4">
+                                  <span className="social-auth-icon-badge">
+                                    <SocialAuthProviderIcon provider={provider} />
+                                  </span>
+                                  <div>
+                                    <div className="text-base font-semibold text-white">{providerLabel}</div>
+                                    <div className="mt-1 text-sm text-slate-300">
+                                      {identity ? getConnectedAccountSummary(identity) : "Not connected"}
+                                    </div>
+                                  </div>
+                                </div>
+                                {identity ? (
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={saving}
+                                    onClick={() => requestConnectedAccountDisconnect(identity)}
+                                  >
+                                    {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={saving || Boolean(connectedAccountActionProvider)}
+                                    onClick={() => void handleConnectConnectedAccount(provider)}
+                                  >
+                                    {isDisconnecting ? "Connecting..." : "Connect"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {message ? <p className="mt-4 success-text">{message}</p> : null}
+                    {error ? <p className="mt-4 error-text">{error}</p> : null}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </section>
         </section>
       </section>
+
+      {disconnectTarget ? (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8"
+          onClick={() => {
+            setDisconnectTarget(null);
+            setDisconnectModalError(null);
+          }}
+        >
+          <div className="flex min-h-full items-center justify-center">
+            <div className="w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
+              <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="disconnect-account-title">
+                <div className="auth-panel-header">
+                  <h2 id="disconnect-account-title" className="auth-panel-title">Disconnect {getSocialAuthProviderLabel(disconnectTarget.provider as SocialAuthProvider)}?</h2>
+                  <p className="auth-panel-copy">
+                    You will no longer be able to use this connected account to sign in to Board Enthusiasts unless you link it again later.
+                  </p>
+                </div>
+
+                <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center gap-4">
+                    <span className="social-auth-icon-badge">
+                      <SocialAuthProviderIcon provider={disconnectTarget.provider as SocialAuthProvider} />
+                    </span>
+                    <div>
+                      <div className="text-base font-semibold text-white">{getSocialAuthProviderLabel(disconnectTarget.provider as SocialAuthProvider)}</div>
+                      <div className="mt-1 text-sm text-slate-300">{getConnectedAccountSummary(disconnectTarget)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {disconnectModalError ? <p className="error-text">{disconnectModalError}</p> : null}
+
+                <div className="button-row justify-center">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={saving}
+                    onClick={() => {
+                      setDisconnectTarget(null);
+                      setDisconnectModalError(null);
+                    }}
+                  >
+                    Keep Connected
+                  </button>
+                  <button type="button" className="danger-button" disabled={saving} onClick={() => void handleDisconnectConnectedAccount()}>
+                    {connectedAccountActionProvider ? "Disconnecting..." : "Disconnect Account"}
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {passwordRequiredDisconnectTarget ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={() => setPasswordRequiredDisconnectTarget(null)}>
+          <div className="flex min-h-full items-center justify-center">
+            <div className="w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
+              <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="set-password-first-title">
+                <div className="auth-panel-header">
+                  <h2 id="set-password-first-title" className="auth-panel-title">Add a password first</h2>
+                  <p className="auth-panel-copy">
+                    Before you disconnect your last connected sign-in option, add a Board Enthusiasts password so you do not get locked out of your account.
+                  </p>
+                </div>
+
+                <div className="rounded-[1.25rem] border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm leading-7 text-slate-200">
+                  Set your password in the Password section, then come back here if you still want to disconnect {getSocialAuthProviderLabel(passwordRequiredDisconnectTarget.provider as SocialAuthProvider)}.
+                </div>
+
+                <div className="button-row justify-center">
+                  <button type="button" className="secondary-button" onClick={() => setPasswordRequiredDisconnectTarget(null)}>
+                    Keep Connected
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => {
+                      setPasswordRequiredDisconnectTarget(null);
+                      focusPasswordSection();
+                    }}
+                  >
+                    Go To Password
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

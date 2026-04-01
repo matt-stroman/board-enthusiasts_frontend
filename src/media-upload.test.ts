@@ -40,4 +40,35 @@ describe("media upload helpers", () => {
     expect(upload.height).toBe(800);
     expect(upload.dataUrl).toMatch(/^data:image\/webp/);
   });
+
+  it("reduces oversized raster files instead of rejecting them immediately", async () => {
+    const mocked = mockRasterImageProcessing({ width: 900, height: 1280, blobSize: 2048, blobType: "image/webp" });
+    restoreImageProcessing = mocked.restore;
+
+    const upload = await normalizeImageUpload(
+      new File([new Uint8Array(1536 * 1024 + 256)], "card.png", { type: "image/png" }),
+      migrationMediaUploadPolicies.cardImages,
+      {
+        label: "card image",
+        readErrorMessage: "Card image upload could not be read.",
+      },
+    );
+
+    expect(mocked.drawImage).toHaveBeenCalled();
+    expect(upload.file.type).toBe("image/webp");
+    expect(upload.file.name).toBe("card.webp");
+  });
+
+  it("still rejects oversized svg uploads that cannot be locally reduced", async () => {
+    await expect(
+      normalizeImageUpload(
+        new File([new Uint8Array(256 * 1024 + 1)], "logo.svg", { type: "image/svg+xml" }),
+        migrationMediaUploadPolicies.logoImages,
+        {
+          label: "studio logo image",
+          readErrorMessage: "Studio media upload could not be read.",
+        },
+      ),
+    ).rejects.toThrow("Uploaded studio logo image must be 256 KB or smaller.");
+  });
 });

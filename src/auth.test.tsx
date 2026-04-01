@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./auth";
 const authClientMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
+  signInWithOAuth: vi.fn(),
   unsubscribe: vi.fn(),
   callback: null as ((event: string, session: { access_token: string } | null) => void) | null,
 }));
@@ -17,6 +18,9 @@ vi.mock("./config", () => ({
     supabaseUrl: "http://127.0.0.1:55421",
     supabasePublishableKey: "publishable-key",
     turnstileSiteKey: null,
+    discordAuthEnabled: false,
+    githubAuthEnabled: false,
+    googleAuthEnabled: false,
     landingMode: false,
   }),
 }));
@@ -29,6 +33,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
     auth: {
       getSession: authClientMocks.getSession,
+      signInWithOAuth: authClientMocks.signInWithOAuth,
       onAuthStateChange: (callback: (event: string, session: { access_token: string } | null) => void) => {
         authClientMocks.callback = callback;
         authClientMocks.onAuthStateChange(callback);
@@ -45,11 +50,17 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 function AuthProbe() {
-  const { loading, currentUser } = useAuth();
+  const { loading, currentUser, signInWithSocialAuth } = useAuth();
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
       <div data-testid="email">{currentUser?.email ?? ""}</div>
+      <button type="button" onClick={() => void signInWithSocialAuth("discord")}>
+        Trigger Discord Sign-In
+      </button>
+      <button type="button" onClick={() => void signInWithSocialAuth("discord", "sign-up")}>
+        Trigger Discord Sign-Up
+      </button>
     </div>
   );
 }
@@ -58,6 +69,7 @@ describe("AuthProvider", () => {
   beforeEach(() => {
     authClientMocks.getSession.mockReset();
     authClientMocks.onAuthStateChange.mockReset();
+    authClientMocks.signInWithOAuth.mockReset();
     authClientMocks.unsubscribe.mockReset();
     authClientMocks.callback = null;
     getCurrentUserMock.mockReset();
@@ -115,5 +127,66 @@ describe("AuthProvider", () => {
     });
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+  });
+
+  it("starts Discord sign-in with the maintained redirect target and skips repeat consent when possible", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signInWithOAuth.mockResolvedValue({
+      data: { provider: "discord", url: "https://discord.com/oauth2/authorize" },
+      error: null,
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Discord Sign-In" }).click();
+      await Promise.resolve();
+    });
+
+    expect(authClientMocks.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "discord",
+      options: {
+        redirectTo: "http://localhost:3000/auth/signin",
+        queryParams: {
+          prompt: "none",
+        },
+      },
+    });
+  });
+
+  it("keeps Discord sign-up on the normal authorization path", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signInWithOAuth.mockResolvedValue({
+      data: { provider: "discord", url: "https://discord.com/oauth2/authorize" },
+      error: null,
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Discord Sign-Up" }).click();
+      await Promise.resolve();
+    });
+
+    expect(authClientMocks.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "discord",
+      options: {
+        redirectTo: "http://localhost:3000/auth/signin",
+      },
+    });
   });
 });

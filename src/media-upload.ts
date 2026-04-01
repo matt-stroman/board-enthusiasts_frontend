@@ -73,13 +73,13 @@ function renderCanvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality
 async function normalizeRasterImage(
   file: File,
   policy: MigrationMediaUploadPolicy,
-  readErrorMessage: string,
+  options: { label: string; readErrorMessage: string },
 ): Promise<NormalizedImageUpload> {
-  const sourceDataUrl = await readFileAsDataUrl(file, readErrorMessage);
-  const { image, width: sourceWidth, height: sourceHeight } = await loadRasterImage(sourceDataUrl, readErrorMessage);
+  const sourceDataUrl = await readFileAsDataUrl(file, options.readErrorMessage);
+  const { image, width: sourceWidth, height: sourceHeight } = await loadRasterImage(sourceDataUrl, options.readErrorMessage);
   const outputDimensions = fitWithinBounds(sourceWidth, sourceHeight, policy.recommendedWidth, policy.recommendedHeight);
   const needsResize = outputDimensions.width !== sourceWidth || outputDimensions.height !== sourceHeight;
-  const needsReencode = needsResize;
+  const needsReencode = needsResize || file.type !== NORMALIZED_RASTER_MIME_TYPE || file.size > policy.maxUploadBytes;
 
   if (!needsReencode) {
     return {
@@ -115,12 +115,16 @@ async function normalizeRasterImage(
     throw new Error("Image upload could not be processed.");
   }
 
+  if (normalizedBlob.size > policy.maxUploadBytes) {
+    throw new Error(buildUploadSizeError(options.label, policy));
+  }
+
   const normalizedFile = new File([normalizedBlob], replaceFileExtension(file.name, ".webp"), {
     type: NORMALIZED_RASTER_MIME_TYPE,
     lastModified: Date.now(),
   });
 
-  const normalizedDataUrl = await readFileAsDataUrl(normalizedFile, readErrorMessage);
+  const normalizedDataUrl = await readFileAsDataUrl(normalizedFile, options.readErrorMessage);
   return {
     file: normalizedFile,
     dataUrl: normalizedDataUrl,
@@ -196,11 +200,11 @@ export async function normalizeImageUpload(
     throw new Error(buildAcceptedMimeTypeError(options.label, policy));
   }
 
-  if (file.size > policy.maxUploadBytes) {
-    throw new Error(buildUploadSizeError(options.label, policy));
-  }
-
   if (file.type === SVG_MIME_TYPE) {
+    if (file.size > policy.maxUploadBytes) {
+      throw new Error(buildUploadSizeError(options.label, policy));
+    }
+
     return {
       file,
       dataUrl: await readFileAsDataUrl(file, options.readErrorMessage),
@@ -210,6 +214,6 @@ export async function normalizeImageUpload(
     };
   }
 
-  const normalized = await normalizeRasterImage(file, policy, options.readErrorMessage);
+  const normalized = await normalizeRasterImage(file, policy, options);
   return normalized;
 }
