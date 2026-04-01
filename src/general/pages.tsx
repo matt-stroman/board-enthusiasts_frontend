@@ -28,6 +28,10 @@ import {
   writeSessionStorageJson,
   type LandingSignupDraftState,
   type TurnstileWidgetStatus,
+  landingEmulatorDiscordUrl,
+  landingGdkDiscordUrl,
+  supportEmailAddress,
+  supportEmailHref,
 } from "../app-core";
 
 export function LandingPage() {
@@ -575,6 +579,181 @@ export function LivePrivacyPage() {
 }
 
 
+type OfferingAction =
+  | { label: string; to: string }
+  | { label: string; href: string; external: true };
+
+type OfferingEntry = {
+  title: string;
+  eyebrow: string;
+  description: string;
+  status: "Available now" | "Coming soon";
+  glyph: "discord" | "library" | "spark" | "toolkit";
+  action?: OfferingAction;
+};
+
+const liveOfferingEntries: OfferingEntry[] = [
+  {
+    title: "BE Game Index",
+    eyebrow: "Index",
+    description: "Browse third-party Board games and apps in one place as the community catalog keeps growing.",
+    status: "Available now",
+    glyph: "library",
+    action: { label: "Browse Index", to: "/browse" },
+  },
+  {
+    title: "BE Discord",
+    eyebrow: "Community",
+    description: "Join players and builders shaping the Board ecosystem together, asking questions, and sharing what they are working on.",
+    status: "Available now",
+    glyph: "discord",
+    action: { label: "Join Discord", href: landingDiscordUrl, external: true },
+  },
+  {
+    title: "BE GPT",
+    eyebrow: "Resource",
+    description: "Use a Board-focused assistant informed by official docs, FAQ, and troubleshooting guidance.",
+    status: "Available now",
+    glyph: "spark",
+    action: { label: "Open GPT", href: landingGptUrl, external: true },
+  },
+  {
+    title: "BE App Launcher for Board",
+    eyebrow: "Utility",
+    description: "Launch installed Board titles more easily after setup without relying on a USB cable or terminal each time.",
+    status: "Available now",
+    glyph: "toolkit",
+    action: { label: "Learn More", href: "https://discord.gg/wqdcusHUKM", external: true },
+  },
+];
+
+const comingSoonOfferingEntries: OfferingEntry[] = [
+  {
+    title: "BE Emulator for Board",
+    eyebrow: "Developer tool",
+    description: "An in-editor Board OS emulator for faster testing workflows inside Unity.",
+    status: "Coming soon",
+    glyph: "toolkit",
+    action: { label: "Follow in Discord", href: landingEmulatorDiscordUrl, external: true },
+  },
+  {
+    title: "BE GDK for Board",
+    eyebrow: "Developer tool",
+    description: "A higher-level toolkit intended to help developers build for Board with smoother workflows and supporting systems.",
+    status: "Coming soon",
+    glyph: "toolkit",
+    action: { label: "Follow in Discord", href: landingGdkDiscordUrl, external: true },
+  },
+];
+
+const homepageValueCards = [
+  {
+    title: "For Players",
+    description: "Discover third-party Board games and apps in one place.",
+  },
+  {
+    title: "For Developers",
+    description: "Show up where players are already browsing and following launches.",
+  },
+  {
+    title: "For the Ecosystem",
+    description: "Build community, tools, and momentum around Board.",
+  },
+];
+
+const ecosystemFitCards = [
+  {
+    title: "Discover",
+    description: "Find third-party Board games and apps through the BE Game Index.",
+  },
+  {
+    title: "Connect",
+    description: "Stay close to players, builders, and community discussion through BE channels.",
+  },
+  {
+    title: "Build",
+    description: "Use or follow the tools BE is creating to support Board development workflows.",
+  },
+];
+
+function OfferingCard({ entry }: { entry: OfferingEntry }) {
+  const action = entry.action;
+
+  return (
+    <article className="app-panel p-6 landing-offering-card">
+      <div className="landing-offering-heading-row">
+        <div className="landing-offering-heading-group">
+          <div className="landing-icon-badge" aria-hidden="true">
+            <LandingGlyph kind={entry.glyph} />
+          </div>
+          <div>
+            <div className="eyebrow">{entry.eyebrow}</div>
+            <h2>{entry.title}</h2>
+          </div>
+        </div>
+        <span className="status-chip">{entry.status}</span>
+      </div>
+      <p className="mt-3 text-sm leading-7 text-slate-300">{entry.description}</p>
+      {action ? (
+        <div className="card-actions mt-5">
+          {"to" in action ? (
+            <Link className="secondary-button" to={action.to}>
+              {action.label}
+            </Link>
+          ) : (
+            <a className="secondary-button" href={action.href} target={action.external ? "_blank" : undefined} rel={action.external ? "noreferrer" : undefined}>
+              {action.label}
+            </a>
+          )}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function OfferingGroupSection({
+  id,
+  title,
+  description,
+  entries,
+}: {
+  id?: string;
+  title: string;
+  description: string;
+  entries: OfferingEntry[];
+}) {
+  return (
+    <section id={id} className="landing-section">
+      <div className="landing-section-heading">
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+      <div className="landing-card-grid">
+        {entries.map((entry) => (
+          <OfferingCard key={entry.title} entry={entry} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CommunityProjectStrip() {
+  return (
+    <section className="landing-section">
+      <article className="app-panel p-6">
+        <div className="eyebrow">Independent and community-built</div>
+        <h2>Board Enthusiasts is independent and community-built.</h2>
+        <p className="mt-3 text-sm leading-7 text-slate-300">
+          Board Enthusiasts is an independent community project for Board players and builders. It is not affiliated with, endorsed by, or sponsored by Board or Harris Hill Products, Inc.
+        </p>
+        <p className="mt-3 text-sm leading-7 text-slate-300">
+          Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+        </p>
+      </article>
+    </section>
+  );
+}
+
 export function HomePage() {
   useDocumentMetadata({
     title: liveMetadata.homeTitle,
@@ -588,300 +767,276 @@ export function HomePage() {
         <div className="landing-hero-column">
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
-              <h1>BE where the Board community shows up first.</h1>
+              <div className="eyebrow">Live now</div>
+              <h1>Discover third-party Board games in one place.</h1>
               <p>
-                Join the community forming around Board, explore useful BE resources, and browse the live BE Library as it grows.
+                The BE Game Index is now live. Browse community-made Board games and apps, follow new launches, and explore the growing BE ecosystem around Board.
               </p>
             </div>
             <div className="landing-hero-footer">
               <div className="hero-actions">
-                <Link className="primary-button" to="/browse">Browse Library</Link>
-                <a className="secondary-button" href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+                <Link className="primary-button" to="/browse">Browse Index</Link>
+                <Link className="secondary-button" to="/offerings">Explore Offerings</Link>
                 <DiscordIconButton />
               </div>
               <p className="landing-hero-note">
-                For official Board news, hardware, and platform information, visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
+                Looking for official Board news, hardware, or platform information? Visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
               </p>
             </div>
           </div>
-
-          <article className="app-panel landing-about-card">
-            <h2>Built to support the Board community.</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              Board Enthusiasts is a community project supporting Board players and builders. It is not officially affiliated with nor endorsed by the Board team or Harris Hill Products, Inc.
-            </p>
-            <p className="mt-3 text-sm leading-7 text-slate-400">
-              Currently built and maintained by Matt Stroman. Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
-            </p>
-          </article>
-
-          <article className="app-panel landing-promo-card">
-            <h2>BE where the Board community shows up first.</h2>
-            <ul className="landing-promo-list" aria-label="Reasons to use BE now">
-              <li>See new third-party releases as they start to surface.</li>
-              <li>Browse the live BE Library as it keeps growing.</li>
-              <li>Follow the tools and resources growing around Board.</li>
-            </ul>
-          </article>
         </div>
 
         <div className="landing-hero-rail">
-          <article className="landing-showcase-card landing-showcase-card-spotlight landing-feature-card">
-            <h2 className="!mt-0">One place to discover third-party Board games and apps.</h2>
-            <p>
-              The BE Library is live as the shared home where players can find new releases in one place and developers can register where the community is already looking.
-            </p>
+          <article className="landing-showcase-card landing-showcase-card-spotlight">
+            <div className="eyebrow">Why it matters</div>
+            <h2>One place to see what the Board community is building right now.</h2>
             <div className="landing-feature-list">
               <div className="landing-feature-item">
-                <strong>Players</strong>
-                <span>Discover and collect new third-party Board content in one place.</span>
+                <strong>Browse releases</strong>
+                <span>See third-party Board games and apps together instead of hunting across separate sites.</span>
               </div>
               <div className="landing-feature-item">
-                <strong>Developers</strong>
-                <span>Show up where players are browsing, following launches, and deciding what to install next.</span>
-              </div>
-            </div>
-            <div className="card-actions mt-5">
-              <Link className="secondary-button" to="/browse">Browse Library</Link>
-            </div>
-          </article>
-
-          <article className="landing-showcase-card landing-signup-card">
-            <h2>Start now. BE part of what launches next.</h2>
-            <p>
-              Browse the live BE Library, plug into the community, and keep the rest of the BE toolset close while the broader platform surface keeps taking shape.
-            </p>
-            <div className="landing-feature-list">
-              <div className="landing-feature-item">
-                <strong>Browse</strong>
-                <span>Discover new Board games and apps from the community catalog.</span>
+                <strong>Track momentum</strong>
+                <span>Follow new launches, studios, and the ecosystem touchpoints growing around Board.</span>
               </div>
               <div className="landing-feature-item">
-                <strong>Play</strong>
-                <span>Track your library, wishlist, and account activity in one place after signing in.</span>
-              </div>
-              <div className="landing-feature-item">
-                <strong>Build</strong>
-                <span>Manage studios, titles, media, and releases from the developer side when you are ready.</span>
+                <strong>Explore BE tools</strong>
+                <span>Explore the community spaces, tools, and supporting BE offerings around the live Game Index.</span>
               </div>
             </div>
-            <div className="button-row mt-6">
-              <Link className="primary-button" to="/browse">Browse Library</Link>
-            </div>
-            <p className="mt-4 text-sm leading-7 text-slate-300">
-              Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
-            </p>
           </article>
         </div>
       </section>
 
       <section className="landing-section">
+        <article className="landing-showcase-card landing-showcase-card-spotlight">
+          <div className="eyebrow">More from BE</div>
+          <h2>BE includes more than the Game Index.</h2>
+          <p>
+            Beyond the live index, BE also includes community spaces, helper tools, utility apps, and in-progress developer offerings built to support the wider Board ecosystem.
+          </p>
+          <div className="card-actions mt-5">
+            <Link className="secondary-button" to="/offerings">Open the Offerings Page</Link>
+          </div>
+        </article>
+      </section>
+
+      <section className="landing-section">
         <div className="landing-section-heading">
-          <h2>Start now. BE part of what launches next.</h2>
-          <p>Board Enthusiasts already has places to plug in today while the live BE Library and broader platform surface keep taking shape.</p>
+          <h2>Why BE exists</h2>
+          <p>The BE Game Index is the live front door, but the bigger goal is to make Board easier to discover, support, and build around.</p>
         </div>
         <div className="landing-card-grid">
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="library" />
-                </div>
-                <div>
-                  <div className="eyebrow">Library</div>
-                  <h2>BE Library</h2>
-                </div>
-              </div>
-              <span className="status-chip">Available now</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              The shared home for browsing third-party Board games and apps, with player and developer flows ready when you sign in.
-            </p>
-            <div className="card-actions mt-5">
-              <Link className="secondary-button" to="/browse">Browse Library</Link>
-            </div>
-          </article>
+          {homepageValueCards.map((card) => (
+            <article key={card.title} className="app-panel p-6 landing-offering-card">
+              <h2>{card.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{card.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="discord" />
-                </div>
-                <div>
-                  <div className="eyebrow">Community</div>
-                  <h2>BE Discord</h2>
-                </div>
-              </div>
-              <span className="status-chip">Available now</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              Join early builders and players shaping the Board ecosystem. Share projects, ask questions, and help the community grow together.
+      <OfferingGroupSection
+        title="Live Now"
+        description="The Game Index is the headline release, and BE already has more around it today. Start with the live offerings already available around it."
+        entries={liveOfferingEntries}
+      />
+
+      <OfferingGroupSection
+        title="Coming Soon"
+        description="These are the next supporting pieces BE is building for smoother Board development workflows."
+        entries={comingSoonOfferingEntries}
+      />
+
+      <CommunityProjectStrip />
+    </div>
+  );
+}
+
+export function OfferingsPage() {
+  useDocumentMetadata({
+    title: liveMetadata.offeringsTitle,
+    description: liveMetadata.offeringsDescription,
+    canonicalUrl: liveMetadata.offeringsCanonical,
+  });
+
+  return (
+      <div className="landing-shell page-grid">
+        <section className="landing-section">
+        <div className="hero-panel landing-hero-panel landing-hero-panel-compact">
+          <div className="landing-hero-copy">
+            <div className="eyebrow">BE ecosystem</div>
+            <h1>Explore the BE ecosystem.</h1>
+            <p>
+              Beyond the live Game Index, BE includes community spaces, helper tools, utility apps, and in-progress developer offerings.
             </p>
-            <div className="card-actions mt-5">
+            <p className="landing-hero-note">
+              The Game Index is the front door. This page covers the broader BE ecosystem around it.
+            </p>
+          </div>
+          <div className="landing-hero-footer">
+            <div className="hero-actions">
+              <Link className="primary-button" to="/browse">Browse Game Index</Link>
               <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Join Discord</a>
             </div>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="spark" />
-                </div>
-                <div>
-                  <div className="eyebrow">Resource</div>
-                  <h2>BE GPT</h2>
-                </div>
-              </div>
-              <span className="status-chip">Available now</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              A Board-focused assistant for players and developers, with guidance drawn from official Board docs, FAQ, and troubleshooting resources.
-            </p>
-            <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingGptUrl} target="_blank" rel="noreferrer">Open GPT</a>
-            </div>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="library" />
-                </div>
-                <div>
-                  <div className="eyebrow">Utility</div>
-                  <h2>BE App Launcher for Board</h2>
-                </div>
-              </div>
-              <span className="status-chip">Available now</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
-            </p>
-            <div className="card-actions mt-5">
-              <a className="secondary-button" href="https://discord.gg/wqdcusHUKM" target="_blank" rel="noreferrer">Learn More</a>
-            </div>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="toolkit" />
-                </div>
-                <div>
-                  <div className="eyebrow">Developer tool</div>
-                  <h2>BE Emulator for Board</h2>
-                </div>
-              </div>
-              <span className="status-chip">Coming Soon</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              An emulator for the Board OS used in the Unity editor to show the screens Board would show for SDK calls, making it easier to test titles in-editor without building and deploying to target as often.
-            </p>
-            <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Get Updates</a>
-            </div>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <div className="landing-offering-heading-row">
-              <div className="landing-offering-heading-group">
-                <div className="landing-icon-badge" aria-hidden="true">
-                  <LandingGlyph kind="toolkit" />
-                </div>
-                <div>
-                  <div className="eyebrow">In progress</div>
-                  <h2>BE GDK for Board</h2>
-                </div>
-              </div>
-              <span className="status-chip">Coming Soon</span>
-            </div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              A companion toolkit for the official Board SDK currently in development, with workflow helpers, editor tools, and higher-level systems designed to help developers focus on the game.
-            </p>
-            <div className="card-actions mt-5">
-              <a className="secondary-button" href={landingDiscordUrl} target="_blank" rel="noreferrer">Get Updates</a>
-            </div>
-          </article>
+          </div>
         </div>
       </section>
 
-      <section className="landing-section">
-        <div className="landing-board-note">
-          <p>
-            Looking for official Board news, hardware, or platform information? Visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
-          </p>
-        </div>
-      </section>
+      <OfferingGroupSection
+        id="available-now"
+        title="Available Now"
+        description="These BE offerings are already live today."
+        entries={liveOfferingEntries}
+      />
+
+      <OfferingGroupSection
+        title="Coming Soon"
+        description="These are the next BE tools and supporting platform pieces now in progress."
+        entries={comingSoonOfferingEntries}
+      />
 
       <section className="landing-section">
         <div className="landing-section-heading">
-          <h2>Built to help the Board ecosystem connect and grow.</h2>
-          <p>BE is meant to be useful right away for supporting and growing the Board community, while also giving players and developers a reason to get involved early.</p>
+          <h2>How BE fits together</h2>
+          <p>Discovery, community, and tooling each play a distinct role in the broader BE ecosystem.</p>
         </div>
         <div className="landing-card-grid">
-          <article className="app-panel p-6 landing-offering-card">
-            <h2>For Players</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
-            </p>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <h2>For Developers</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              Connect with players and fellow builders, share progress, explore practical resources, and be ready to register where discovery is taking shape.
-            </p>
-          </article>
-
-          <article className="app-panel p-6 landing-offering-card">
-            <h2>For the Ecosystem</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">
-              BE exists to support the growing Board community by helping players and developers connect, collaborate, and stay engaged.
-            </p>
-          </article>
+          {ecosystemFitCards.map((card) => (
+            <article key={card.title} className="app-panel p-6 landing-offering-card">
+              <h2>{card.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{card.description}</p>
+            </article>
+          ))}
         </div>
       </section>
+
+      <section className="landing-section">
+        <article className="landing-showcase-card landing-showcase-card-spotlight">
+          <div className="eyebrow">Back to the index</div>
+          <h2>Browse the live BE Game Index.</h2>
+          <p>
+            When you are ready to discover what is available right now, jump back into the live index and explore third-party Board games and apps.
+          </p>
+          <div className="card-actions mt-5">
+            <Link className="primary-button" to="/browse">Browse Game Index</Link>
+            <Link className="secondary-button" to="/">Return Home</Link>
+          </div>
+        </article>
+      </section>
+
+      <CommunityProjectStrip />
     </div>
   );
 }
 
 
 export function InstallGuidePage() {
-  return (
-    <div className="page-grid">
-      <section className="space-y-8">
-        <div className="space-y-3">
-          <h1 className="app-page-title">Install Guide</h1>
-          <p className="max-w-3xl text-base leading-8 text-slate-300">
-            Follow these steps to install independent games on Board.
+  const boardDeveloperBridgeUrl = "https://dev.board.fun/#:~:text=Board%20Developer%20Bridge%20(bdb)";
+  const boardInstallInstructionsUrl = "https://docs.dev.board.fun/getting-started/deploy#board-developer-bridge-bdb";
+
+    return (
+      <div className="page-grid">
+        <section className="space-y-8">
+          <div className="space-y-2">
+            <h1 className="font-display text-3xl font-bold uppercase tracking-[0.08em] text-white">Install Guide</h1>
+            <p className="text-sm leading-7 text-slate-300">
+              Follow these steps to get an independent game onto your Board today.
+            </p>
+          </div>
+
+          <section className="app-panel p-6">
+            <div className="eyebrow">A smoother install flow is coming</div>
+            <h2>We know the current process is a bit cumbersome.</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-300">
+            Right now, installing independent games still means downloading the title on your computer and using Board&apos;s install tooling.
           </p>
-        </div>
+          <p className="mt-3 text-sm leading-7 text-slate-300">
+            Coming soon to BE, we plan to offer an on-Board app for the index that can install games from your library without needing to stay connected to your PC.
+          </p>
+        </section>
 
         <section className="home-card-grid">
           <section className="app-panel p-6">
-            <div className="eyebrow">1. Get the files</div>
-            <h2>Download game files</h2>
+            <div className="eyebrow">1. Get the game</div>
+            <h2>Choose a title and download it from the developer.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Get the APK or install package from the developer or publisher.
+              <Link className="text-cyan-100 transition hover:text-white" to="/browse">Browse the index</Link> to find a game you like, then use the <code>Get Title</code> link on that listing to purchase and download it from the developer&apos;s publishing site.
             </p>
           </section>
           <section className="app-panel p-6">
-            <div className="eyebrow">2. Connect your device</div>
-            <h2>Prepare Board and your computer</h2>
+            <div className="eyebrow">2. Download the installer</div>
+            <h2>Get Board&apos;s install tool onto your computer.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Connect Board and your computer, then enable any required device settings.
+              On Board&apos;s developer portal, you&apos;ll need to unlock the download first and then choose the version for your computer.
             </p>
+            <ul className="bullet-list mt-3">
+              <li>Open <a className="text-cyan-100 transition hover:text-white" href={boardDeveloperBridgeUrl} target="_blank" rel="noreferrer">Board Developer Bridge (bdb)</a> on Board&apos;s developer portal.</li>
+              <li>Read Board&apos;s <a className="text-cyan-100 transition hover:text-white" href="https://dev.board.fun/" target="_blank" rel="noreferrer">Developer Terms of Use</a>.</li>
+              <li>Check the agreement box to enable the download buttons.</li>
+              <li>Download the version for your operating system.</li>
+            </ul>
           </section>
           <section className="app-panel p-6">
-            <div className="eyebrow">3. Finish the install</div>
-            <h2>Verify and launch</h2>
+            <div className="eyebrow">3. Install on Board</div>
+            <h2>Follow Board&apos;s setup steps and finish the install.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Confirm installation completed successfully, then launch on Board.
+              Follow <a className="text-cyan-100 transition hover:text-white" href={boardInstallInstructionsUrl} target="_blank" rel="noreferrer">Board&apos;s instructions</a> for connecting Board and installing your game.
             </p>
+          </section>
+        </section>
+      </section>
+    </div>
+  );
+}
+
+export function SupportPage() {
+  useDocumentMetadata({
+    title: liveMetadata.supportTitle,
+    description: liveMetadata.supportDescription,
+    canonicalUrl: liveMetadata.supportCanonical,
+  });
+
+  return (
+    <div className="page-grid">
+      <section className="space-y-8">
+        <div className="space-y-2">
+          <h1 className="font-display text-3xl font-bold uppercase tracking-[0.08em] text-white">Contact Us</h1>
+          <p className="text-sm leading-7 text-slate-300">
+            If something on Board Enthusiasts is not working the way you expected, we&apos;re here to help.
+          </p>
+        </div>
+
+        <section className="app-panel p-6">
+          <div className="eyebrow">Support</div>
+          <h2>Email the BE team.</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-300">
+            Reach us at <a className="text-cyan-100 transition hover:text-white" href={supportEmailHref}>{supportEmailAddress}</a>. We&apos;ll help with sign-in issues, broken pages, account questions, and anything else that seems off in the site.
+          </p>
+          <div className="card-actions mt-5">
+            <a className="primary-button" href={supportEmailHref}>Email Support</a>
+            <Link className="secondary-button" to="/browse">Browse the Index</Link>
+          </div>
+        </section>
+
+        <section className="home-card-grid">
+          <section className="app-panel p-6">
+            <div className="eyebrow">What to include</div>
+            <h2>Help us understand what happened.</h2>
+            <ul className="bullet-list mt-3">
+              <li>Tell us what you were trying to do.</li>
+              <li>Include the page or feature where the problem happened.</li>
+              <li>Share a screenshot if one helps explain the issue faster.</li>
+            </ul>
+          </section>
+          <section className="app-panel p-6">
+            <div className="eyebrow">Before you email</div>
+            <h2>A couple of quick checks can help.</h2>
+            <ul className="bullet-list mt-3">
+              <li>Refresh the page and try again.</li>
+              <li>Make sure your internet connection is still active.</li>
+              <li>If you were signing in, double-check that you are using the right account or provider.</li>
+            </ul>
           </section>
         </section>
       </section>
@@ -906,5 +1061,3 @@ export function NotFoundPage() {
     </div>
   );
 }
-
-

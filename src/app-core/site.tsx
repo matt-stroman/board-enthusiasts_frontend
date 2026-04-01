@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import type { SocialAuthProvider } from "../auth";
+import constructionGlyph from "../assets/landing-glyphs/construction.svg?raw";
+import viewCarouselGlyph from "../assets/landing-glyphs/view-carousel.svg?raw";
 import { appConfig, landingDiscordUrl, landingSignupRoute, type ConnectedAccountIdentity } from "./shared";
 
 export function LandingUpdatesLink({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -123,6 +125,10 @@ export function UnderlineActionLink({
   );
 }
 
+function InlineSvgGlyph({ markup }: { markup: string }) {
+  return <span className="landing-inline-glyph" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+
 export function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" | "toolkit" }) {
   if (kind === "discord") {
     return (
@@ -136,14 +142,7 @@ export function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" |
   }
 
   if (kind === "library") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path
-          d="M4 6.5A2.5 2.5 0 0 1 6.5 4H18a2 2 0 0 1 2 2v11.5a2.5 2.5 0 0 1-2.5 2.5H7a3 3 0 0 1-3-3V6.5Zm3 1.25A1.25 1.25 0 0 0 5.75 9v8A1.75 1.75 0 0 0 7.5 18.75H17a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1H6.5A1.5 1.5 0 0 0 5 7v.2c.46-.29 1-.45 1.59-.45H17v1.5H7Z"
-          fill="currentColor"
-        />
-      </svg>
-    );
+    return <InlineSvgGlyph markup={viewCarouselGlyph} />;
   }
 
   if (kind === "spark") {
@@ -156,14 +155,7 @@ export function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" |
     );
   }
 
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M6 4h3v3H6V4Zm9 0h3v3h-3V4ZM6 17h3v3H6v-3Zm9 0h3v3h-3v-3ZM10.5 6.5h3v3h-3v-3Zm0 8h3v3h-3v-3Zm-4-4h11v3h-11v-3Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
+  return <InlineSvgGlyph markup={constructionGlyph} />;
 }
 
 export function getMfaQrCodeImageSource(qrCode: string): string {

@@ -28,6 +28,7 @@ import {
   formatMembershipRole,
   formatReportStatus,
   formatTimestamp,
+  getUserFacingErrorMessage,
   getCatalogTitleAvailabilityNote,
   getFallbackGradient,
   getHeroImageUrl,
@@ -99,7 +100,7 @@ export function BrowsePage() {
       setReportedTitleIds(new Set(reportsResponse.reports.map((report) => report.titleId)));
       setPlayerActionErrorMessage(null);
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
     } finally {
       setPlayerStateLoading(false);
     }
@@ -123,7 +124,7 @@ export function BrowsePage() {
         setError(null);
       } catch (nextError) {
         if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : String(nextError));
+          setError(getUserFacingErrorMessage(nextError, "We couldn't load the browse page right now. Please try again."));
         }
       } finally {
         if (!cancelled) {
@@ -276,7 +277,7 @@ export function BrowsePage() {
         setPlayerActionStatusMessage(`${titleDisplayName} added to wishlist.`);
       }
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't update your library right now. Please try again."));
     } finally {
       markBusy(titleId, false);
     }
@@ -305,7 +306,7 @@ export function BrowsePage() {
         setPlayerActionStatusMessage(`${titleDisplayName} added to My Games.`);
       }
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't update your wishlist right now. Please try again."));
     } finally {
       markBusy(titleId, false);
     }
@@ -340,7 +341,7 @@ export function BrowsePage() {
       setReportTarget(null);
       setReportReason("");
     } catch (nextError) {
-      setReportErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setReportErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't submit that report right now. Please try again."));
     } finally {
       setReportSubmitting(false);
     }
@@ -610,7 +611,7 @@ export function StudioDetailPage() {
       setReportedTitleIds(new Set(reportsResponse.reports.map((report) => report.titleId)));
       setPlayerActionErrorMessage(null);
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
     } finally {
       setPlayerStateLoading(false);
     }
@@ -634,7 +635,7 @@ export function StudioDetailPage() {
         setError(null);
       } catch (nextError) {
         if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : String(nextError));
+          setError(getUserFacingErrorMessage(nextError, "We couldn't load that studio right now. Please try again."));
         }
       } finally {
         if (!cancelled) {
@@ -749,7 +750,7 @@ export function StudioDetailPage() {
         setPlayerActionStatusMessage(`${titleDisplayName} added to wishlist.`);
       }
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't update your library right now. Please try again."));
     } finally {
       markBusy(titleId, false);
     }
@@ -778,7 +779,7 @@ export function StudioDetailPage() {
         setPlayerActionStatusMessage(`${titleDisplayName} added to My Games.`);
       }
     } catch (nextError) {
-      setPlayerActionErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't update your wishlist right now. Please try again."));
     } finally {
       markBusy(titleId, false);
     }
@@ -813,7 +814,7 @@ export function StudioDetailPage() {
       setReportTarget(null);
       setReportReason("");
     } catch (nextError) {
-      setReportErrorMessage(nextError instanceof Error ? nextError.message : String(nextError));
+      setReportErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't submit that report right now. Please try again."));
     } finally {
       setReportSubmitting(false);
     }
@@ -1083,7 +1084,7 @@ export function TitleDetailPage() {
       setExistingReport(reportsResponse.reports.find((candidate) => candidate.titleId === nextTitleId) ?? null);
       setPlayerStateError(null);
     } catch (nextError) {
-      setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerStateError(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
     } finally {
       setPlayerStateLoading(false);
     }
@@ -1111,7 +1112,7 @@ export function TitleDetailPage() {
         setError(null);
       } catch (nextError) {
         if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : String(nextError));
+          setError(getUserFacingErrorMessage(nextError, "We couldn't load that title right now. Please try again."));
         }
       } finally {
         if (!cancelled) {
@@ -1170,7 +1171,7 @@ export function TitleDetailPage() {
       setActionMessage(nextIncluded ? "Added to your library." : "Removed from your library.");
       setPlayerStateError(null);
     } catch (nextError) {
-      setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerStateError(getUserFacingErrorMessage(nextError, "We couldn't update your library right now. Please try again."));
       setActionMessage(null);
     } finally {
       setActionLoading(false);
@@ -1194,7 +1195,7 @@ export function TitleDetailPage() {
       setActionMessage(nextIncluded ? "Added to your wishlist." : "Removed from your wishlist.");
       setPlayerStateError(null);
     } catch (nextError) {
-      setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerStateError(getUserFacingErrorMessage(nextError, "We couldn't update your wishlist right now. Please try again."));
       setActionMessage(null);
     } finally {
       setActionLoading(false);
@@ -1219,7 +1220,7 @@ export function TitleDetailPage() {
       setActionMessage("Report submitted.");
       setPlayerStateError(null);
     } catch (nextError) {
-      setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
+      setPlayerStateError(getUserFacingErrorMessage(nextError, "We couldn't submit that report right now. Please try again."));
       setActionMessage(null);
     } finally {
       setActionLoading(false);
@@ -1424,4 +1425,3 @@ export function TitleDetailPage() {
     </section>
   );
 }
-

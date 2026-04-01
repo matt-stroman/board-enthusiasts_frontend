@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { appConfig, landingPrivacyRoute, LandingShell, ProtectedRoute, Shell } from "../app-core";
 import { BrowsePage, StudioDetailPage, TitleDetailPage } from "../browse";
 import { DevelopPage } from "../developer";
-import { HomePage, InstallGuidePage, LandingPage, LandingPrivacyPage, LivePrivacyPage, NotFoundPage } from "../general";
+import { HomePage, InstallGuidePage, LandingPage, LandingPrivacyPage, LivePrivacyPage, NotFoundPage, OfferingsPage, SupportPage } from "../general";
 import { ModeratePage } from "../moderator";
 import { PlayerPage, SignInPage, SignOutPage } from "../player";
 
@@ -28,6 +28,8 @@ export function AppRoutes() {
     <Shell>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/offerings" element={<OfferingsPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route path="/privacy" element={<LivePrivacyPage />} />
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/browse/:studioSlug/:titleSlug" element={<TitleDetailPage />} />

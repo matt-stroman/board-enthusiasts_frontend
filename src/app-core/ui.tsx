@@ -10,6 +10,7 @@ import type {
 import { useId, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { formatMediaUploadGuidance } from "../media-upload";
+import { supportRoute } from "./errors";
 import type { AvatarEditorState } from "./shared";
 import {
   AVATAR_UPLOAD_ACCEPT,
@@ -94,10 +95,23 @@ export function LoadingPanel({ title = "Loading..." }: { title?: string }) {
   );
 }
 
-export function ErrorPanel({ title = "Something went wrong", detail }: { title?: string; detail: string }) {
+export function ErrorPanel({
+  title = "Something went wrong",
+  detail,
+  showSupportLink = true,
+}: {
+  title?: string;
+  detail: string;
+  showSupportLink?: boolean;
+}) {
   return (
     <Panel title={title} eyebrow="Error">
       <p>{detail}</p>
+      {showSupportLink ? (
+        <p className="mt-3 text-sm leading-7 text-slate-300">
+          Need a hand? <Link className="text-cyan-100 transition hover:text-white" to={supportRoute}>Contact Us</Link>.
+        </p>
+      ) : null}
     </Panel>
   );
 }

@@ -2,6 +2,7 @@ import type { CurrentUserResponse, PlatformRole } from "@board-enthusiasts/migra
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCurrentUser } from "./api";
+import { getUserFacingErrorMessage } from "./app-core/errors";
 import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig } from "./config";
 
@@ -120,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setCurrentUser(null);
-    setAuthError(lastError instanceof Error ? lastError.message : String(lastError));
+    setAuthError(getUserFacingErrorMessage(lastError, "We couldn't refresh your account right now. Please reload the page and try again."));
   }
 
   useEffect(() => {
@@ -171,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await supabase.auth.signInWithPassword({ email, password });
         if (result.error) {
           setLoading(false);
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
 
         setSession(result.data.session);
@@ -193,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (result.error) {
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error, "We couldn't start that sign-in option right now. Please try again."));
         }
       },
       async signUp(input: SignUpInput): Promise<{ requiresEmailConfirmation: boolean }> {
@@ -218,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (result.error) {
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
 
         setSession(result.data.session);
@@ -237,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           captchaToken: captchaToken ?? undefined,
         });
         if (result.error) {
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
       },
       async verifyEmailCode(email: string, token: string): Promise<void> {
@@ -245,7 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await supabase.auth.verifyOtp({ email, token, type: "signup" });
         if (result.error) {
           setLoading(false);
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
 
         setSession(result.data.session);
@@ -257,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await supabase.auth.verifyOtp({ email, token, type: "recovery" });
         if (result.error) {
           setLoading(false);
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
 
         setSession(result.data.session);
@@ -267,14 +268,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async updatePassword(password: string): Promise<void> {
         const result = await supabase.auth.updateUser({ password });
         if (result.error) {
-          throw new Error(result.error.message);
+          throw new Error(getUserFacingErrorMessage(result.error));
         }
       },
       async signOut(options?: { tolerateNetworkFailure?: boolean }): Promise<void> {
         try {
           const result = await supabase.auth.signOut();
           if (result.error) {
-            throw new Error(result.error.message);
+            throw new Error(getUserFacingErrorMessage(result.error));
           }
         } catch (error) {
           if (!options?.tolerateNetworkFailure) {

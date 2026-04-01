@@ -22,6 +22,8 @@ export const landingSignupSource = "landing_page";
 export const landingPrivacyRoute = "/privacy";
 export const landingSignupRoute = "/#signup";
 export const landingDiscordUrl = "https://discord.gg/cz2zReWqcA";
+export const landingGdkDiscordUrl = "https://discord.gg/T9CMkmJX7P";
+export const landingEmulatorDiscordUrl = "https://discord.gg/YFsFcCM6Ff";
 export const landingGptUrl = "https://chatgpt.com/g/g-69b033db223c81919edf748c33b08b3f-board-enthusiast";
 export const landingBoardUrl = "https://board.fun/";
 export const landingSupportMailtoHref = "mailto:support@boardenthusiasts.com?subject=%5BBug%20Report%5D%20Email%20signup%20issue";
@@ -38,8 +40,16 @@ export const landingMetadata = {
 export const liveMetadata = {
   homeTitle: "Board Enthusiasts | For Board Players and Builders",
   homeDescription:
-    "BE is where the Board community shows up first. Browse the live BE Library, plug into Discord, discover current tools, and follow what launches next.",
+    "The BE Game Index is live. Browse third-party Board games and apps in one place, then explore the broader Board Enthusiasts ecosystem around it.",
   homeCanonical: "https://boardenthusiasts.com/",
+  offeringsTitle: "BE Offerings | Tools, Community, and Ecosystem Support for Board",
+  offeringsDescription:
+    "Explore the broader BE ecosystem around the live Game Index, including community spaces, helper tools, utility apps, and in-progress offerings for Board players and builders.",
+  offeringsCanonical: "https://boardenthusiasts.com/offerings",
+  supportTitle: "Contact Us | Board Enthusiasts",
+  supportDescription:
+    "Get help with Board Enthusiasts, report site issues, and contact the team at support@boardenthusiasts.com.",
+  supportCanonical: "https://boardenthusiasts.com/support",
   privacyTitle: "BE Privacy Snapshot | For Board Players and Builders",
   privacyDescription:
     "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
@@ -556,7 +566,7 @@ export function canViewTitleReportMessageAudience(audience: string, viewerRole: 
 }
 
 export function isBrowsePath(pathname: string): boolean {
-  return pathname === "/" || pathname.startsWith("/browse") || pathname.startsWith("/studios");
+  return pathname.startsWith("/browse") || pathname.startsWith("/studios");
 }
 
 export function parseGenreTags(value: string | null | undefined): string[] {

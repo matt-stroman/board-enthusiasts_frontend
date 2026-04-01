@@ -107,6 +107,22 @@ export interface SupportIssueReportResponse {
   accepted: true;
 }
 
+function isTechnicalApiMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return [
+    "duplicate key value",
+    "violates",
+    "constraint",
+    "row for relation",
+    "relation \"",
+    "sql",
+    "supabase",
+    "storage.objects",
+    "jwt",
+    "auth session missing",
+  ].some((pattern) => normalized.includes(pattern));
+}
+
 export async function apiFetch<T>(
   apiBaseUrl: string,
   path: string,
@@ -135,7 +151,7 @@ export async function apiFetch<T>(
     });
   } catch (error) {
     throw new Error(
-      "Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct.",
+      "We couldn't reach Board Enthusiasts right now. Please check your connection and try again.",
       { cause: error },
     );
   }
@@ -163,8 +179,22 @@ export async function apiFetch<T>(
       }
     }
 
+    if (response.status === 401) {
+      detail = "Your session is no longer active. Please sign in again and try once more.";
+    } else if (response.status === 403) {
+      detail = "This part of Board Enthusiasts isn't available to your account.";
+    } else if (response.status === 404) {
+      detail = "We couldn't find what you were looking for.";
+    } else if (response.status === 409 && /(already|duplicate|exists)/i.test(detail)) {
+      detail = "That information is already in use. Review it and try again.";
+    } else if (response.status === 429) {
+      detail = "Board Enthusiasts is getting more requests than usual right now. Please wait a moment and try again.";
+    } else if (response.status >= 500 || isTechnicalApiMessage(detail)) {
+      detail = "Board Enthusiasts is having trouble right now. Please try again in a moment.";
+    }
+
     if (structuredError) {
-      throw structuredError;
+      throw new ApiError(detail, structuredError.status, structuredError.code, structuredError.errors);
     }
 
     throw new ApiError(detail, response.status, code);

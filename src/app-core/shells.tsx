@@ -16,6 +16,7 @@ import {
   landingSignupRoute,
   renderCurrentUserAvatar,
 } from "./shared";
+import { getUserFacingErrorMessage, supportRoute } from "./errors";
 import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 
@@ -27,6 +28,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const accessToken = session?.access_token ?? "";
   const homeShell = location.pathname === "/";
   const browseActive = isBrowsePath(location.pathname);
+  const offeringsActive = location.pathname.startsWith("/offerings");
   const installActive = location.pathname.startsWith("/install-guide");
   const showSignedInSections = Boolean(session && currentUser);
   const accountReady = Boolean(currentUser);
@@ -69,7 +71,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const response = await getCurrentUserNotifications(appConfig.apiBaseUrl, accessToken);
       setNotifications([...response.notifications].sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
     } catch (nextError) {
-      setNotificationError(nextError instanceof Error ? nextError.message : String(nextError));
+      setNotificationError(getUserFacingErrorMessage(nextError, "We couldn't load your notifications right now. Please try again."));
     } finally {
       setNotificationsLoading(false);
     }
@@ -133,6 +135,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <nav className="app-nav" aria-label="Primary">
             <Link to="/browse" className={navLinkClass(browseActive)}>
               Browse
+            </Link>
+            <Link to="/offerings" className={navLinkClass(offeringsActive)}>
+              Offerings
             </Link>
             {showSignedInSections ? (
               <>
@@ -297,6 +302,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link to="/browse" className={`${navLinkClass(browseActive)} whitespace-nowrap`}>
             Browse
           </Link>
+          <Link to="/offerings" className={`${navLinkClass(offeringsActive)} whitespace-nowrap`}>
+            Offerings
+          </Link>
           {showSignedInSections ? (
             <>
               <NavLink to="/player" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
@@ -335,8 +343,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="app-footer-links">
             <Link to="/browse">Browse</Link>
+            <Link to="/offerings">Offerings</Link>
             <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
             <a href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+            <Link to={supportRoute}>Contact Us</Link>
             <Link to="/privacy">Privacy</Link>
             {showSignedInSections ? (
               <>
@@ -527,6 +537,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           <div className="app-footer-links">
             <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
             <a href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+            <Link to={supportRoute}>Contact Us</Link>
             <Link to={landingPrivacyRoute}>Privacy</Link>
           </div>
           <div className="landing-footer-copyright">© {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a></div>

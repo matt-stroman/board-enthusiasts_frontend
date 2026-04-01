@@ -595,15 +595,18 @@ describe("App", () => {
   it("renders the live BE front door and signed-out shell navigation", async () => {
     renderApp("/");
 
-    expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." })).toBeVisible();
     expect(screen.getByText("For Board Players And Builders")).toBeVisible();
-    expect(screen.getByText(/The BE Library is live/i)).toBeVisible();
-    expect(screen.getAllByRole("link", { name: "Browse Library" }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/The BE Game Index is now live/i)).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Browse Index" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Offerings" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Install" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("heading", { name: "BE Library" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "BE includes more than the Game Index." })).toBeVisible();
+    expect(screen.getByText("Explore BE tools")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE Game Index" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "BE Discord" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "BE Emulator for Board" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "https://mattstroman.com");
@@ -611,6 +614,100 @@ describe("App", () => {
     expect(screen.queryByRole("link", { name: "Player Sign In" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Developer Sign In" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Join the list" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Browse highlighted only on browse routes", async () => {
+    renderApp("/");
+
+    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+
+    const homeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
+    expect(homeBrowseLink).toBeDefined();
+    expect(homeBrowseLink).not.toHaveClass("active");
+
+    await userEvent.click(homeBrowseLink as HTMLAnchorElement);
+
+    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+
+    const activeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
+    expect(activeBrowseLink).toBeDefined();
+    expect(activeBrowseLink).toHaveClass("active");
+
+    const homeLink = screen.getAllByRole("link").find((link) => link.getAttribute("href") === "/");
+    expect(homeLink).toBeDefined();
+
+    await userEvent.click(homeLink as HTMLAnchorElement);
+
+    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+
+    const returnedHomeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
+    expect(returnedHomeBrowseLink).toBeDefined();
+    expect(returnedHomeBrowseLink).not.toHaveClass("active");
+  });
+
+  it("renders the dedicated offerings page and links users back to the game index", async () => {
+    renderApp("/offerings");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Explore the BE ecosystem." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Available Now" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Coming Soon" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "How BE fits together" })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Browse Game Index" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "BE Game Index" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE GDK for Board" })).toBeVisible();
+    expect(screen.queryByText("How to use this page")).not.toBeInTheDocument();
+    expect(screen.queryByText("What BE includes")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Join the list" })).not.toBeInTheDocument();
+  });
+
+  it("renders the install guide with the Board download and install links", async () => {
+    renderApp("/install-guide");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Install Guide" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "We know the current process is a bit cumbersome." })).toBeVisible();
+    expect(screen.getByText(/on-Board app for the index/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Browse the index" })).toHaveAttribute("href", "/browse");
+    expect(screen.getByRole("link", { name: "Board Developer Bridge (bdb)" })).toHaveAttribute(
+      "href",
+      "https://dev.board.fun/#:~:text=Board%20Developer%20Bridge%20(bdb)",
+    );
+    expect(screen.getByRole("link", { name: "Developer Terms of Use" })).toHaveAttribute("href", "https://dev.board.fun/");
+    expect(screen.getByText(/Check the agreement box to enable the download buttons/i)).toBeVisible();
+    expect(screen.getByText(/Download the version for your operating system/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Board's instructions" })).toHaveAttribute(
+      "href",
+      "https://docs.dev.board.fun/getting-started/deploy#board-developer-bridge-bdb",
+    );
+  });
+
+  it("renders the support page with the support email address", async () => {
+    renderApp("/support");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Contact Us" })).toBeVisible();
+    expect(screen.getByText(/we're here to help/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: "support@boardenthusiasts.com" })).toHaveAttribute(
+      "href",
+      "mailto:support@boardenthusiasts.com",
+    );
+    expect(screen.getByRole("link", { name: "Email Support" })).toHaveAttribute(
+      "href",
+      "mailto:support@boardenthusiasts.com",
+    );
+  });
+
+  it("shows a friendly browse error message and points users to contact us when the site cannot be reached", async () => {
+    apiMocks.listPublicStudios.mockRejectedValue(
+      new Error("Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct."),
+    );
+    apiMocks.listCatalogTitles.mockRejectedValue(
+      new Error("Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct."),
+    );
+
+    renderApp("/browse");
+
+    expect(await screen.findByText("We couldn't reach Board Enthusiasts right now. Please check your connection and try again.")).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Contact Us" }).some((link) => link.getAttribute("href") === "/support")).toBe(true);
+    expect(screen.queryByText(/configured frontend API base URL/i)).not.toBeInTheDocument();
   });
 
   it("renders the signed-in account avatar in the shell and user menu", async () => {
@@ -2553,7 +2650,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." });
+    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
     await userEvent.click(screen.getByRole("button", { name: /open account/i }));
 
     expect(screen.getByRole("button", { name: "Profile" })).toBeVisible();
@@ -2606,7 +2703,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." });
+    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
     await userEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     expect(await screen.findByText("Moderator follow-up on your report")).toBeVisible();
