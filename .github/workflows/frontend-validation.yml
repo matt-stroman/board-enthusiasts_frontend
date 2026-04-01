@@ -98,7 +98,7 @@ jobs:
                           "ls-remote",
                           "--exit-code",
                           "--heads",
-                          "https://github.com/matt-stroman/board-enthusiasts.git",
+                          "https://github.com/board-enthusiasts/board-enthusiasts.git",
                           head_ref
                       ],
                       capture_output=True,
@@ -122,7 +122,7 @@ jobs:
 
       - name: Clone root workspace
         run: |
-          git clone --depth 1 --branch "${{ steps.root_ref.outputs.root_ref }}" --recurse-submodules https://github.com/matt-stroman/board-enthusiasts.git root-workspace
+          git clone --depth 1 --branch "${{ steps.root_ref.outputs.root_ref }}" --recurse-submodules https://github.com/board-enthusiasts/board-enthusiasts.git root-workspace
 
       - name: Overlay frontend branch contents into root workspace
         run: |
