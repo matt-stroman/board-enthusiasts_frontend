@@ -54,9 +54,9 @@ import {
   uploadTitleMediaAsset,
   upsertTitleMediaAsset,
   upsertTitleMetadata,
-} from "./api";
-import { useAuth } from "./auth";
-import { readAppConfig } from "./config";
+} from "../api";
+import { useAuth } from "../auth";
+import { readAppConfig } from "../config";
 import {
   STUDIO_DESCRIPTION_MAX_LENGTH,
   TITLE_DESCRIPTION_MAX_LENGTH,
@@ -71,7 +71,7 @@ import {
 import {
   formatMediaUploadGuidance,
   normalizeImageUpload,
-} from "./media-upload";
+} from "../media-upload";
 
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";

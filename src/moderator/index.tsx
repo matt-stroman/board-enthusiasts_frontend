@@ -1,0 +1,1 @@
+export { ModeratePage } from "./pages";
