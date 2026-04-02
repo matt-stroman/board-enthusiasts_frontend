@@ -5,3 +5,4 @@ export * from "./app-core/captcha";
 export * from "./app-core/errors";
 export * from "./app-core/shells";
 export * from "./app-core/site";
+export * from "./app-core/analytics";

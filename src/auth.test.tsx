@@ -6,11 +6,13 @@ const authClientMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   signInWithOAuth: vi.fn(),
+  signUp: vi.fn(),
   unsubscribe: vi.fn(),
   callback: null as ((event: string, session: { access_token: string } | null) => void) | null,
 }));
 
 const getCurrentUserMock = vi.hoisted(() => vi.fn());
+const trackAnalyticsEventMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./config", () => ({
   readAppConfig: () => ({
@@ -29,11 +31,16 @@ vi.mock("./api", () => ({
   getCurrentUser: getCurrentUserMock,
 }));
 
+vi.mock("./app-core/analytics", () => ({
+  trackAnalyticsEvent: trackAnalyticsEventMock,
+}));
+
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
     auth: {
       getSession: authClientMocks.getSession,
       signInWithOAuth: authClientMocks.signInWithOAuth,
+      signUp: authClientMocks.signUp,
       onAuthStateChange: (callback: (event: string, session: { access_token: string } | null) => void) => {
         authClientMocks.callback = callback;
         authClientMocks.onAuthStateChange(callback);
@@ -50,7 +57,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 function AuthProbe() {
-  const { loading, currentUser, signInWithSocialAuth } = useAuth();
+  const { loading, currentUser, signInWithSocialAuth, signUp } = useAuth();
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
@@ -61,6 +68,17 @@ function AuthProbe() {
       <button type="button" onClick={() => void signInWithSocialAuth("discord", "sign-up")}>
         Trigger Discord Sign-Up
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          void signUp({
+            email: "new.player@example.com",
+            password: "NewPlayer!123",
+          })
+        }
+      >
+        Trigger Email Sign-Up
+      </button>
     </div>
   );
 }
@@ -70,9 +88,13 @@ describe("AuthProvider", () => {
     authClientMocks.getSession.mockReset();
     authClientMocks.onAuthStateChange.mockReset();
     authClientMocks.signInWithOAuth.mockReset();
+    authClientMocks.signUp.mockReset();
     authClientMocks.unsubscribe.mockReset();
     authClientMocks.callback = null;
     getCurrentUserMock.mockReset();
+    trackAnalyticsEventMock.mockReset();
+    window.sessionStorage.clear();
+    window.localStorage.clear();
   });
 
   it("does not re-enter loading on auth token refresh after bootstrap", async () => {
@@ -159,6 +181,13 @@ describe("AuthProvider", () => {
         },
       },
     });
+    expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "oauth_started",
+        provider: "discord",
+        surface: "sign-in",
+      }),
+    );
   });
 
   it("keeps Discord sign-up on the normal authorization path", async () => {
@@ -188,5 +217,100 @@ describe("AuthProvider", () => {
         redirectTo: "http://localhost:3000/auth/signin",
       },
     });
+    expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "oauth_started",
+        provider: "discord",
+        surface: "sign-up",
+      }),
+    );
+  });
+
+  it("records oauth completion after the redirect returns with a signed-in session", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signInWithOAuth.mockResolvedValue({
+      data: { provider: "discord", url: "https://discord.com/oauth2/authorize" },
+      error: null,
+    });
+    getCurrentUserMock.mockResolvedValue({
+      subject: "user-1",
+      displayName: "Discord Player",
+      email: "discord.player@example.com",
+      emailVerified: true,
+      identityProvider: "discord",
+      roles: ["player"],
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Discord Sign-In" }).click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      authClientMocks.callback?.("SIGNED_IN", { access_token: "oauth-token" });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "oauth_completed",
+          provider: "discord",
+          surface: "sign-in",
+          authState: "authenticated",
+        }),
+      ),
+    );
+  });
+
+  it("records raw account creation for successful email sign-up", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signUp.mockResolvedValue({
+      data: {
+        session: null,
+      },
+      error: null,
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Email Sign-Up" }).click();
+      await Promise.resolve();
+    });
+
+    expect(authClientMocks.signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "new.player@example.com",
+        password: "NewPlayer!123",
+      }),
+    );
+    expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "account_created",
+        surface: "email-password",
+        authState: "anonymous",
+        metadata: expect.objectContaining({
+          requiresEmailConfirmation: true,
+          identityProvider: "email",
+        }),
+      }),
+    );
   });
 });

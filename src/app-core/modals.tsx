@@ -1,6 +1,6 @@
 import type { CatalogTitleResponse, PlayerTitleReportSummary } from "@board-enthusiasts/migration-contract";
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
@@ -25,6 +25,7 @@ import {
   getHeroImageUrl,
   parseGenreTags,
 } from "./shared";
+import { trackAnalyticsEvent } from "./analytics";
 import { ErrorPanel, Field, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
 
 export function ReportTitleModal({
@@ -90,6 +91,7 @@ export function TitleQuickViewModal({
   onClose: () => void;
 }) {
   const { session, currentUser } = useAuth();
+  const location = useLocation();
   const [title, setTitle] = useState<CatalogTitleResponse["title"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +178,26 @@ export function TitleQuickViewModal({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [accessToken, onClose, playerAccessEnabled, studioSlug, titleSlug]);
+
+  useEffect(() => {
+    if (!title) {
+      return;
+    }
+
+    trackAnalyticsEvent({
+      event: "title_quick_view_opened",
+      path: `${location.pathname}${location.search}`,
+      authState: session && currentUser ? "authenticated" : "anonymous",
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      surface: "quick-view",
+      contentKind: title.contentKind,
+      metadata: {
+        titleId: title.id,
+        studioId: title.studioId,
+      },
+    });
+  }, [currentUser, location.pathname, location.search, session, title]);
 
   async function handleLibraryToggle(nextIncluded: boolean): Promise<void> {
     if (!title || !accessToken) {
@@ -362,7 +384,27 @@ export function TitleQuickViewModal({
                       Details
                     </Link>
                     {title.acquisition?.url ?? title.acquisitionUrl ? (
-                      <a className="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" href={title.acquisition?.url ?? title.acquisitionUrl ?? undefined} target="_blank" rel="noreferrer">
+                      <a
+                        className="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-slate-100"
+                        href={title.acquisition?.url ?? title.acquisitionUrl ?? undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() =>
+                          trackAnalyticsEvent({
+                            event: "title_get_clicked",
+                            path: `${location.pathname}${location.search}`,
+                            authState: session && currentUser ? "authenticated" : "anonymous",
+                            studioSlug: title.studioSlug,
+                            titleSlug: title.slug,
+                            surface: "quick-view",
+                            contentKind: title.contentKind,
+                            metadata: {
+                              titleId: title.id,
+                              studioId: title.studioId,
+                            },
+                          })
+                        }
+                      >
                         Get title
                       </a>
                     ) : null}

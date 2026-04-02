@@ -2,6 +2,7 @@ import type { CurrentUserResponse, PlatformRole } from "@board-enthusiasts/migra
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCurrentUser } from "./api";
+import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
 import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig } from "./config";
@@ -45,6 +46,12 @@ const supabase = createClient(appConfig.supabaseUrl, appConfig.supabasePublishab
 const AuthContext = createContext<AuthContextValue | null>(null);
 const developerOrAboveRoles: readonly PlatformRole[] = ["developer", "verified_developer", "moderator", "admin", "super_admin"];
 const moderatorOrAboveRoles: readonly PlatformRole[] = ["moderator", "admin", "super_admin"];
+const oauthPendingStorageKey = "be-auth-pending-oauth";
+
+type PendingOAuthState = {
+  provider: SocialAuthProvider;
+  intent: SocialAuthIntent;
+};
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
@@ -56,6 +63,46 @@ function getSupabaseStorageKeys(supabaseUrl: string): string[] {
   const hostname = new URL(supabaseUrl).hostname;
   const storageKey = `sb-${hostname.split(".")[0] ?? hostname}-auth-token`;
   return [storageKey, `${storageKey}-code-verifier`, `${storageKey}-user`];
+}
+
+function readPendingOAuthState(): PendingOAuthState | null {
+  try {
+    const raw = window.sessionStorage.getItem(oauthPendingStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PendingOAuthState>;
+    if (
+      (parsed.provider === "discord" || parsed.provider === "github" || parsed.provider === "google")
+      && (parsed.intent === "sign-in" || parsed.intent === "sign-up")
+    ) {
+      return {
+        provider: parsed.provider,
+        intent: parsed.intent,
+      };
+    }
+  } catch {
+    // Ignore malformed state and fall back to no pending OAuth marker.
+  }
+
+  return null;
+}
+
+function writePendingOAuthState(state: PendingOAuthState): void {
+  try {
+    window.sessionStorage.setItem(oauthPendingStorageKey, JSON.stringify(state));
+  } catch {
+    // Keep auth flow resilient even if session storage is unavailable.
+  }
+}
+
+function clearPendingOAuthState(): void {
+  try {
+    window.sessionStorage.removeItem(oauthPendingStorageKey);
+  } catch {
+    // Ignore storage cleanup failures for the same reason as above.
+  }
 }
 
 export function hasPlatformRole(roles: PlatformRole[], required: "player" | "developer" | "moderator"): boolean {
@@ -81,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setCurrentUser(null);
     setAuthError(null);
+    clearPendingOAuthState();
 
     for (const storageKey of getSupabaseStorageKeys(appConfig.supabaseUrl)) {
       try {
@@ -141,10 +189,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void bootstrap();
 
-    const subscription = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const subscription = supabase.auth.onAuthStateChange((event, nextSession) => {
       void (async () => {
         setSession(nextSession);
         await refreshCurrentUser(nextSession);
+        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && nextSession?.access_token) {
+          const pendingOAuth = readPendingOAuthState();
+          if (pendingOAuth) {
+            trackAnalyticsEvent({
+              event: "oauth_completed",
+              path: `${window.location.pathname}${window.location.search}`,
+              authState: "authenticated",
+              provider: pendingOAuth.provider,
+              surface: pendingOAuth.intent,
+              metadata: {
+                identityProvider: pendingOAuth.provider,
+              },
+            });
+            clearPendingOAuthState();
+          }
+        }
+
         if (!cancelled) {
           setLoading(false);
         }
@@ -180,6 +245,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       },
       async signInWithSocialAuth(provider: SocialAuthProvider, intent: SocialAuthIntent = "sign-in"): Promise<void> {
+        trackAnalyticsEvent({
+          event: "oauth_started",
+          path: `${window.location.pathname}${window.location.search}`,
+          authState: session && currentUser ? "authenticated" : "anonymous",
+          provider,
+          surface: intent,
+          metadata: {
+            redirectTo: buildAuthRedirectUrl(window.location.origin),
+          },
+        });
+        writePendingOAuthState({ provider, intent });
         const queryParams =
           provider === "discord" && intent === "sign-in"
             ? {
@@ -194,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (result.error) {
+          clearPendingOAuthState();
           throw new Error(getUserFacingErrorMessage(result.error, "We couldn't start that sign-in option right now. Please try again."));
         }
       },
@@ -221,6 +298,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.error) {
           throw new Error(getUserFacingErrorMessage(result.error));
         }
+
+        trackAnalyticsEvent({
+          event: "account_created",
+          path: `${window.location.pathname}${window.location.search}`,
+          authState: "anonymous",
+          surface: "email-password",
+          metadata: {
+            requiresEmailConfirmation: !result.data.session,
+            identityProvider: "email",
+          },
+        });
 
         setSession(result.data.session);
         if (result.data.session) {

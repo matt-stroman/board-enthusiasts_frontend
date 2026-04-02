@@ -17,6 +17,7 @@ import {
   renderCurrentUserAvatar,
 } from "./shared";
 import { getUserFacingErrorMessage, supportRoute } from "./errors";
+import { usePageAnalytics } from "./analytics";
 import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 
@@ -43,6 +44,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
+  usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
     return active ? "app-nav-link active" : "app-nav-link";
@@ -409,6 +411,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const currentYear = new Date().getFullYear();
   const [mobileHeaderVisible, setMobileHeaderVisible] = useState(true);
   const lastMobileScrollY = useRef(0);
+  usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
     if (!location.hash) {

@@ -1,6 +1,6 @@
 import type { CatalogTitleResponse, CatalogTitleSummary, DeveloperStudioSummary, PlayerTitleReportSummary, StudioSummary, TitleMediaAsset } from "@board-enthusiasts/migration-contract";
-import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
@@ -41,6 +41,7 @@ import {
   PlayerRangeField,
   ReportTitleModal,
   StudioLinkIcon,
+  trackAnalyticsEvent,
   StudioCard,
   TitleCard,
   TitleNameHeading,
@@ -51,6 +52,7 @@ import {
 
 export function BrowsePage() {
   const { session, currentUser } = useAuth();
+  const location = useLocation();
   const accessToken = session?.access_token ?? "";
   const playerAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "player") : false;
   const [studios, setStudios] = useState<StudioSummary[]>([]);
@@ -79,6 +81,7 @@ export function BrowsePage() {
   const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
   const [quickViewTarget, setQuickViewTarget] = useState<{ studioSlug: string; titleSlug: string } | null>(null);
   const deferredQuery = useDeferredValue(query);
+  const lastTrackedBrowseFilterKeyRef = useRef("");
 
   async function refreshPlayerState(): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
@@ -205,6 +208,81 @@ export function BrowsePage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [contentKind, deferredQuery, maxPlayersFilter, minPlayersFilter, resultsPerPage, selectedGenres, selectedStudios, sort]);
+
+  useEffect(() => {
+    if (loading || error) {
+      return;
+    }
+
+    const hasNonDefaultFilters =
+      deferredQuery.trim().length > 0 ||
+      contentKind !== "all" ||
+      sort !== "title-asc" ||
+      selectedStudios.length > 0 ||
+      selectedGenres.length > 0 ||
+      minPlayersFilter !== PLAYER_FILTER_MIN ||
+      maxPlayersFilter !== PLAYER_FILTER_MAX;
+
+    if (!hasNonDefaultFilters) {
+      lastTrackedBrowseFilterKeyRef.current = "";
+      return;
+    }
+
+    const analyticsKey = JSON.stringify({
+      path: `${location.pathname}${location.search}`,
+      query: deferredQuery.trim().toLowerCase(),
+      contentKind,
+      sort,
+      selectedStudios,
+      selectedGenres,
+      minPlayersFilter,
+      maxPlayersFilter,
+      resultCount: filteredTitles.length,
+    });
+
+    if (lastTrackedBrowseFilterKeyRef.current === analyticsKey) {
+      return;
+    }
+
+    lastTrackedBrowseFilterKeyRef.current = analyticsKey;
+    const timeoutId = window.setTimeout(() => {
+      trackAnalyticsEvent({
+        event: "browse_filters_applied",
+        path: `${location.pathname}${location.search}`,
+        authState: session && currentUser ? "authenticated" : "anonymous",
+        contentKind: contentKind === "all" ? null : (contentKind as "game" | "app"),
+        metadata: {
+          query: deferredQuery.trim() || null,
+          sort,
+          selectedStudios,
+          selectedGenres,
+          minPlayers: minPlayersFilter,
+          maxPlayers: maxPlayersFilter,
+          resultCount: filteredTitles.length,
+        },
+        value1: filteredTitles.length,
+      });
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    contentKind,
+    currentUser,
+    deferredQuery,
+    error,
+    filteredTitles.length,
+    loading,
+    location.pathname,
+    location.search,
+    maxPlayersFilter,
+    minPlayersFilter,
+    selectedGenres,
+    selectedStudios,
+    session,
+    sort,
+  ]);
 
   const normalizedResultsPerPage = resultsPerPage === "all" ? 0 : Number(resultsPerPage);
   const totalPages = normalizedResultsPerPage <= 0 ? 1 : Math.max(1, Math.ceil(filteredTitles.length / normalizedResultsPerPage));
@@ -1048,6 +1126,7 @@ export function StudioDetailPage() {
 
 export function TitleDetailPage() {
   const { session, currentUser } = useAuth();
+  const location = useLocation();
   const params = useParams<{ studioSlug: string; titleSlug: string }>();
   const studioSlug = params.studioSlug ?? "";
   const titleSlug = params.titleSlug ?? "";
@@ -1126,6 +1205,26 @@ export function TitleDetailPage() {
       cancelled = true;
     };
   }, [accessToken, playerAccessEnabled, studioSlug, titleSlug]);
+
+  useEffect(() => {
+    if (!title) {
+      return;
+    }
+
+    trackAnalyticsEvent({
+      event: "title_detail_viewed",
+      path: `${location.pathname}${location.search}`,
+      authState: session && currentUser ? "authenticated" : "anonymous",
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      surface: "title-detail",
+      contentKind: title.contentKind,
+      metadata: {
+        titleId: title.id,
+        studioId: title.studioId,
+      },
+    });
+  }, [currentUser, location.pathname, location.search, session, title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1276,7 +1375,27 @@ export function TitleDetailPage() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 {title.acquisitionUrl ? (
-                  <a className="primary-button" href={title.acquisitionUrl} target="_blank" rel="noreferrer">
+                  <a
+                    className="primary-button"
+                    href={title.acquisitionUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() =>
+                      trackAnalyticsEvent({
+                        event: "title_get_clicked",
+                        path: `${location.pathname}${location.search}`,
+                        authState: session && currentUser ? "authenticated" : "anonymous",
+                        studioSlug: title.studioSlug,
+                        titleSlug: title.slug,
+                        surface: "title-detail",
+                        contentKind: title.contentKind,
+                        metadata: {
+                          titleId: title.id,
+                          studioId: title.studioId,
+                        },
+                      })
+                    }
+                  >
                     Get title
                   </a>
                 ) : null}
