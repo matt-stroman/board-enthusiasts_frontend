@@ -16,6 +16,9 @@ export type AnalyticsEventName =
   | "title_detail_viewed"
   | "title_get_clicked";
 
+/**
+ * Canonical analytics event payload sent from the SPA to the internal Worker ingestion route.
+ */
 export interface AnalyticsEventRequest {
   event: AnalyticsEventName;
   path?: string | null;
@@ -157,6 +160,9 @@ async function postAnalyticsEvent(payload: AnalyticsEventRequest): Promise<void>
   }
 }
 
+/**
+ * Record a one-off product analytics event without blocking the user flow.
+ */
 export function trackAnalyticsEvent(event: Omit<AnalyticsEventRequest, "sessionId" | "visitorId">): void {
   const normalizedPath = normalizePath(event.path ?? (typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : null));
   const visitor = getOrCreateVisitorId();
@@ -169,6 +175,9 @@ export function trackAnalyticsEvent(event: Omit<AnalyticsEventRequest, "sessionI
   });
 }
 
+/**
+ * Track route-level page views while preserving anonymous visitor/session continuity across the SPA.
+ */
 export function usePageAnalytics(path: string, authState: AnalyticsAuthState): void {
   const trackedPathRef = useRef<string | null>(null);
 

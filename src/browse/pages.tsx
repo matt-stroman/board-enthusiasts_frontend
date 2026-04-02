@@ -1504,7 +1504,7 @@ export function TitleDetailPage() {
             )
           ) : (
             <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
-              <p>This signed-in account does not currently have player access for collection and reporting workflows.</p>
+              <p>This account can sign in, but it is not set up for player features like library, wishlist, or title reporting yet.</p>
             </div>
           )}
         </section>
