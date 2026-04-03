@@ -1,5 +1,5 @@
 import type { CurrentUserResponse, PlatformRole } from "@board-enthusiasts/migration-contract";
-import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type Session, type SupabaseClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCurrentUser } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
@@ -16,10 +16,16 @@ export interface SignUpInput {
   avatarUrl?: string | null;
   avatarDataUrl?: string | null;
   captchaToken?: string | null;
+  marketingOptIn?: boolean | null;
+  marketingConsentTextVersion?: string | null;
 }
 
 export type SocialAuthProvider = "discord" | "github" | "google";
 export type SocialAuthIntent = "sign-in" | "sign-up";
+export interface SocialAuthSignInOptions {
+  marketingOptIn?: boolean;
+  marketingConsentTextVersion?: string | null;
+}
 
 interface AuthContextValue {
   client: SupabaseClient;
@@ -31,7 +37,7 @@ interface AuthContextValue {
   githubAuthEnabled: boolean;
   googleAuthEnabled: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signInWithSocialAuth: (provider: SocialAuthProvider, intent?: SocialAuthIntent) => Promise<void>;
+  signInWithSocialAuth: (provider: SocialAuthProvider, intent?: SocialAuthIntent, options?: SocialAuthSignInOptions) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   requestPasswordReset: (email: string, captchaToken?: string | null) => Promise<void>;
   verifyEmailCode: (email: string, token: string) => Promise<void>;
@@ -51,6 +57,8 @@ const oauthPendingStorageKey = "be-auth-pending-oauth";
 type PendingOAuthState = {
   provider: SocialAuthProvider;
   intent: SocialAuthIntent;
+  marketingOptIn: boolean;
+  marketingConsentTextVersion: string | null;
 };
 
 function delay(milliseconds: number): Promise<void> {
@@ -80,6 +88,11 @@ function readPendingOAuthState(): PendingOAuthState | null {
       return {
         provider: parsed.provider,
         intent: parsed.intent,
+        marketingOptIn: parsed.marketingOptIn === true,
+        marketingConsentTextVersion:
+          parsed.marketingOptIn === true && typeof parsed.marketingConsentTextVersion === "string" && parsed.marketingConsentTextVersion.trim().length > 0
+            ? parsed.marketingConsentTextVersion.trim()
+            : null,
       };
     }
   } catch {
@@ -103,6 +116,47 @@ function clearPendingOAuthState(): void {
   } catch {
     // Ignore storage cleanup failures for the same reason as above.
   }
+}
+
+function readFallbackAuthMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const candidate = metadata[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function buildFallbackCurrentUser(authUser: SupabaseAuthUser | null | undefined): CurrentUserResponse | null {
+  if (!authUser) {
+    return null;
+  }
+
+  const metadata = (authUser.user_metadata ?? {}) as Record<string, unknown>;
+  const firstName = readFallbackAuthMetadataString(metadata, "firstName", "given_name");
+  const lastName = readFallbackAuthMetadataString(metadata, "lastName", "family_name");
+  const displayName =
+    readFallbackAuthMetadataString(metadata, "displayName", "full_name", "name") ??
+    ([firstName, lastName].filter(Boolean).join(" ").trim() || null) ??
+    authUser.email?.split("@")[0] ??
+    "User";
+  const identityProvider =
+    typeof authUser.app_metadata?.provider === "string" && authUser.app_metadata.provider.trim().length > 0
+      ? authUser.app_metadata.provider.trim()
+      : "email";
+  const avatarUrl = readFallbackAuthMetadataString(metadata, "avatarUrl", "avatar_url", "picture", "image");
+
+  return {
+    subject: authUser.id,
+    displayName,
+    email: authUser.email ?? null,
+    emailVerified: Boolean(authUser.email_confirmed_at),
+    identityProvider,
+    roles: ["player"],
+    avatarUrl,
+  };
 }
 
 export function hasPlatformRole(roles: PlatformRole[], required: "player" | "developer" | "moderator"): boolean {
@@ -168,8 +222,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    setCurrentUser(null);
-    setAuthError(getUserFacingErrorMessage(lastError, "We couldn't refresh your account right now. Please reload the page and try again."));
+    setCurrentUser(buildFallbackCurrentUser(nextSession.user));
+    setAuthError(
+      getUserFacingErrorMessage(lastError, "We couldn't fully refresh your account right now. Some account features may be temporarily limited.")
+    );
+  }
+
+  async function consumePendingOAuthState(nextSession: Session | null): Promise<PendingOAuthState | null> {
+    if (!nextSession?.access_token) {
+      return null;
+    }
+
+    const pendingOAuth = readPendingOAuthState();
+    if (!pendingOAuth) {
+      return null;
+    }
+
+    // Clear the marker before any async work so oauth bootstrap and auth-state callbacks
+    // do not re-run the same completion work or get stuck in update loops.
+    clearPendingOAuthState();
+
+    if (pendingOAuth.intent === "sign-up" && nextSession.user) {
+      const existingMetadata =
+        typeof nextSession.user.user_metadata === "object" && nextSession.user.user_metadata
+          ? (nextSession.user.user_metadata as Record<string, unknown>)
+          : {};
+      const updateResult = await supabase.auth.updateUser({
+        data: {
+          ...existingMetadata,
+          beMarketingOptIn: pendingOAuth.marketingOptIn,
+          beMarketingConsentTextVersion: pendingOAuth.marketingOptIn ? pendingOAuth.marketingConsentTextVersion : null,
+        },
+      });
+      if (updateResult.error) {
+        setAuthError(
+          getUserFacingErrorMessage(
+            updateResult.error,
+            "We couldn't finish setting up your account preferences right now. Please reload the page and try again."
+          )
+        );
+      }
+    }
+
+    return pendingOAuth;
+  }
+
+  function recordCompletedOAuth(pendingOAuth: PendingOAuthState | null): void {
+    if (!pendingOAuth) {
+      return;
+    }
+
+    trackAnalyticsEvent({
+      event: "oauth_completed",
+      path: `${window.location.pathname}${window.location.search}`,
+      authState: "authenticated",
+      provider: pendingOAuth.provider,
+      surface: pendingOAuth.intent,
+      metadata: {
+        identityProvider: pendingOAuth.provider,
+      },
+    });
   }
 
   useEffect(() => {
@@ -183,7 +295,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setSession(result.data.session);
+      const pendingOAuth = await consumePendingOAuthState(result.data.session);
       await refreshCurrentUser(result.data.session);
+      recordCompletedOAuth(pendingOAuth);
       setLoading(false);
     }
 
@@ -191,27 +305,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const subscription = supabase.auth.onAuthStateChange((event, nextSession) => {
       void (async () => {
-        setSession(nextSession);
-        await refreshCurrentUser(nextSession);
-        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && nextSession?.access_token) {
-          const pendingOAuth = readPendingOAuthState();
-          if (pendingOAuth) {
-            trackAnalyticsEvent({
-              event: "oauth_completed",
-              path: `${window.location.pathname}${window.location.search}`,
-              authState: "authenticated",
-              provider: pendingOAuth.provider,
-              surface: pendingOAuth.intent,
-              metadata: {
-                identityProvider: pendingOAuth.provider,
-              },
-            });
-            clearPendingOAuthState();
-          }
-        }
+        try {
+          setSession(nextSession);
+          const pendingOAuth =
+            event === "SIGNED_IN" || event === "INITIAL_SESSION" ? await consumePendingOAuthState(nextSession) : null;
 
-        if (!cancelled) {
-          setLoading(false);
+          await refreshCurrentUser(nextSession);
+          recordCompletedOAuth(pendingOAuth);
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
       })();
     });
@@ -244,7 +348,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshCurrentUser(result.data.session);
         setLoading(false);
       },
-      async signInWithSocialAuth(provider: SocialAuthProvider, intent: SocialAuthIntent = "sign-in"): Promise<void> {
+      async signInWithSocialAuth(
+        provider: SocialAuthProvider,
+        intent: SocialAuthIntent = "sign-in",
+        options?: SocialAuthSignInOptions
+      ): Promise<void> {
         trackAnalyticsEvent({
           event: "oauth_started",
           path: `${window.location.pathname}${window.location.search}`,
@@ -255,7 +363,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             redirectTo: buildAuthRedirectUrl(window.location.origin),
           },
         });
-        writePendingOAuthState({ provider, intent });
+        writePendingOAuthState({
+          provider,
+          intent,
+          marketingOptIn: options?.marketingOptIn === true,
+          marketingConsentTextVersion: options?.marketingOptIn === true ? options.marketingConsentTextVersion?.trim() ?? null : null,
+        });
         const queryParams =
           provider === "discord" && intent === "sign-in"
             ? {
@@ -291,6 +404,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               displayName,
               avatarUrl: input.avatarUrl ?? null,
               avatarDataUrl: input.avatarDataUrl ?? null,
+              beMarketingOptIn: input.marketingOptIn === true,
+              beMarketingConsentTextVersion:
+                input.marketingOptIn === true ? input.marketingConsentTextVersion?.trim() ?? null : null,
             },
             captchaToken: input.captchaToken ?? undefined,
           },

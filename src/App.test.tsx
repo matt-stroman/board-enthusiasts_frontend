@@ -1560,7 +1560,7 @@ describe("App", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Sign in with Discord" }));
 
-    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-in");
+    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-in", undefined);
     expect(window.sessionStorage.getItem("signin-oauth-return-to")).toBe("/develop");
     expect(screen.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
@@ -2124,10 +2124,13 @@ describe("App", () => {
     const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
     expect(within(registerDialog).getByRole("heading", { name: "Create your account" })).toBeVisible();
     const createAccountButton = within(registerDialog).getByRole("button", { name: "Create an account" });
+    expect(
+      within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }),
+    ).not.toBeChecked();
     expect(createAccountButton).toBeDisabled();
 
-    await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "new.player@example.com");
-    fireEvent.blur(within(registerDialog).getByLabelText(/Email/i));
+    await userEvent.type(within(registerDialog).getByRole("textbox", { name: /^Email/i }), "new.player@example.com");
+    fireEvent.blur(within(registerDialog).getByRole("textbox", { name: /^Email/i }));
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "NewPlayer!123");
     fireEvent.blur(within(registerDialog).getByLabelText(/^Password/i));
     await completeLocalAntiSpamCheck(within(registerDialog));
@@ -2139,8 +2142,50 @@ describe("App", () => {
       email: "new.player@example.com",
       password: "NewPlayer!123",
       captchaToken: "local-development-turnstile-token",
+      marketingOptIn: false,
+      marketingConsentTextVersion: null,
     });
     expect(await screen.findByText(/Account created\. Check your email/i)).toBeVisible();
+  });
+
+  it("passes signup marketing consent when the user opts in during registration", async () => {
+    const signUp = vi.fn().mockResolvedValue({ requiresEmailConfirmation: true });
+    authState.value = {
+      session: null,
+      currentUser: null,
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp,
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    renderApp("/auth/signin");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
+
+    const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
+    await userEvent.type(within(registerDialog).getByRole("textbox", { name: /^Email/i }), "new.player@example.com");
+    fireEvent.blur(within(registerDialog).getByRole("textbox", { name: /^Email/i }));
+    await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "NewPlayer!123");
+    fireEvent.blur(within(registerDialog).getByLabelText(/^Password/i));
+    await userEvent.click(within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
+    await completeLocalAntiSpamCheck(within(registerDialog));
+    await userEvent.click(within(registerDialog).getByRole("button", { name: "Create an account" }));
+
+    expect(signUp).toHaveBeenCalledWith({
+      email: "new.player@example.com",
+      password: "NewPlayer!123",
+      captchaToken: "local-development-turnstile-token",
+      marketingOptIn: true,
+      marketingConsentTextVersion: "account-signup-v1",
+    });
   });
 
   it("validates registration fields on blur and keeps submit disabled until the required fields are ready", async () => {
@@ -2167,8 +2212,8 @@ describe("App", () => {
     const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
     const createAccountButton = within(registerDialog).getByRole("button", { name: "Create an account" });
 
-    await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "not-an-email");
-    fireEvent.blur(within(registerDialog).getByLabelText(/Email/i));
+    await userEvent.type(within(registerDialog).getByRole("textbox", { name: /^Email/i }), "not-an-email");
+    fireEvent.blur(within(registerDialog).getByRole("textbox", { name: /^Email/i }));
     expect(await within(registerDialog).findByText("Enter a valid email address.")).toBeVisible();
 
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "short");
@@ -2203,8 +2248,9 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
 
     let registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
-    await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "new.player@example.com");
+    await userEvent.type(within(registerDialog).getByRole("textbox", { name: /^Email/i }), "new.player@example.com");
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "NewPlayer!123");
+    await userEvent.click(within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
 
     const registerOverlay = registerDialog.parentElement?.parentElement?.parentElement;
     expect(registerOverlay).toBeInstanceOf(HTMLElement);
@@ -2217,8 +2263,9 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
     registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
 
-    expect(within(registerDialog).getByLabelText(/Email/i)).toHaveValue("");
+    expect(within(registerDialog).getByRole("textbox", { name: /^Email/i })).toHaveValue("");
     expect(within(registerDialog).getByLabelText(/^Password/i)).toHaveValue("");
+    expect(within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i })).not.toBeChecked();
   });
 
   it("restores the registration draft after the page remounts", async () => {
@@ -2227,8 +2274,9 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
     const registerDialog = await screen.findByRole("dialog", { name: "Create your account" });
 
-    await userEvent.type(within(registerDialog).getByLabelText(/Email/i), "persisted.player@example.com");
+    await userEvent.type(within(registerDialog).getByRole("textbox", { name: /^Email/i }), "persisted.player@example.com");
     await userEvent.type(within(registerDialog).getByLabelText(/^Password/i), "Persisted!123");
+    await userEvent.click(within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
 
     firstRender.unmount();
 
@@ -2238,8 +2286,9 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
     const restoredDialog = await screen.findByRole("dialog", { name: "Create your account" });
-    expect(within(restoredDialog).getByLabelText(/Email/i)).toHaveValue("persisted.player@example.com");
+    expect(within(restoredDialog).getByRole("textbox", { name: /^Email/i })).toHaveValue("persisted.player@example.com");
     expect(within(restoredDialog).getByLabelText(/^Password/i)).toHaveValue("Persisted!123");
+    expect(within(restoredDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i })).toBeChecked();
   });
 
   it("does not reopen the registration modal automatically from stored draft state", async () => {
@@ -2249,6 +2298,7 @@ describe("App", () => {
         registerModalOpen: true,
         registrationEmail: "persisted.player@example.com",
         registrationPassword: "Persisted!123",
+        registrationMarketingOptIn: true,
       }),
     );
 
@@ -2281,8 +2331,12 @@ describe("App", () => {
     expect(within(registerDialog).getByRole("button", { name: "Sign up with Discord" })).toBeVisible();
     expect(within(registerDialog).getByRole("button", { name: "Login" })).toBeVisible();
 
+    await userEvent.click(within(registerDialog).getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
     await userEvent.click(within(registerDialog).getByRole("button", { name: "Sign up with Discord" }));
-    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-up");
+    expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-up", {
+      marketingOptIn: true,
+      marketingConsentTextVersion: "account-signup-v1",
+    });
   });
 
   it("requests password recovery from the sign-in page", async () => {

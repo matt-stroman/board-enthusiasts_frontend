@@ -18,6 +18,7 @@ export const appConfig = new Proxy({} as AppConfig, {
   },
 });
 export const landingConsentTextVersion = "landing-page-v1";
+export const accountSignupConsentTextVersion = "account-signup-v1";
 export const landingSignupSource = "landing_page";
 export const landingPrivacyRoute = "/privacy";
 export const landingSignupRoute = "/#signup";
@@ -240,6 +241,7 @@ export interface SignInPageDraftState {
   registrationEmail: string;
   registrationPassword: string;
   showRegistrationPassword: boolean;
+  registrationMarketingOptIn: boolean;
   recoveryEmail: string;
   recoveryCode: string;
   recoveryPassword: string;

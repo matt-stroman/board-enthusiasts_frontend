@@ -22,6 +22,7 @@ import { hasPlatformRole, useAuth, type SignUpInput, type SocialAuthIntent, type
 import { buildAuthRedirectUrl } from "../auth-redirects";
 import { buildAcceptedMimeTypeError, normalizeImageUpload } from "../media-upload";
 import {
+  accountSignupConsentTextVersion,
   appConfig,
   AVATAR_UPLOAD_ACCEPT,
   avatarUploadPolicy,
@@ -109,6 +110,7 @@ export function SignInPage() {
       registrationEmail: storedDraft?.registrationEmail ?? "",
       registrationPassword: storedDraft?.registrationPassword ?? "",
       showRegistrationPassword: storedDraft?.showRegistrationPassword ?? false,
+      registrationMarketingOptIn: storedDraft?.registrationMarketingOptIn ?? false,
       recoveryEmail: storedDraft?.recoveryEmail ?? "",
       recoveryCode: storedDraft?.recoveryCode ?? "",
       recoveryPassword: storedDraft?.recoveryPassword ?? "",
@@ -137,6 +139,7 @@ export function SignInPage() {
   const [registrationEmail, setRegistrationEmail] = useState(signInDraft.registrationEmail);
   const [registrationPassword, setRegistrationPassword] = useState(signInDraft.registrationPassword);
   const [showRegistrationPassword, setShowRegistrationPassword] = useState(signInDraft.showRegistrationPassword);
+  const [registrationMarketingOptIn, setRegistrationMarketingOptIn] = useState(signInDraft.registrationMarketingOptIn);
   const [registrationEmailError, setRegistrationEmailError] = useState<string | null>(null);
   const [registrationPasswordErrors, setRegistrationPasswordErrors] = useState<string[]>([]);
   const [registrationCaptchaToken, setRegistrationCaptchaToken] = useState<string | null>(null);
@@ -210,6 +213,7 @@ export function SignInPage() {
       recoveryModalOpen ||
       registrationEmail.trim().length > 0 ||
       registrationPassword.length > 0 ||
+      registrationMarketingOptIn ||
       recoveryEmail.trim().length > 0 ||
       recoveryCode.trim().length > 0 ||
       recoveryPassword.length > 0 ||
@@ -233,6 +237,7 @@ export function SignInPage() {
       registrationEmail,
       registrationPassword,
       showRegistrationPassword,
+      registrationMarketingOptIn,
       recoveryEmail,
       recoveryCode,
       recoveryPassword,
@@ -254,6 +259,7 @@ export function SignInPage() {
     recoveryPassword,
     recoveryStep,
     registrationEmail,
+    registrationMarketingOptIn,
     registrationPassword,
     showRecoveryConfirmPassword,
     showRecoveryPassword,
@@ -290,6 +296,7 @@ export function SignInPage() {
     setRegistrationEmail("");
     setRegistrationPassword("");
     setShowRegistrationPassword(false);
+    setRegistrationMarketingOptIn(false);
     setRegistrationEmailError(null);
     setRegistrationPasswordErrors([]);
     setRegistrationCaptchaToken(null);
@@ -445,14 +452,18 @@ export function SignInPage() {
     setMfaError(null);
   }
 
-  async function handleSocialSignIn(provider: SocialAuthProvider, intent: SocialAuthIntent = "sign-in"): Promise<void> {
+  async function handleSocialSignIn(
+    provider: SocialAuthProvider,
+    intent: SocialAuthIntent = "sign-in",
+    options?: { marketingOptIn?: boolean; marketingConsentTextVersion?: string | null }
+  ): Promise<void> {
     setSocialSubmitting(provider);
     setError(null);
     setPageMessage(null);
     writeSessionStorageValue(SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY, returnTo);
 
     try {
-      await signInWithSocialAuth(provider, intent);
+      await signInWithSocialAuth(provider, intent, options);
       setSocialSubmitting(null);
     } catch (nextError) {
       clearPendingOAuthReturnTo();
@@ -483,6 +494,8 @@ export function SignInPage() {
         email: registrationEmail.trim(),
         password: registrationPassword,
         captchaToken: registrationCaptchaToken,
+        marketingOptIn: registrationMarketingOptIn,
+        marketingConsentTextVersion: registrationMarketingOptIn ? accountSignupConsentTextVersion : null,
       } satisfies SignUpInput);
       if (result.requiresEmailConfirmation) {
         setPageMessage("Account created. Check your email to confirm the registration, then sign in.");
@@ -667,7 +680,12 @@ export function SignInPage() {
                             type="button"
                             className="social-auth-button"
                             disabled={registering || Boolean(socialSubmitting)}
-                            onClick={() => void handleSocialSignIn(provider, "sign-up")}
+                            onClick={() =>
+                              void handleSocialSignIn(provider, "sign-up", {
+                                marketingOptIn: registrationMarketingOptIn,
+                                marketingConsentTextVersion: registrationMarketingOptIn ? accountSignupConsentTextVersion : null,
+                              })
+                            }
                           >
                             <span className="social-auth-icon-badge">
                               <SocialAuthProviderIcon provider={provider} />
@@ -713,6 +731,15 @@ export function SignInPage() {
                     hintTone={registrationPasswordHintTone}
                     required
                   />
+                  <label className="landing-consent">
+                    <input
+                      type="checkbox"
+                      checked={registrationMarketingOptIn}
+                      onChange={(event) => setRegistrationMarketingOptIn(event.currentTarget.checked)}
+                      disabled={registering || Boolean(socialSubmitting)}
+                    />
+                    <span>I want email updates from Board Enthusiasts about launch progress, new BE resources, community announcements, and future invites.</span>
+                  </label>
 
                   {captchaRequired ? (
                     <div className="surface-panel-strong rounded-[1rem] p-4">
@@ -2324,4 +2351,3 @@ export function PlayerPage() {
     </section>
   );
 }
-

@@ -7,8 +7,9 @@ const authClientMocks = vi.hoisted(() => ({
   onAuthStateChange: vi.fn(),
   signInWithOAuth: vi.fn(),
   signUp: vi.fn(),
+  updateUser: vi.fn(),
   unsubscribe: vi.fn(),
-  callback: null as ((event: string, session: { access_token: string } | null) => void) | null,
+  callback: null as ((event: string, session: { access_token: string; user?: { user_metadata?: Record<string, unknown> } } | null) => void) | null,
 }));
 
 const getCurrentUserMock = vi.hoisted(() => vi.fn());
@@ -28,9 +29,13 @@ vi.mock("./config", () => ({
   }),
 }));
 
-vi.mock("./api", () => ({
-  getCurrentUser: getCurrentUserMock,
-}));
+vi.mock("./api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./api")>();
+  return {
+    ...actual,
+    getCurrentUser: getCurrentUserMock,
+  };
+});
 
 vi.mock("./app-core/analytics", () => ({
   trackAnalyticsEvent: trackAnalyticsEventMock,
@@ -42,7 +47,8 @@ vi.mock("@supabase/supabase-js", () => ({
       getSession: authClientMocks.getSession,
       signInWithOAuth: authClientMocks.signInWithOAuth,
       signUp: authClientMocks.signUp,
-      onAuthStateChange: (callback: (event: string, session: { access_token: string } | null) => void) => {
+      updateUser: authClientMocks.updateUser,
+      onAuthStateChange: (callback: (event: string, session: { access_token: string; user?: { user_metadata?: Record<string, unknown> } } | null) => void) => {
         authClientMocks.callback = callback;
         authClientMocks.onAuthStateChange(callback);
         return {
@@ -66,7 +72,15 @@ function AuthProbe() {
       <button type="button" onClick={() => void signInWithSocialAuth("discord")}>
         Trigger Discord Sign-In
       </button>
-      <button type="button" onClick={() => void signInWithSocialAuth("discord", "sign-up")}>
+      <button
+        type="button"
+        onClick={() =>
+          void signInWithSocialAuth("discord", "sign-up", {
+            marketingOptIn: true,
+            marketingConsentTextVersion: "account-signup-v1",
+          })
+        }
+      >
         Trigger Discord Sign-Up
       </button>
       <button
@@ -75,6 +89,8 @@ function AuthProbe() {
           void signUp({
             email: "new.player@example.com",
             password: "NewPlayer!123",
+            marketingOptIn: true,
+            marketingConsentTextVersion: "account-signup-v1",
           })
         }
       >
@@ -90,7 +106,12 @@ describe("AuthProvider", () => {
     authClientMocks.onAuthStateChange.mockReset();
     authClientMocks.signInWithOAuth.mockReset();
     authClientMocks.signUp.mockReset();
+    authClientMocks.updateUser.mockReset();
     authClientMocks.unsubscribe.mockReset();
+    authClientMocks.updateUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    });
     authClientMocks.callback = null;
     getCurrentUserMock.mockReset();
     trackAnalyticsEventMock.mockReset();
@@ -273,6 +294,115 @@ describe("AuthProvider", () => {
     );
   });
 
+  it("applies marketing consent metadata before completing oauth sign-up refresh", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signInWithOAuth.mockResolvedValue({
+      data: { provider: "discord", url: "https://discord.com/oauth2/authorize" },
+      error: null,
+    });
+    getCurrentUserMock.mockResolvedValue({
+      subject: "user-1",
+      displayName: "Discord Player",
+      email: "discord.player@example.com",
+      emailVerified: true,
+      identityProvider: "discord",
+      roles: ["player"],
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Discord Sign-Up" }).click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      authClientMocks.callback?.("SIGNED_IN", {
+        access_token: "oauth-token",
+        user: {
+          user_metadata: {
+            full_name: "Discord Player",
+          },
+        },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(authClientMocks.updateUser).toHaveBeenCalledWith({
+        data: {
+          full_name: "Discord Player",
+          beMarketingOptIn: true,
+          beMarketingConsentTextVersion: "account-signup-v1",
+        },
+      }),
+    );
+  });
+
+  it("finalizes pending oauth sign-up state during bootstrap before the redirect callback fires", async () => {
+    window.sessionStorage.setItem(
+      "be-auth-pending-oauth",
+      JSON.stringify({
+        provider: "github",
+        intent: "sign-up",
+        marketingOptIn: true,
+        marketingConsentTextVersion: "account-signup-v1",
+      }),
+    );
+    authClientMocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "oauth-token",
+          user: {
+            user_metadata: {
+              full_name: "GitHub Player",
+            },
+          },
+        },
+      },
+    });
+    getCurrentUserMock.mockResolvedValue({
+      subject: "user-1",
+      displayName: "GitHub Player",
+      email: "github.player@example.com",
+      emailVerified: true,
+      identityProvider: "github",
+      roles: ["player"],
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() =>
+      expect(authClientMocks.updateUser).toHaveBeenCalledWith({
+        data: {
+          full_name: "GitHub Player",
+          beMarketingOptIn: true,
+          beMarketingConsentTextVersion: "account-signup-v1",
+        },
+      }),
+    );
+    await waitFor(() => expect(screen.getByTestId("email")).toHaveTextContent("github.player@example.com"));
+    expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "oauth_completed",
+        provider: "github",
+        surface: "sign-up",
+      }),
+    );
+    expect(window.sessionStorage.getItem("be-auth-pending-oauth")).toBeNull();
+  });
+
   it("records raw account creation for successful email sign-up", async () => {
     authClientMocks.getSession.mockResolvedValue({
       data: { session: null },
@@ -300,6 +430,12 @@ describe("AuthProvider", () => {
       expect.objectContaining({
         email: "new.player@example.com",
         password: "NewPlayer!123",
+        options: expect.objectContaining({
+          data: expect.objectContaining({
+            beMarketingOptIn: true,
+            beMarketingConsentTextVersion: "account-signup-v1",
+          }),
+        }),
       }),
     );
     expect(trackAnalyticsEventMock).toHaveBeenCalledWith(
@@ -313,5 +449,34 @@ describe("AuthProvider", () => {
         }),
       }),
     );
+  });
+
+  it("falls back to the Supabase session user when the current-user api cannot be refreshed", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token-1",
+          user: {
+            id: "user-1",
+            email: "fallback.player@example.com",
+            email_confirmed_at: "2026-04-03T12:00:00Z",
+            app_metadata: { provider: "discord" },
+            user_metadata: {
+              full_name: "Fallback Player",
+            },
+          },
+        },
+      },
+    });
+    getCurrentUserMock.mockRejectedValue(new Error("Current user api unavailable."));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(screen.getByTestId("email")).toHaveTextContent("fallback.player@example.com");
   });
 });
