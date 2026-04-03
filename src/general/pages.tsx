@@ -627,6 +627,15 @@ const liveOfferingEntries: OfferingEntry[] = [
   },
 ];
 
+const publicApiDocsOfferingEntry: OfferingEntry = {
+  title: "Board Enthusiasts API",
+  eyebrow: "Developer resource",
+  description: "Explore the public API reference for catalog browsing plus supported player and developer workflows.",
+  status: "Available now",
+  glyph: "spark",
+  action: { label: "Open API Docs", href: "https://documenter.getpostman.com/view/3468151/2sBXiompb8", external: true },
+};
+
 const comingSoonOfferingEntries: OfferingEntry[] = [
   {
     title: "BE Emulator for Board",
@@ -860,6 +869,8 @@ export function OfferingsPage() {
     canonicalUrl: liveMetadata.offeringsCanonical,
   });
 
+  const offeringsPageLiveEntries = [...liveOfferingEntries, publicApiDocsOfferingEntry];
+
   return (
       <div className="landing-shell page-grid">
         <section className="landing-section">
@@ -887,7 +898,7 @@ export function OfferingsPage() {
         id="available-now"
         title="Available Now"
         description="These BE offerings are already live today."
-        entries={liveOfferingEntries}
+        entries={offeringsPageLiveEntries}
       />
 
       <OfferingGroupSection

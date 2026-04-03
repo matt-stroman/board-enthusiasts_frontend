@@ -654,6 +654,11 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "How BE fits together" })).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Browse Game Index" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "BE Game Index" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Board Enthusiasts API" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open API Docs" })).toHaveAttribute(
+      "href",
+      "https://documenter.getpostman.com/view/3468151/2sBXiompb8",
+    );
     expect(screen.getByRole("heading", { name: "BE GDK for Board" })).toBeVisible();
     expect(screen.queryByText("How to use this page")).not.toBeInTheDocument();
     expect(screen.queryByText("What BE includes")).not.toBeInTheDocument();
