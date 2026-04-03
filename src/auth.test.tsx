@@ -16,6 +16,7 @@ const trackAnalyticsEventMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./config", () => ({
   readAppConfig: () => ({
+    appEnv: "production",
     apiBaseUrl: "http://127.0.0.1:8787",
     supabaseUrl: "http://127.0.0.1:55421",
     supabasePublishableKey: "publishable-key",

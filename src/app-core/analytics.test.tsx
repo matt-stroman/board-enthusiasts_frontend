@@ -4,6 +4,7 @@ import { trackAnalyticsEvent, usePageAnalytics } from "./analytics";
 
 vi.mock("../config", () => ({
   readAppConfig: () => ({
+    appEnv: "production",
     apiBaseUrl: "https://api.boardenthusiasts.test",
     supabaseUrl: "https://example.supabase.co",
     supabasePublishableKey: "publishable-key",

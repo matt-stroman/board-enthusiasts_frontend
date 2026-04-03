@@ -133,6 +133,7 @@ const apiMocks = vi.hoisted(() => ({
 
 const configState = vi.hoisted(() => ({
   value: {
+    appEnv: "production" as "local" | "staging" | "production",
     apiBaseUrl: "http://127.0.0.1:8787",
     supabaseUrl: "http://127.0.0.1:55421",
     supabasePublishableKey: "publishable-key",
@@ -234,6 +235,7 @@ describe("App", () => {
       refreshCurrentUser: vi.fn(),
     };
     configState.value = {
+      appEnv: "production",
       apiBaseUrl: "http://127.0.0.1:8787",
       supabaseUrl: "http://127.0.0.1:55421",
       supabasePublishableKey: "publishable-key",
@@ -776,7 +778,23 @@ describe("App", () => {
     expect(screen.getByRole("contentinfo")).toHaveTextContent(
       "Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.",
     );
+    expect(screen.queryByText(/Preview environment\./i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Browse" })).not.toBeInTheDocument();
+  });
+
+  it("shows the highlighted preview footer notice outside production", async () => {
+    configState.value = {
+      ...configState.value,
+      appEnv: "staging",
+      landingMode: true,
+    };
+
+    renderApp("/");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
+    expect(screen.getByRole("note", { name: "Preview environment notice" })).toHaveTextContent(
+      "Preview environment. This site currently uses mock/demo content to show the planned experience. It does not include real or current Board games, and any accounts or other data created here may be reset, removed, or not carried into the live launch.",
+    );
   });
 
   it("submits the landing-page signup form", async () => {
@@ -4539,6 +4557,7 @@ describe("App", () => {
 
   it("publishes route-specific metadata for the landing privacy page", async () => {
     configState.value = {
+      appEnv: "production",
       apiBaseUrl: "http://127.0.0.1:8787",
       supabaseUrl: "http://127.0.0.1:55421",
       supabasePublishableKey: "publishable-key",

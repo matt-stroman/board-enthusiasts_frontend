@@ -1,4 +1,7 @@
+export type AppEnvironment = "local" | "staging" | "production";
+
 export interface AppConfig {
+  appEnv: AppEnvironment;
   apiBaseUrl: string;
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -10,6 +13,7 @@ export interface AppConfig {
 }
 
 export interface FrontendRuntimeEnv {
+  VITE_APP_ENV?: string;
   VITE_API_BASE_URL?: string;
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
@@ -67,9 +71,30 @@ function readBooleanFlag(value: string | undefined): boolean {
   return (value ?? "").trim().toLowerCase() === "true";
 }
 
+function inferAppEnvironment(apiBaseUrl: string): AppEnvironment {
+  const hostname = new URL(apiBaseUrl).hostname;
+  return isLoopbackHost(hostname) ? "local" : "production";
+}
+
+function readAppEnvironment(value: string | undefined, apiBaseUrl: string): AppEnvironment {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return inferAppEnvironment(apiBaseUrl);
+  }
+
+  if (normalized === "local" || normalized === "staging" || normalized === "production") {
+    return normalized;
+  }
+
+  throw new Error("VITE_APP_ENV must be one of local, staging, or production.");
+}
+
 export function readAppConfigFromEnv(env: FrontendRuntimeEnv): AppConfig {
+  const apiBaseUrl = requireRuntimeUrl("VITE_API_BASE_URL", env.VITE_API_BASE_URL);
+
   return {
-    apiBaseUrl: requireRuntimeUrl("VITE_API_BASE_URL", env.VITE_API_BASE_URL),
+    appEnv: readAppEnvironment(env.VITE_APP_ENV, apiBaseUrl),
+    apiBaseUrl,
     supabaseUrl: requireRuntimeUrl("VITE_SUPABASE_URL", env.VITE_SUPABASE_URL),
     supabasePublishableKey: requireValue("VITE_SUPABASE_PUBLISHABLE_KEY", env.VITE_SUPABASE_PUBLISHABLE_KEY),
     turnstileSiteKey: normalizeOptionalValue(env.VITE_TURNSTILE_SITE_KEY),

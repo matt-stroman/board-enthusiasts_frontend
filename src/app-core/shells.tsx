@@ -21,6 +21,22 @@ import { usePageAnalytics } from "./analytics";
 import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 
+function PreviewEnvironmentFooterNote() {
+  if (appConfig.appEnv === "production") {
+    return null;
+  }
+
+  return (
+    <div className="app-footer-preview-row">
+      <div className="app-footer-preview" role="note" aria-label="Preview environment notice">
+        <strong>Preview environment.</strong> This site currently uses mock/demo content to show the planned experience. It does not
+        include real or current Board games, and any accounts or other data created here may be reset, removed, or not carried into
+        the live launch.
+      </div>
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
@@ -366,6 +382,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             © {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a>
           </div>
         </div>
+        <PreviewEnvironmentFooterNote />
         <div className="landing-footer-disclaimer-row">
           <div className="landing-footer-disclaimer">
             Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
@@ -545,6 +562,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="landing-footer-copyright">© {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a></div>
         </div>
+        <PreviewEnvironmentFooterNote />
         <div className="landing-footer-disclaimer-row">
           <div className="landing-footer-disclaimer">
             Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
