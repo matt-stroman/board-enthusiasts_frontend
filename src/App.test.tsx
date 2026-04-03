@@ -654,6 +654,11 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "How BE fits together" })).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Browse Game Index" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "BE Game Index" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE YouTube" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Watch Channel" })).toHaveAttribute(
+      "href",
+      "https://www.youtube.com/@boardenthusiasts",
+    );
     expect(screen.getByRole("heading", { name: "Board Enthusiasts API" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Open API Docs" })).toHaveAttribute(
       "href",

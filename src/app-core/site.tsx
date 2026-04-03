@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import type { SocialAuthProvider } from "../auth";
+import apiGlyph from "../assets/landing-glyphs/api.svg?raw";
 import constructionGlyph from "../assets/landing-glyphs/construction.svg?raw";
 import viewCarouselGlyph from "../assets/landing-glyphs/view-carousel.svg?raw";
 import { appConfig, landingDiscordUrl, landingSignupRoute, type ConnectedAccountIdentity } from "./shared";
@@ -129,7 +130,11 @@ function InlineSvgGlyph({ markup }: { markup: string }) {
   return <span className="landing-inline-glyph" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
 }
 
-export function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" | "toolkit" }) {
+export function LandingGlyph({ kind }: { kind: "api" | "discord" | "library" | "spark" | "toolkit" | "youtube" }) {
+  if (kind === "api") {
+    return <InlineSvgGlyph markup={apiGlyph} />;
+  }
+
   if (kind === "discord") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -151,6 +156,18 @@ export function LandingGlyph({ kind }: { kind: "discord" | "library" | "spark" |
         <path d="m12 2 1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2Z" fill="currentColor" />
         <path d="m18.5 13 1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1 1-2.8Z" fill="currentColor" />
         <path d="m5.5 13 1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1 1-2.8Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (kind === "youtube") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M21.4 7.2a2.9 2.9 0 0 0-2.1-2.1C17.5 4.6 12 4.6 12 4.6s-5.5 0-7.3.5a2.9 2.9 0 0 0-2.1 2.1A30.6 30.6 0 0 0 2 12a30.6 30.6 0 0 0 .6 4.8 2.9 2.9 0 0 0 2.1 2.1c1.8.5 7.3.5 7.3.5s5.5 0 7.3-.5a2.9 2.9 0 0 0 2.1-2.1A30.6 30.6 0 0 0 22 12a30.6 30.6 0 0 0-.6-4.8Z"
+          fill="#FF0000"
+        />
+        <path d="m10 15.5 5-3.5-5-3.5v7Z" fill="#FFFFFF" />
       </svg>
     );
   }

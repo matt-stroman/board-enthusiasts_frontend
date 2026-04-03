@@ -588,7 +588,7 @@ type OfferingEntry = {
   eyebrow: string;
   description: string;
   status: "Available now" | "Coming soon";
-  glyph: "discord" | "library" | "spark" | "toolkit";
+  glyph: "api" | "discord" | "library" | "spark" | "toolkit" | "youtube";
   action?: OfferingAction;
 };
 
@@ -608,6 +608,14 @@ const liveOfferingEntries: OfferingEntry[] = [
     status: "Available now",
     glyph: "discord",
     action: { label: "Join Discord", href: landingDiscordUrl, external: true },
+  },
+  {
+    title: "BE YouTube",
+    eyebrow: "Channel",
+    description: "Watch Board guides, feature walkthroughs, community showcases, and practical videos for players and builders.",
+    status: "Available now",
+    glyph: "youtube",
+    action: { label: "Watch Channel", href: "https://www.youtube.com/@boardenthusiasts", external: true },
   },
   {
     title: "BE GPT",
@@ -632,7 +640,7 @@ const publicApiDocsOfferingEntry: OfferingEntry = {
   eyebrow: "Developer resource",
   description: "Explore the public API reference for catalog browsing plus supported player and developer workflows.",
   status: "Available now",
-  glyph: "spark",
+  glyph: "api",
   action: { label: "Open API Docs", href: "https://documenter.getpostman.com/view/3468151/2sBXiompb8", external: true },
 };
 
