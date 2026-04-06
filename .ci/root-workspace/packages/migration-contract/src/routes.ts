@@ -13,7 +13,7 @@ export const maintainedUiRoutes: ReadonlyArray<MaintainedUiRoute> = [
   { path: "/studios/blue-harbor-games", label: "Public Studio", access: "public", parityMarker: "Blue Harbor Games" },
   { path: "/browse/blue-harbor-games/lantern-drift", label: "Public Title", access: "public", parityMarker: "Lantern Drift" },
   { path: "/player", label: "Player Workspace", access: "player", parityMarker: "My Games" },
-  { path: "/develop", label: "Developer Workspace", access: "developer", parityMarker: "Developer Console" },
+  { path: "/developer", label: "Developer Workspace", access: "developer", parityMarker: "Developer Console" },
   { path: "/moderate", label: "Moderation Workspace", access: "moderator", parityMarker: "Verify Developers" }
 ];
 
@@ -31,6 +31,7 @@ export const maintainedApiRoutes: ReadonlyArray<MaintainedApiRoute> = [
   { method: "GET", path: "/health/ready", description: "Ready health probe", access: "public", authMode: "public" },
   { method: "GET", path: "/genres", description: "Genre catalog listing", access: "public", authMode: "public" },
   { method: "GET", path: "/age-rating-authorities", description: "Age rating authority catalog listing", access: "public", authMode: "public" },
+  { method: "GET", path: "/spotlights/home", description: "Home spotlight listing", access: "public", authMode: "public" },
   { method: "GET", path: "/catalog", description: "Public catalog listing", access: "public", authMode: "public" },
   { method: "GET", path: "/studios", description: "Public studio listing", access: "public", authMode: "public" },
   { method: "GET", path: "/catalog/blue-harbor-games/lantern-drift", description: "Catalog detail", access: "public", authMode: "token-optional" },
@@ -54,6 +55,9 @@ export const maintainedApiRoutes: ReadonlyArray<MaintainedApiRoute> = [
   { method: "GET", path: "/player/wishlist", description: "Player wishlist titles", access: "player", authMode: "token-required" },
   { method: "PUT", path: "/player/wishlist/titles/{titleId}", description: "Add title to player wishlist", access: "player", authMode: "token-required" },
   { method: "DELETE", path: "/player/wishlist/titles/{titleId}", description: "Remove title from player wishlist", access: "player", authMode: "token-required" },
+  { method: "GET", path: "/player/followed-studios", description: "Player followed studios", access: "player", authMode: "token-required" },
+  { method: "PUT", path: "/player/followed-studios/{studioId}", description: "Follow studio", access: "player", authMode: "token-required" },
+  { method: "DELETE", path: "/player/followed-studios/{studioId}", description: "Unfollow studio", access: "player", authMode: "token-required" },
   { method: "GET", path: "/player/reports", description: "Player title report list", access: "player", authMode: "token-required" },
   { method: "POST", path: "/player/reports", description: "Create player title report", access: "player", authMode: "token-required" },
   { method: "GET", path: "/player/reports/{reportId}", description: "Player title report detail", access: "player", authMode: "token-required" },
@@ -82,6 +86,11 @@ export const maintainedApiRoutes: ReadonlyArray<MaintainedApiRoute> = [
   { method: "PUT", path: "/developer/titles/{titleId}/media/{mediaRole}", description: "Upsert developer title media asset", access: "developer", authMode: "token-required" },
   { method: "POST", path: "/developer/titles/{titleId}/media/{mediaRole}/upload", description: "Upload developer title media asset", access: "developer", authMode: "token-required" },
   { method: "DELETE", path: "/developer/titles/{titleId}/media/{mediaRole}", description: "Delete developer title media asset", access: "developer", authMode: "token-required" },
+  { method: "GET", path: "/developer/titles/{titleId}/showcase-media", description: "Developer title showcase media list", access: "developer", authMode: "token-required" },
+  { method: "POST", path: "/developer/titles/{titleId}/showcase-media", description: "Create developer title showcase media", access: "developer", authMode: "token-required" },
+  { method: "PUT", path: "/developer/titles/{titleId}/showcase-media/{showcaseMediaId}", description: "Update developer title showcase media", access: "developer", authMode: "token-required" },
+  { method: "POST", path: "/developer/titles/{titleId}/showcase-media/{showcaseMediaId}/image-upload", description: "Upload developer title showcase media image", access: "developer", authMode: "token-required" },
+  { method: "DELETE", path: "/developer/titles/{titleId}/showcase-media/{showcaseMediaId}", description: "Delete developer title showcase media", access: "developer", authMode: "token-required" },
   { method: "GET", path: "/developer/titles/{titleId}/reports", description: "Developer title report list", access: "developer", authMode: "token-required" },
   { method: "GET", path: "/developer/titles/{titleId}/reports/{reportId}", description: "Developer title report detail", access: "developer", authMode: "token-required" },
   { method: "POST", path: "/developer/titles/{titleId}/reports/{reportId}/messages", description: "Add developer title report message", access: "developer", authMode: "token-required" },

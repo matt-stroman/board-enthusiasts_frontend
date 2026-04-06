@@ -32,6 +32,7 @@ export type TitleContentKind = "game" | "app";
 export type TitleLifecycleStatus = "draft" | "active" | "archived";
 export type TitleVisibility = "unlisted" | "listed";
 export type TitleMediaRole = "card" | "hero" | "logo";
+export type TitleShowcaseMediaKind = "image" | "external_video";
 
 export interface CurrentUserResponse {
   subject: string;
@@ -157,6 +158,16 @@ export interface PlayerTitleListResponse {
 
 export interface PlayerCollectionMutationResponse {
   titleId: string;
+  included: boolean;
+  alreadyInRequestedState: boolean;
+}
+
+export interface PlayerFollowedStudioListResponse {
+  studios: StudioSummary[];
+}
+
+export interface PlayerStudioFollowMutationResponse {
+  studioId: string;
   included: boolean;
   alreadyInRequestedState: boolean;
 }
@@ -312,6 +323,7 @@ export interface StudioSummary {
   avatarUrl: string | null;
   logoUrl: string | null;
   bannerUrl: string | null;
+  followerCount: number;
   links: StudioLink[];
 }
 
@@ -373,8 +385,8 @@ export interface UpsertTitleMetadataRequest {
   genreSlugs: string[];
   minPlayers: number;
   maxPlayers: number;
-  ageRatingAuthority: string;
-  ageRatingValue: string;
+  ageRatingAuthority: string | null;
+  ageRatingValue: string | null;
   minAgeYears: number;
 }
 
@@ -413,6 +425,17 @@ export interface TitleMediaAsset {
   updatedAt: string;
 }
 
+export interface TitleShowcaseMedia {
+  id: string;
+  kind: TitleShowcaseMediaKind;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  altText: string | null;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TitleMediaAssetListResponse {
   mediaAssets: TitleMediaAsset[];
 }
@@ -421,12 +444,33 @@ export interface TitleMediaAssetResponse {
   mediaAsset: TitleMediaAsset;
 }
 
+export interface TitleShowcaseMediaListResponse {
+  showcaseMedia: TitleShowcaseMedia[];
+}
+
+export interface TitleShowcaseMediaResponse {
+  showcaseMedia: TitleShowcaseMedia;
+}
+
 export interface UpsertTitleMediaAssetRequest {
   sourceUrl: string;
   altText: string | null;
   mimeType: string | null;
   width: number | null;
   height: number | null;
+}
+
+export interface CreateTitleShowcaseMediaRequest {
+  kind: TitleShowcaseMediaKind;
+  videoUrl: string | null;
+  altText: string | null;
+  displayOrder: number;
+}
+
+export interface UpdateTitleShowcaseMediaRequest {
+  videoUrl: string | null;
+  altText: string | null;
+  displayOrder: number;
 }
 
 export interface CurrentTitleRelease {
@@ -452,13 +496,14 @@ export interface DeveloperTitle {
   minPlayers: number;
   maxPlayers: number;
   playerCountDisplay: string;
-  ageRatingAuthority: string;
-  ageRatingValue: string;
+  ageRatingAuthority: string | null;
+  ageRatingValue: string | null;
   minAgeYears: number;
-  ageDisplay: string;
+  ageDisplay: string | null;
   cardImageUrl: string | null;
   acquisitionUrl: string | null;
   mediaAssets: TitleMediaAsset[];
+  showcaseMedia: TitleShowcaseMedia[];
   currentRelease?: CurrentTitleRelease;
   acquisition?: PublicTitleAcquisition;
   currentReleaseId: string | null;
@@ -482,10 +527,10 @@ export interface TitleMetadataVersion {
   minPlayers: number;
   maxPlayers: number;
   playerCountDisplay: string;
-  ageRatingAuthority: string;
-  ageRatingValue: string;
+  ageRatingAuthority: string | null;
+  ageRatingValue: string | null;
   minAgeYears: number;
-  ageDisplay: string;
+  ageDisplay: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -500,6 +545,7 @@ export interface UpsertTitleReleaseRequest {
   version: string;
   status: TitleReleaseStatus;
   acquisitionUrl: string | null;
+  expiresAt: string | null;
 }
 
 export interface TitleRelease {
@@ -507,6 +553,7 @@ export interface TitleRelease {
   version: string;
   status: TitleReleaseStatus;
   acquisitionUrl: string | null;
+  expiresAt: string | null;
   isCurrent: boolean;
   publishedAt: string | null;
   createdAt: string;
@@ -542,10 +589,10 @@ export interface CatalogTitleSummary {
   minPlayers: number;
   maxPlayers: number;
   playerCountDisplay: string;
-  ageRatingAuthority: string;
-  ageRatingValue: string;
+  ageRatingAuthority: string | null;
+  ageRatingValue: string | null;
   minAgeYears: number;
-  ageDisplay: string;
+  ageDisplay: string | null;
   cardImageUrl: string | null;
   logoImageUrl: string | null;
   acquisitionUrl: string | null;
@@ -589,6 +636,7 @@ export interface CatalogTitleListQuery {
 export interface CatalogTitle extends CatalogTitleSummary {
   description: string;
   mediaAssets: TitleMediaAsset[];
+  showcaseMedia: TitleShowcaseMedia[];
   currentRelease?: CurrentTitleRelease;
   acquisition?: PublicTitleAcquisition;
   createdAt: string;
@@ -597,6 +645,15 @@ export interface CatalogTitle extends CatalogTitleSummary {
 
 export interface CatalogTitleResponse {
   title: CatalogTitle;
+}
+
+export interface HomeSpotlightEntry {
+  slotNumber: number;
+  title: CatalogTitle;
+}
+
+export interface HomeSpotlightResponse {
+  entries: HomeSpotlightEntry[];
 }
 
 export interface ProblemDetails {
@@ -648,8 +705,8 @@ export interface MigrationSeedTitleFixture {
   genreDisplay: string;
   minPlayers: number;
   maxPlayers: number;
-  ageRatingAuthority: string;
-  ageRatingValue: string;
+  ageRatingAuthority: string | null;
+  ageRatingValue: string | null;
   minAgeYears: number;
   currentReleaseVersion?: string;
   currentReleasePublishedAt?: string;
@@ -663,6 +720,13 @@ export interface MigrationSeedTitleFixture {
     mimeType: string;
     width: number | null;
     height: number | null;
+  }>;
+  showcaseMedia?: Array<{
+    kind: TitleShowcaseMediaKind;
+    assetPath: string;
+    altText: string;
+    videoUrl?: string | null;
+    displayOrder: number;
   }>;
 }
 
@@ -836,6 +900,30 @@ export const migrationSeedUsers: ReadonlyArray<MigrationSeedUserFixture> = [
     roles: ["player", "developer", "verified_developer"],
     boardUserId: "board_emma_torres",
     boardAvatarUrl: "https://cdn.board.fun/avatars/board_emma_torres.png"
+  },
+  {
+    userName: "staging.player",
+    email: "testing+staging-player@boardenthusiasts.com",
+    displayName: "Staging Player",
+    firstName: "Staging",
+    lastName: "Player",
+    roles: ["player"]
+  },
+  {
+    userName: "staging.developer",
+    email: "testing+staging-developer@boardenthusiasts.com",
+    displayName: "Staging Developer",
+    firstName: "Staging",
+    lastName: "Developer",
+    roles: ["player", "developer"]
+  },
+  {
+    userName: "staging.moderator",
+    email: "testing+staging-moderator@boardenthusiasts.com",
+    displayName: "Staging Moderator",
+    firstName: "Staging",
+    lastName: "Moderator",
+    roles: ["player", "moderator"]
   },
   {
     userName: "olivia.bennett",
@@ -1027,10 +1115,9 @@ function buildSeedStudioFixture(
   const longDescription = buildNearLimitCopy(
     [
       description,
-      `${displayName} builds polished releases for Board with a strong emphasis on clear onboarding, family-friendly session flow, and readable interfaces across both handheld and docked play.`,
-      `The studio profile usually highlights recent launches, roadmap visibility, support channels, and public-facing brand assets because players, moderators, and partner developers all rely on the same listing.`,
-      `Local seed data should reflect realistic publishing expectations, including long-form descriptions, multiple links, and enough editorial detail to expose layout issues before UI changes reach production.`,
-      `Each seeded studio description is intentionally dense so overview cards, browse panels, and developer workspace summaries have to deal with real content volume instead of placeholder blurbs.`
+      `${displayName} focuses on clear onboarding, readable presentation, and releases that feel welcoming whether you are playing solo, with family, or with a full group.`,
+      `Players can expect a distinct studio style, reliable support links, and polished details that make it easy to see what the team is about at a glance.`,
+      `Across its catalog, ${displayName} aims to deliver thoughtful ideas, smooth play sessions, and the kind of consistency that keeps players coming back.`
     ],
     migrationSeedStudioDescriptionMaxLength
   );
@@ -1070,13 +1157,14 @@ function buildSeedTitleFixture(args: {
   minAgeYears: number;
   currentReleaseVersion?: string;
   currentReleasePublishedAt?: string;
+  showcaseMedia?: MigrationSeedTitleFixture["showcaseMedia"];
 }): MigrationSeedTitleFixture {
   const studioHomepage = `https://${args.studioSlug}.example`;
   const longShortDescription = buildNearLimitCopy(
     [
       args.shortDescription,
-      `${args.displayName} is tuned for Board players who expect a polished listing, clear install context, and enough summary detail to decide whether the current release fits their group.`,
-      `The short description is intentionally close to the real constraint so cards, quick views, and workspace summaries must handle a dense but still readable pitch.`
+      `${args.displayName} offers a clear hook, approachable pacing, and enough detail to quickly tell who it is for.`,
+      `Expect a polished snapshot of the experience, the audience it suits, and what makes it stand out on Board.`
     ],
     migrationSeedTitleShortDescriptionMaxLength,
     12
@@ -1084,9 +1172,9 @@ function buildSeedTitleFixture(args: {
   const longDescription = buildNearLimitCopy(
     [
       args.description,
-      `${args.displayName} is seeded with production-style metadata so the local stack has to render full editorial copy, stronger acquisition context, and more realistic release framing for both players and developers.`,
-      `The description intentionally covers onboarding expectations, core interaction loops, accessibility and family-use considerations, replay value, and the sort of operational detail a real studio would maintain during ongoing release management.`,
-      `This fixture text is long on purpose: it helps surface weak panel sizing, awkward column splits, truncated cards, and any workflow screens that only looked correct when fed placeholder content.`
+      `${args.displayName} blends clear onboarding, readable presentation, and a distinct play loop built to feel good in both short sessions and longer evenings.`,
+      `Whether you are jumping in alone or sharing the experience with others, it is designed around smooth setup, clear goals, and satisfying moment-to-moment play.`,
+      `Players can expect thoughtful pacing, replay value, and the practical details that help them decide when it is the right time to dive in.`
     ],
     migrationSeedTitleDescriptionMaxLength
   );
@@ -1117,7 +1205,8 @@ function buildSeedTitleFixture(args: {
       { role: "card", assetPath: `${args.slug}/card.png`, altText: `${args.displayName} card art`, mimeType: "image/png", width: 900, height: 1280 },
       { role: "hero", assetPath: `${args.slug}/hero.png`, altText: `${args.displayName} hero art`, mimeType: "image/png", width: 1600, height: 900 },
       { role: "logo", assetPath: `${args.slug}/logo.png`, altText: `${args.displayName} logo`, mimeType: "image/png", width: 1200, height: 400 }
-    ]
+    ],
+    showcaseMedia: args.showcaseMedia
   };
 }
 
@@ -1151,7 +1240,15 @@ export const migrationSeedTitles: ReadonlyArray<MigrationSeedTitleFixture> = [
     ageRatingValue: "E",
     minAgeYears: 6,
     currentReleaseVersion: "1.0.0",
-    currentReleasePublishedAt: "2026-03-07T12:00:00Z"
+    currentReleasePublishedAt: "2026-03-07T12:00:00Z",
+    showcaseMedia: [
+      { kind: "image", assetPath: "lantern-drift/hero.png", altText: "Lantern Drift canal preview", displayOrder: 0 },
+      { kind: "image", assetPath: "riverlight-quest/hero.png", altText: "Lantern Drift puzzle route preview", displayOrder: 1 },
+      { kind: "image", assetPath: "parade-of-sparks/hero.png", altText: "Lantern Drift festival preview", displayOrder: 2 },
+      { kind: "external_video", assetPath: "lantern-drift/card.png", altText: "Lantern Drift trailer preview", videoUrl: "https://www.youtube.com/watch?v=board-enthusiasts-lantern-drift", displayOrder: 3 },
+      { kind: "image", assetPath: "lantern-drift/logo.png", altText: "Lantern Drift logo close-up", displayOrder: 4 },
+      { kind: "image", assetPath: "lantern-drift/card.png", altText: "Lantern Drift key art", displayOrder: 5 }
+    ]
   }),
   buildSeedTitleFixture({
     studioSlug: "blue-harbor-games",
@@ -1170,7 +1267,13 @@ export const migrationSeedTitles: ReadonlyArray<MigrationSeedTitleFixture> = [
     ageRatingValue: "E",
     minAgeYears: 6,
     currentReleaseVersion: "0.9.0",
-    currentReleasePublishedAt: "2026-03-06T18:30:00Z"
+    currentReleasePublishedAt: "2026-03-06T18:30:00Z",
+    showcaseMedia: [
+      { kind: "image", assetPath: "compass-echo/hero.png", altText: "Compass Echo route planner preview", displayOrder: 0 },
+      { kind: "external_video", assetPath: "compass-echo/card.png", altText: "Compass Echo feature walkthrough preview", videoUrl: "https://www.youtube.com/watch?v=board-enthusiasts-compass-echo", displayOrder: 1 },
+      { kind: "image", assetPath: "anchorpoint-atlas/hero.png", altText: "Compass Echo clue board preview", displayOrder: 2 },
+      { kind: "image", assetPath: "trailblazer-terminal/hero.png", altText: "Compass Echo expedition planning preview", displayOrder: 3 }
+    ]
   }),
   buildSeedTitleFixture({
     studioSlug: "blue-harbor-games",
@@ -1456,8 +1559,11 @@ export const migrationSeedTitles: ReadonlyArray<MigrationSeedTitleFixture> = [
     ageRatingAuthority: "ESRB",
     ageRatingValue: "E",
     minAgeYears: 6,
-    currentReleaseVersion: "1.1.3",
-    currentReleasePublishedAt: "2026-02-19T16:45:00Z"
+    showcaseMedia: [
+      { kind: "image", assetPath: "beacon-boardwalk/hero.png", altText: "Beacon Boardwalk preview", displayOrder: 0 },
+      { kind: "image", assetPath: "marble-meridian/hero.png", altText: "Beacon Boardwalk boardwalk attraction preview", displayOrder: 1 },
+      { kind: "external_video", assetPath: "beacon-boardwalk/card.png", altText: "Beacon Boardwalk coming soon trailer preview", videoUrl: "https://www.youtube.com/watch?v=board-enthusiasts-beacon-boardwalk", displayOrder: 2 }
+    ]
   }),
   buildSeedTitleFixture({
     studioSlug: "north-maple-interactive",
