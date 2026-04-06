@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { createMarketingSignup, createSupportIssueReport } from "../api";
+import { createMarketingSignup, createSupportIssueReport, getHomeOfferingSpotlights, type HomeOfferingSpotlightEntry } from "../api";
 import {
   appConfig,
   buildLandingSupportIssuePayload,
@@ -176,7 +176,7 @@ export function LandingPage() {
             <div className="landing-hero-copy">
               <h1><i>BE</i> where the Board community shows up first.</h1>
               <p>
-                Join the community forming around Board, explore useful BE resources, and get early access to the upcoming third-party library.
+                Discover BE resources, connect with other Board players and builders, and get updates on what is coming next.
               </p>
             </div>
             <div className="landing-hero-footer">
@@ -193,12 +193,12 @@ export function LandingPage() {
 
           <article className="app-panel landing-about-card">
             <div className="eyebrow">About BE</div>
-            <h2>Built to support the Board community.</h2>
+            <h2>For Board players and builders.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Board Enthusiasts is a community project supporting Board players and builders. It is not officially affiliated with nor endorsed by the Board team or Harris Hill Products, Inc.
+              Board Enthusiasts is an independent project for Board players and builders. It is not affiliated with or endorsed by Board or Harris Hill Products, Inc.
             </p>
             <p className="mt-3 text-sm leading-7 text-slate-400">
-              Currently built and maintained by Matt Stroman. Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or reach out in the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+              Questions or ideas? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
             </p>
           </article>
 
@@ -206,9 +206,9 @@ export function LandingPage() {
             <div className="eyebrow">Why join now</div>
             <h2>BE where the Board community shows up first.</h2>
             <ul className="landing-promo-list" aria-label="Reasons to join early">
-              <li>See new third-party releases as they start to surface.</li>
-              <li>Get early access when the BE Library opens up.</li>
-              <li>Follow the tools and resources growing around Board.</li>
+              <li>See new indie releases early.</li>
+              <li>Get updates as the BE Library grows.</li>
+              <li>Find tools and community resources for Board.</li>
             </ul>
           </article>
         </div>
@@ -219,18 +219,18 @@ export function LandingPage() {
               <LandingGlyph kind="library" />
             </div>
             <div className="eyebrow">Coming soon</div>
-            <h2>One place to discover third-party Board games and apps.</h2>
+              <h2>A shared place for indie Board releases.</h2>
             <p>
-              The BE Library is taking shape as the shared home where players can find new releases in one place and developers can register where the community is already looking.
+              The BE Library will make it easier to discover games and apps, follow studios, and keep up with what is new on Board.
             </p>
             <div className="landing-feature-list">
               <div className="landing-feature-item">
                 <strong>Players</strong>
-                <span>Discover and collect new third-party Board content in one place.</span>
+                <span>Follow new releases and save titles to revisit.</span>
               </div>
               <div className="landing-feature-item">
                 <strong>Developers</strong>
-                <span>Show up where players are browsing, following launches, and deciding what to install next.</span>
+                <span>Give players one more place to find your work.</span>
               </div>
             </div>
             <div className="card-actions mt-5">
@@ -238,10 +238,10 @@ export function LandingPage() {
             </div>
           </article>
           <article id="signup" className="landing-showcase-card landing-signup-card">
-            <div className="eyebrow">Get early access</div>
-            <h2>BE there when the Library opens.</h2>
+            <div className="eyebrow">Get updates</div>
+            <h2>Be there when the Library opens.</h2>
             <p>
-              Join the BE list for launch updates, early invites, community announcements, and new resources for Board players and developers.
+              Join the BE list for launch updates, invites, and new resources for Board players and developers.
             </p>
             <form className="mt-6 stack-form" onSubmit={(event) => void handleSubmit(event)}>
               <div className="form-grid">
@@ -286,7 +286,7 @@ export function LandingPage() {
                     onChange={(event) => setDeveloperInterestSelected(event.currentTarget.checked)}
                     disabled={submitting}
                   />
-                  <span>I want to create third-party content for Board.</span>
+                  <span>I want to create indie content for Board.</span>
                 </label>
               </fieldset>
 
@@ -334,7 +334,7 @@ export function LandingPage() {
                 </Link>
               </div>
               <p className="mt-4 text-sm leading-7 text-slate-300">
-                Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+                Questions? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
               </p>
             </form>
           </article>
@@ -470,7 +470,7 @@ export function LandingPage() {
             <div className="eyebrow">For Players</div>
             <h2>Follow what is being built</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              Find community, track new third-party releases, and get ready for one place to discover more of what is happening around Board.
+              Find community, track new indie releases, and get ready for one place to discover more of what is happening around Board.
             </p>
           </article>
           <article className="app-panel p-6 landing-value-card">
@@ -596,7 +596,7 @@ const liveOfferingEntries: OfferingEntry[] = [
   {
     title: "BE Game Index",
     eyebrow: "Index",
-    description: "Browse third-party Board games and apps in one place as the community catalog keeps growing.",
+    description: "Browse indie Board games and apps in one place as the community catalog keeps growing.",
     status: "Available now",
     glyph: "library",
     action: { label: "Browse Index", to: "/browse" },
@@ -666,7 +666,7 @@ const comingSoonOfferingEntries: OfferingEntry[] = [
 const homepageValueCards = [
   {
     title: "For Players",
-    description: "Discover third-party Board games and apps in one place.",
+    description: "Discover indie Board games and apps in one place.",
   },
   {
     title: "For Developers",
@@ -681,7 +681,7 @@ const homepageValueCards = [
 const ecosystemFitCards = [
   {
     title: "Discover",
-    description: "Find third-party Board games and apps through the BE Game Index.",
+    description: "Find indie Board games and apps through the BE Game Index.",
   },
   {
     title: "Connect",
@@ -764,8 +764,159 @@ function CommunityProjectStrip() {
           Board Enthusiasts is an independent community project for Board players and builders. It is not affiliated with, endorsed by, or sponsored by Board or Harris Hill Products, Inc.
         </p>
         <p className="mt-3 text-sm leading-7 text-slate-300">
-          Questions, collaboration ideas, or contribution interest? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
+          Questions? Email <a href="mailto:contact@boardenthusiasts.com">contact@boardenthusiasts.com</a> or join the <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>.
         </p>
+      </article>
+    </section>
+  );
+}
+
+function HomeOfferingsSpotlight() {
+  const [entries, setEntries] = useState<HomeOfferingSpotlightEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [rotationTick, setRotationTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load(): Promise<void> {
+      try {
+        const response = await getHomeOfferingSpotlights(appConfig.apiBaseUrl);
+        if (!cancelled) {
+          setEntries(response.entries);
+        }
+      } catch {
+        if (!cancelled) {
+          setEntries([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (entries.length <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % entries.length);
+    }, 7000);
+
+    return () => window.clearInterval(intervalId);
+  }, [entries.length, rotationTick]);
+
+  useEffect(() => {
+    if (entries.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+
+    setActiveIndex((current) => Math.min(current, entries.length - 1));
+  }, [entries.length]);
+
+  function changeEntry(nextIndex: number): void {
+    if (entries.length === 0) {
+      return;
+    }
+
+    setActiveIndex((nextIndex + entries.length) % entries.length);
+    setRotationTick((current) => current + 1);
+  }
+
+  const activeEntry = entries[activeIndex] ?? null;
+
+  if (!activeEntry) {
+    return (
+      <section className="landing-section">
+        <article className="landing-showcase-card landing-showcase-card-spotlight">
+          <div className="eyebrow">{loading ? "Loading offerings" : "BE offerings"}</div>
+          <h2>Featured offerings will appear here.</h2>
+          <p>You can still explore everything on the Offerings page.</p>
+          <div className="card-actions mt-5">
+            <Link className="secondary-button" to="/offerings">Open Offerings</Link>
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  return (
+    <section className="landing-section">
+      <article className="landing-showcase-card landing-showcase-card-spotlight overflow-hidden p-0">
+        <div className="relative grid gap-0 lg:grid-cols-[13rem_minmax(0,1fr)]">
+          <div className="flex min-h-[15rem] items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(96,255,164,0.18),transparent_32%),linear-gradient(180deg,rgba(15,22,34,0.98),rgba(8,12,20,0.98))] px-8 py-10">
+            <div className="landing-icon-badge !mb-0 !size-20 rounded-[1.9rem]" aria-hidden="true">
+              <LandingGlyph kind={activeEntry.glyph} />
+            </div>
+          </div>
+          <div className="relative p-6 md:p-8">
+            {entries.length > 1 ? (
+              <>
+                <button
+                  className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-slate-950/80 p-3 text-slate-100 transition hover:border-cyan-300/45 hover:text-cyan-100"
+                  type="button"
+                  aria-label="Previous offering spotlight"
+                  onClick={() => changeEntry(activeIndex - 1)}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2" aria-hidden="true"><path d="M14.5 5 7.5 12l7 7" /></svg>
+                </button>
+                <button
+                  className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-slate-950/80 p-3 text-slate-100 transition hover:border-cyan-300/45 hover:text-cyan-100"
+                  type="button"
+                  aria-label="Next offering spotlight"
+                  onClick={() => changeEntry(activeIndex + 1)}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg>
+                </button>
+              </>
+            ) : null}
+            <div className="mx-auto flex h-full max-w-3xl flex-col justify-center">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="eyebrow">{activeEntry.eyebrow}</div>
+                <span className="status-chip">{activeEntry.statusLabel}</span>
+              </div>
+              <h2 className="mt-3">{activeEntry.title}</h2>
+              <p className="mt-3">{activeEntry.description}</p>
+              {activeEntry.actionLabel && activeEntry.actionUrl ? (
+                <div className="card-actions mt-5">
+                  {activeEntry.actionExternal ? (
+                    <a className="secondary-button" href={activeEntry.actionUrl} target="_blank" rel="noreferrer">
+                      {activeEntry.actionLabel}
+                    </a>
+                  ) : (
+                    <Link className="secondary-button" to={activeEntry.actionUrl}>
+                      {activeEntry.actionLabel}
+                    </Link>
+                  )}
+                </div>
+              ) : null}
+              {entries.length > 1 ? (
+                <div className="mt-6 flex items-center gap-2">
+                  {entries.map((entry, index) => (
+                    <button
+                      key={`${entry.slotNumber}-${entry.title}`}
+                      className={`h-2.5 w-8 rounded-full transition ${index === activeIndex ? "bg-cyan-200" : "bg-white/18 hover:bg-white/35"}`}
+                      type="button"
+                      aria-label={`Show ${entry.title}`}
+                      aria-pressed={index === activeIndex}
+                      onClick={() => changeEntry(index)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
       </article>
     </section>
   );
@@ -785,9 +936,9 @@ export function HomePage() {
           <div className="hero-panel landing-hero-panel">
             <div className="landing-hero-copy">
               <div className="eyebrow">Live now</div>
-              <h1>Discover third-party Board games in one place.</h1>
+              <h1>Discover indie Board games in one place.</h1>
               <p>
-                The BE Game Index is now live. Browse community-made Board games and apps, follow new launches, and explore the growing BE ecosystem around Board.
+                The BE Game Index is live. Browse indie Board games and apps, follow new releases, and explore BE tools built around the platform.
               </p>
             </div>
             <div className="landing-hero-footer">
@@ -806,37 +957,26 @@ export function HomePage() {
         <div className="landing-hero-rail">
           <article className="landing-showcase-card landing-showcase-card-spotlight">
             <div className="eyebrow">Why it matters</div>
-            <h2>One place to see what the Board community is building right now.</h2>
+            <h2>A better way to keep up with indie Board releases.</h2>
             <div className="landing-feature-list">
               <div className="landing-feature-item">
-                <strong>Browse releases</strong>
-                <span>See third-party Board games and apps together instead of hunting across separate sites.</span>
+                <strong>Browse titles</strong>
+                <span>See indie Board games and apps in one place.</span>
               </div>
               <div className="landing-feature-item">
-                <strong>Track momentum</strong>
-                <span>Follow new launches, studios, and the ecosystem touchpoints growing around Board.</span>
+                <strong>Follow what is new</strong>
+                <span>Keep up with upcoming releases, studios, and new additions.</span>
               </div>
               <div className="landing-feature-item">
                 <strong>Explore BE tools</strong>
-                <span>Explore the community spaces, tools, and supporting BE offerings around the live Game Index.</span>
+                <span>Find the resources and community spaces built around the index.</span>
               </div>
             </div>
           </article>
         </div>
       </section>
 
-      <section className="landing-section">
-        <article className="landing-showcase-card landing-showcase-card-spotlight">
-          <div className="eyebrow">More from BE</div>
-          <h2>BE includes more than the Game Index.</h2>
-          <p>
-            Beyond the live index, BE also includes community spaces, helper tools, utility apps, and in-progress developer offerings built to support the wider Board ecosystem.
-          </p>
-          <div className="card-actions mt-5">
-            <Link className="secondary-button" to="/offerings">Open the Offerings Page</Link>
-          </div>
-        </article>
-      </section>
+      <HomeOfferingsSpotlight />
 
       <section className="landing-section">
         <div className="landing-section-heading">
@@ -852,18 +992,6 @@ export function HomePage() {
           ))}
         </div>
       </section>
-
-      <OfferingGroupSection
-        title="Live Now"
-        description="The Game Index is the headline release, and BE already has more around it today. Start with the live offerings already available around it."
-        entries={liveOfferingEntries}
-      />
-
-      <OfferingGroupSection
-        title="Coming Soon"
-        description="These are the next supporting pieces BE is building for smoother Board development workflows."
-        entries={comingSoonOfferingEntries}
-      />
 
       <CommunityProjectStrip />
     </div>
@@ -887,10 +1015,7 @@ export function OfferingsPage() {
             <div className="eyebrow">BE ecosystem</div>
             <h1>Explore the BE ecosystem.</h1>
             <p>
-              Beyond the live Game Index, BE includes community spaces, helper tools, utility apps, and in-progress developer offerings.
-            </p>
-            <p className="landing-hero-note">
-              The Game Index is the front door. This page covers the broader BE ecosystem around it.
+              Beyond the Game Index, BE includes community spaces, helper tools, utility apps, and in-progress developer offerings.
             </p>
           </div>
           <div className="landing-hero-footer">
@@ -935,7 +1060,7 @@ export function OfferingsPage() {
           <div className="eyebrow">Back to the index</div>
           <h2>Browse the live BE Game Index.</h2>
           <p>
-            When you are ready to discover what is available right now, jump back into the live index and explore third-party Board games and apps.
+            When you are ready to discover what is available right now, jump back into the live index and explore indie Board games and apps.
           </p>
           <div className="card-actions mt-5">
             <Link className="primary-button" to="/browse">Browse Game Index</Link>
@@ -943,8 +1068,6 @@ export function OfferingsPage() {
           </div>
         </article>
       </section>
-
-      <CommunityProjectStrip />
     </div>
   );
 }
@@ -960,31 +1083,27 @@ export function InstallGuidePage() {
           <div className="space-y-2">
             <h1 className="font-display text-3xl font-bold uppercase tracking-[0.08em] text-white">Install Guide</h1>
             <p className="text-sm leading-7 text-slate-300">
-              Follow these steps to get an independent game onto your Board today.
+              Follow these steps to find an indie Board game and install it onto your Board today.
             </p>
           </div>
 
-          <section className="app-panel p-6">
-            <div className="eyebrow">A smoother install flow is coming</div>
-            <h2>We know the current process is a bit cumbersome.</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
-            Right now, installing independent games still means downloading the title on your computer and using Board&apos;s install tooling.
-          </p>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
-            Coming soon to BE, we plan to offer an on-Board app for the index that can install games from your library without needing to stay connected to your PC.
-          </p>
-        </section>
-
         <section className="home-card-grid">
           <section className="app-panel p-6">
-            <div className="eyebrow">1. Get the game</div>
-            <h2>Choose a title and download it from the developer.</h2>
+            <div className="eyebrow">1. Discover on BE</div>
+            <h2>Browse the index and pick an indie title to install.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              <Link className="text-cyan-100 transition hover:text-white" to="/browse">Browse the index</Link> to find a game you like, then use the <code>Get Title</code> link on that listing to purchase and download it from the developer&apos;s publishing site.
+              Start in the <Link className="text-cyan-100 transition hover:text-white" to="/browse">BE Game Index</Link> to browse indie Board games and apps, compare listings, and decide what you want to install.
             </p>
           </section>
           <section className="app-panel p-6">
-            <div className="eyebrow">2. Download the installer</div>
+            <div className="eyebrow">2. Download on your PC</div>
+            <h2>Get the title from the developer onto your computer.</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Use the <code>Get Title</code> link on the listing to purchase or download the title from the developer&apos;s site. Keep the download on your PC, since Board currently requires PC-assisted installation through <code>bdb</code>.
+            </p>
+          </section>
+          <section className="app-panel p-6">
+            <div className="eyebrow">3. Download the installer</div>
             <h2>Get Board&apos;s install tool onto your computer.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               On Board&apos;s developer portal, you&apos;ll need to unlock the download first and then choose the version for your computer.
@@ -997,7 +1116,7 @@ export function InstallGuidePage() {
             </ul>
           </section>
           <section className="app-panel p-6">
-            <div className="eyebrow">3. Install on Board</div>
+            <div className="eyebrow">4. Install on Board</div>
             <h2>Follow Board&apos;s setup steps and finish the install.</h2>
             <p className="mt-3 text-sm leading-7 text-slate-300">
               Follow <a className="text-cyan-100 transition hover:text-white" href={boardInstallInstructionsUrl} target="_blank" rel="noreferrer">Board&apos;s instructions</a> for connecting Board and installing your game.

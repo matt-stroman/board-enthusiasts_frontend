@@ -14,7 +14,10 @@ export type AnalyticsEventName =
   | "browse_filters_applied"
   | "title_quick_view_opened"
   | "title_detail_viewed"
-  | "title_get_clicked";
+  | "title_get_clicked"
+  | "title_wishlisted"
+  | "studio_followed"
+  | "homepage_spotlight_clicked";
 
 /**
  * Canonical analytics event payload sent from the SPA to the internal Worker ingestion route.

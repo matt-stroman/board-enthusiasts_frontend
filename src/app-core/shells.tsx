@@ -21,22 +21,6 @@ import { usePageAnalytics } from "./analytics";
 import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 
-function PreviewEnvironmentFooterNote() {
-  if (appConfig.appEnv === "production") {
-    return null;
-  }
-
-  return (
-    <div className="app-footer-preview-row">
-      <div className="app-footer-preview" role="note" aria-label="Preview environment notice">
-        <strong>Preview environment.</strong> This site currently uses mock/demo content to show the planned experience. It does not
-        include real or current Board games, and any accounts or other data created here may be reset, removed, or not carried into
-        the live launch.
-      </div>
-    </div>
-  );
-}
-
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
@@ -162,8 +146,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <NavLink to="/player" className={({ isActive }) => navLinkClass(isActive)}>
                   Play
                 </NavLink>
-                <NavLink to="/develop" className={({ isActive }) => navLinkClass(isActive)}>
-                  Develop
+                <NavLink to="/developer" className={({ isActive }) => navLinkClass(isActive)}>
+                  Developer
                 </NavLink>
                 {showModerateSection ? (
                   <NavLink to="/moderate" className={({ isActive }) => navLinkClass(isActive)}>
@@ -282,7 +266,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         <>
                           <div className="border-t border-white/10" />
                           <nav className="p-2 text-sm text-slate-200">
-                            <button className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/10" type="button" onClick={() => navigateToAndClose("/develop")}>Developer Console</button>
+                            <button className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/10" type="button" onClick={() => navigateToAndClose("/developer")}>Developer Console</button>
                           </nav>
                         </>
                       ) : null}
@@ -328,8 +312,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <NavLink to="/player" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
                 Play
               </NavLink>
-              <NavLink to="/develop" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
-                Develop
+              <NavLink to="/developer" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
+                Developer
               </NavLink>
               {showModerateSection ? (
                 <NavLink to="/moderate" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
@@ -357,32 +341,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="app-footer-inner">
           <div className="landing-footer-copy-block">
             <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Independent and community-built.</div>
-            <div>Board Enthusiasts is a community project supporting Board players and builders.</div>
+            <div>Board Enthusiasts is an independent project for Board players and builders.</div>
           </div>
           <div className="app-footer-links">
-            <Link to="/browse">Browse</Link>
-            <Link to="/offerings">Offerings</Link>
-            <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
-            <a href={landingBoardUrl} target="_blank" rel="noreferrer">Get Board</a>
+            <Link to="/studios">Studios</Link>
             <Link to={supportRoute}>Contact Us</Link>
             <Link to="/privacy">Privacy</Link>
-            {showSignedInSections ? (
-              <>
-                <Link to="/player">Play</Link>
-                <Link to="/player/wishlist">Wishlist</Link>
-                <Link to="/player?workflow=reported-titles">Reported Titles</Link>
-                <Link to="/develop">Develop</Link>
-                {showModerateSection ? <Link to="/moderate">Moderate</Link> : null}
-                <Link to="/player?workflow=account-profile">Account</Link>
-              </>
-            ) : null}
-            {!homeShell ? <Link to="/install-guide">Install</Link> : null}
+            <Link to="/install-guide">Install Guide</Link>
           </div>
           <div className="landing-footer-copyright">
             © {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a>
           </div>
         </div>
-        <PreviewEnvironmentFooterNote />
         <div className="landing-footer-disclaimer-row">
           <div className="landing-footer-disclaimer">
             Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
@@ -552,7 +522,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
         <div className="app-footer-inner">
           <div className="landing-footer-copy-block">
             <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Independent and community-built.</div>
-            <div>Board Enthusiasts is a community project supporting Board players and builders.</div>
+            <div>Board Enthusiasts is an independent project for Board players and builders.</div>
           </div>
           <div className="app-footer-links">
             <a href={landingDiscordUrl} target="_blank" rel="noreferrer">Discord</a>
@@ -562,7 +532,6 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="landing-footer-copyright">© {currentYear} Matt Stroman | <a href="https://mattstroman.com" target="_blank" rel="noreferrer">Portfolio</a> | <a href="https://www.linkedin.com/in/mattstromandev/" target="_blank" rel="noreferrer">LinkedIn</a></div>
         </div>
-        <PreviewEnvironmentFooterNote />
         <div className="landing-footer-disclaimer-row">
           <div className="landing-footer-disclaimer">
             Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.

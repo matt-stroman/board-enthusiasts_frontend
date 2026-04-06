@@ -59,6 +59,8 @@ const authState = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   createMarketingSignup: vi.fn(),
   createSupportIssueReport: vi.fn(),
+  getHomeSpotlights: vi.fn(),
+  getHomeOfferingSpotlights: vi.fn(),
   getBoardProfile: vi.fn(),
   listPublicStudios: vi.fn(),
   listCatalogTitles: vi.fn(),
@@ -77,6 +79,9 @@ const apiMocks = vi.hoisted(() => ({
   getPlayerWishlist: vi.fn(),
   addTitleToPlayerWishlist: vi.fn(),
   removeTitleFromPlayerWishlist: vi.fn(),
+  getPlayerFollowedStudios: vi.fn(),
+  addStudioToPlayerFollows: vi.fn(),
+  removeStudioFromPlayerFollows: vi.fn(),
   getPlayerTitleReports: vi.fn(),
   createPlayerTitleReport: vi.fn(),
   getPlayerTitleReport: vi.fn(),
@@ -105,6 +110,7 @@ const apiMocks = vi.hoisted(() => ({
   getTitleMetadataVersions: vi.fn(),
   activateTitleMetadataVersion: vi.fn(),
   getTitleMediaAssets: vi.fn(),
+  getTitleShowcaseMedia: vi.fn(),
   upsertTitleMediaAsset: vi.fn(),
   uploadTitleMediaAsset: vi.fn(),
   deleteTitleMediaAsset: vi.fn(),
@@ -272,6 +278,8 @@ describe("App", () => {
       error: null,
     });
     apiMocks.listPublicStudios.mockResolvedValue({ studios: [] });
+    apiMocks.getHomeSpotlights.mockResolvedValue({ entries: [] });
+    apiMocks.getHomeOfferingSpotlights.mockResolvedValue({ entries: [] });
     apiMocks.listCatalogTitles.mockResolvedValue({ titles: [], paging: { pageNumber: 1, pageSize: 48, totalCount: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
     apiMocks.listGenres.mockResolvedValue({
       genres: [
@@ -324,6 +332,9 @@ describe("App", () => {
     }));
     apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
     apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerFollowedStudios.mockResolvedValue({ studios: [] });
+    apiMocks.addStudioToPlayerFollows.mockResolvedValue({ studioId: "studio-1", included: true, alreadyInRequestedState: false });
+    apiMocks.removeStudioFromPlayerFollows.mockResolvedValue({ studioId: "studio-1", included: false, alreadyInRequestedState: false });
     apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
     apiMocks.getModerationTitleReports.mockResolvedValue({ reports: [] });
     apiMocks.getDeveloperEnrollment.mockResolvedValue({
@@ -340,6 +351,7 @@ describe("App", () => {
     apiMocks.listStudioTitles.mockResolvedValue({ titles: [] });
     apiMocks.getTitleMetadataVersions.mockResolvedValue({ metadataVersions: [] });
     apiMocks.getTitleMediaAssets.mockResolvedValue({ mediaAssets: [] });
+    apiMocks.getTitleShowcaseMedia.mockResolvedValue({ showcaseMedia: [] });
     apiMocks.getDeveloperTitleReports.mockResolvedValue({ reports: [] });
     apiMocks.getTitleReleases.mockResolvedValue({ releases: [] });
     apiMocks.getStudioIntegrationConnections.mockResolvedValue({ integrationConnections: [] });
@@ -549,6 +561,7 @@ describe("App", () => {
         },
       ],
     });
+    apiMocks.getTitleShowcaseMedia.mockResolvedValue({ showcaseMedia: [] });
     apiMocks.getDeveloperTitleReports.mockResolvedValue({ reports: [] });
     apiMocks.getTitleReleases.mockResolvedValue({
       releases: [
@@ -597,20 +610,20 @@ describe("App", () => {
   it("renders the live BE front door and signed-out shell navigation", async () => {
     renderApp("/");
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." })).toBeVisible();
     expect(screen.getByText("For Board Players And Builders")).toBeVisible();
-    expect(screen.getByText(/The BE Game Index is now live/i)).toBeVisible();
+    expect(screen.getByText(/The BE Game Index is live/i)).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Browse Index" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Offerings" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Install" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "BE includes more than the Game Index." })).toBeVisible();
-    expect(screen.getByText("Explore BE tools")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "BE Game Index" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "BE Discord" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "BE Emulator for Board" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "A better way to keep up with indie Board releases." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Featured offerings will appear here." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Why BE exists" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "For Players" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "For Developers" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "https://mattstroman.com");
     expect(screen.getByRole("link", { name: "LinkedIn" })).toHaveAttribute("href", "https://www.linkedin.com/in/mattstromandev/");
     expect(screen.queryByRole("link", { name: "Player Sign In" })).not.toBeInTheDocument();
@@ -621,7 +634,7 @@ describe("App", () => {
   it("keeps Browse highlighted only on browse routes", async () => {
     renderApp("/");
 
-    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+    await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." });
 
     const homeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
     expect(homeBrowseLink).toBeDefined();
@@ -629,7 +642,7 @@ describe("App", () => {
 
     await userEvent.click(homeBrowseLink as HTMLAnchorElement);
 
-    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(await screen.findByLabelText("Search")).toBeVisible();
 
     const activeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
     expect(activeBrowseLink).toBeDefined();
@@ -640,7 +653,7 @@ describe("App", () => {
 
     await userEvent.click(homeLink as HTMLAnchorElement);
 
-    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+    await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." });
 
     const returnedHomeBrowseLink = screen.getAllByRole("link", { name: "Browse" }).find((link) => link.getAttribute("href") === "/browse");
     expect(returnedHomeBrowseLink).toBeDefined();
@@ -676,9 +689,9 @@ describe("App", () => {
     renderApp("/install-guide");
 
     expect(await screen.findByRole("heading", { level: 1, name: "Install Guide" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "We know the current process is a bit cumbersome." })).toBeVisible();
-    expect(screen.getByText(/on-Board app for the index/i)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Browse the index" })).toHaveAttribute("href", "/browse");
+    expect(screen.getByText("Follow these steps to find an indie Board game and install it onto your Board today.")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Browse the index and pick an indie title to install." })).toBeVisible();
+    expect(screen.getByRole("link", { name: "BE Game Index" })).toHaveAttribute("href", "/browse");
     expect(screen.getByRole("link", { name: "Board Developer Bridge (bdb)" })).toHaveAttribute(
       "href",
       "https://dev.board.fun/#:~:text=Board%20Developer%20Bridge%20(bdb)",
@@ -782,7 +795,7 @@ describe("App", () => {
     expect(screen.queryByRole("link", { name: "Browse" })).not.toBeInTheDocument();
   });
 
-  it("shows the highlighted preview footer notice outside production", async () => {
+  it("keeps the landing shell free of preview-environment notices outside production", async () => {
     configState.value = {
       ...configState.value,
       appEnv: "staging",
@@ -792,9 +805,7 @@ describe("App", () => {
     renderApp("/");
 
     expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
-    expect(screen.getByRole("note", { name: "Preview environment notice" })).toHaveTextContent(
-      "Preview environment. This site currently uses mock/demo content to show the planned experience. It does not include real or current Board games, and any accounts or other data created here may be reset, removed, or not carried into the live launch.",
-    );
+    expect(screen.queryByRole("note", { name: "Preview environment notice" })).not.toBeInTheDocument();
   });
 
   it("submits the landing-page signup form", async () => {
@@ -823,7 +834,7 @@ describe("App", () => {
     await userEvent.type(screen.getByPlaceholderText("you@example.com"), "matt@example.com");
     await userEvent.click(screen.getByRole("checkbox", { name: /I want email updates from Board Enthusiasts/i }));
     await userEvent.click(screen.getByRole("checkbox", { name: /I want to discover and follow new Board games and apps/i }));
-    await userEvent.click(screen.getByRole("checkbox", { name: /I want to create third-party content for Board/i }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /I want to create indie content for Board/i }));
     await completeLocalAntiSpamCheck();
     await userEvent.click(screen.getByRole("button", { name: "Join the list" }));
 
@@ -916,7 +927,7 @@ describe("App", () => {
     },
     {
       name: "submits with only the developer role interest",
-      toggleLabels: ["I want to create third-party content for Board."],
+      toggleLabels: ["I want to create indie content for Board."],
       expectedRoleInterests: ["developer"],
     },
   ])("$name", async ({ toggleLabels, expectedRoleInterests }) => {
@@ -1047,7 +1058,7 @@ describe("App", () => {
           studioDisplayName: "Blue Harbor Games",
           slug: "lantern-drift",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 2,
@@ -1081,7 +1092,7 @@ describe("App", () => {
         genreDisplay: "Puzzle, Family",
         contentKind: "game",
         visibility: "listed",
-        lifecycleStatus: "published",
+        lifecycleStatus: "active",
         isReported: false,
         currentMetadataRevision: 2,
         playerCountDisplay: "1-4 players",
@@ -1098,7 +1109,7 @@ describe("App", () => {
           id: "release-1",
           titleId: "title-1",
           version: "1.0.0",
-          status: "published",
+          status: "production",
           isCurrent: true,
           publishedAt: "2026-03-08T12:00:00Z",
           createdAt: "2026-03-08T12:00:00Z",
@@ -1111,7 +1122,7 @@ describe("App", () => {
 
     renderApp("/browse");
 
-    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(await screen.findByText("Lantern Drift")).toBeVisible();
     expect(apiMocks.listCatalogTitles).toHaveBeenCalledWith("http://127.0.0.1:8787");
 
@@ -1119,7 +1130,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("dialog")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(screen.getByLabelText("Search")).toBeVisible();
     expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null);
   });
 
@@ -1147,7 +1158,7 @@ describe("App", () => {
           studioDisplayName: "Harborlight Mechanics",
           slug: "cinderline-workshop",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 1,
@@ -1172,7 +1183,7 @@ describe("App", () => {
           studioDisplayName: "Harborlight Mechanics",
           slug: "signal-harbor",
           contentKind: "app",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 1,
@@ -1217,7 +1228,7 @@ describe("App", () => {
         studioDisplayName: "Blue Harbor Games",
         slug: `title-${index + 1}`,
         contentKind: "game" as const,
-        lifecycleStatus: "published" as const,
+        lifecycleStatus: "active" as const,
         visibility: "listed" as const,
         isReported: false,
         currentMetadataRevision: 1,
@@ -1240,7 +1251,7 @@ describe("App", () => {
 
     renderApp("/browse");
 
-    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(screen.getByText("Showing results 1 - 10 of 22")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -1314,10 +1325,10 @@ describe("App", () => {
     renderApp("/browse/blue-harbor-games/lantern-drift");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(screen.getByText("Current version", { exact: false })).toBeVisible();
-    expect(screen.getByText("1.0.0")).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Current release" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Configured")).not.toBeInTheDocument();
+    expect(screen.getByText("Release", { selector: "dt" })).toBeVisible();
+    expect(screen.getAllByText("1.0.0").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Current release" })).toBeVisible();
+    expect(screen.getByText("Configured")).toBeVisible();
   });
 
   it("shows an unavailable notice for unlisted titles that remain in a player's collection", async () => {
@@ -1406,7 +1417,7 @@ describe("App", () => {
     renderApp("/browse/blue-harbor-games/lantern-drift");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(screen.getByText(/unlisted and no longer available/i)).toBeVisible();
+    expect(screen.queryByRole("link", { name: /Get title/i })).not.toBeInTheDocument();
     expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", "player-token");
   });
 
@@ -1420,7 +1431,7 @@ describe("App", () => {
           studioDisplayName: "Blue Harbor Games",
           slug: "lantern-drift",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 2,
@@ -1444,7 +1455,7 @@ describe("App", () => {
 
     renderApp("/browse");
 
-    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(screen.getByAltText("Lantern Drift logo")).toBeVisible();
   });
 
@@ -1458,7 +1469,7 @@ describe("App", () => {
           studioDisplayName: "Blue Harbor Games",
           slug: "lantern-drift",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 2,
@@ -1483,7 +1494,7 @@ describe("App", () => {
           studioDisplayName: "Tiny Orbit Forge",
           slug: "orbital-crew",
           contentKind: "game",
-          lifecycleStatus: "published",
+          lifecycleStatus: "active",
           visibility: "listed",
           isReported: false,
           currentMetadataRevision: 1,
@@ -1507,7 +1518,7 @@ describe("App", () => {
 
     renderApp("/browse");
 
-    expect(await screen.findByRole("heading", { name: "Browse" })).toBeVisible();
+    expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(screen.getByText("Lantern Drift")).toBeVisible();
     expect(screen.getByText("Orbital Crew")).toBeVisible();
 
@@ -1524,7 +1535,7 @@ describe("App", () => {
   });
 
   it("redirects protected routes to sign in when unauthenticated", async () => {
-    renderApp("/develop");
+    renderApp("/developer");
 
     expect(await screen.findByRole("heading", { name: "Sign In" })).toBeVisible();
     expect(screen.getByLabelText("Email")).toBeVisible();
@@ -1556,12 +1567,12 @@ describe("App", () => {
       signInWithSocialAuth: vi.fn(),
     };
 
-    renderApp("/auth/signin?returnTo=%2Fdevelop");
+    renderApp("/auth/signin?returnTo=%2Fdeveloper");
 
     await userEvent.click(await screen.findByRole("button", { name: "Sign in with Discord" }));
 
     expect(authState.value.signInWithSocialAuth).toHaveBeenCalledWith("discord", "sign-in", undefined);
-    expect(window.sessionStorage.getItem("signin-oauth-return-to")).toBe("/develop");
+    expect(window.sessionStorage.getItem("signin-oauth-return-to")).toBe("/developer");
     expect(screen.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
   });
@@ -1598,7 +1609,7 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     expect(await screen.findByRole("heading", { name: "Become a Developer" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Become a Developer" })).toBeVisible();
@@ -1606,10 +1617,10 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "Access not available" })).not.toBeInTheDocument();
   });
 
-  it("restores the maintained studio workflow navigation inside /develop", async () => {
+  it("restores the maintained studio workflow navigation inside /developer", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     expect(await screen.findByRole("button", { name: "Studios" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Overview" })).toBeVisible();
@@ -1624,7 +1635,7 @@ describe("App", () => {
   it("shows the correct selector stack for each develop domain", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     await screen.findByRole("button", { name: "Studios" });
     let sidebar = screen.getByText("Section").closest("aside");
@@ -1651,7 +1662,7 @@ describe("App", () => {
   it("restores the maintained title overview as summary cards instead of inline editors", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getAllByText("Lantern Drift").length).toBeGreaterThan(0);
@@ -1701,7 +1712,7 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     const visibilitySwitch = await screen.findByRole("switch", { name: "Title visibility" });
     expect(visibilitySwitch).toHaveAttribute("aria-checked", "true");
@@ -1743,15 +1754,15 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     const visibilitySwitch = await screen.findByRole("switch", { name: "Title visibility" });
     expect(visibilitySwitch).toBeDisabled();
 
     await userEvent.hover(visibilitySwitch.parentElement as HTMLElement);
 
-    expect(screen.getByText("Create a release first, then activate the title before you list it.")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Activate and list title" })).not.toBeInTheDocument();
+    expect(screen.getByText("Activate this title when you are ready for players to start discovering it.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Activate and list title" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open releases" })).toBeVisible();
   });
 
@@ -1816,7 +1827,7 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Unarchive title" })).toBeEnabled();
@@ -1860,7 +1871,7 @@ describe("App", () => {
     });
     apiMocks.unarchiveTitle.mockRejectedValue(new Error('new row for relation "titles" violates check constraint "titles_draft_private"'));
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
 
@@ -1877,7 +1888,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.createTitleRelease.mockRejectedValue(new Error('duplicate key value violates unique constraint "title_releases_title_version_unique"'));
 
-    renderApp("/develop?domain=releases&workflow=releases-create&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=releases&workflow=releases-create&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Create Release" })).toBeVisible();
 
@@ -1896,7 +1907,7 @@ describe("App", () => {
   it("restores the release overview without the old publish workflow", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
+    renderApp("/developer?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
 
     expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Open publish" })).not.toBeInTheDocument();
@@ -1923,7 +1934,7 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
+    renderApp("/developer?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-1");
 
     expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
 
@@ -1954,6 +1965,7 @@ describe("App", () => {
         version: "1.0.1",
         status: "testing",
         acquisitionUrl: "https://example.com/titles/lantern-drift/v1-0-1",
+        expiresAt: null,
       });
     });
 
@@ -1989,7 +2001,7 @@ describe("App", () => {
       ],
     });
 
-    renderApp("/develop?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-2");
+    renderApp("/developer?domain=releases&workflow=releases-overview&studioId=studio-1&titleId=title-1&releaseId=release-2");
 
     expect(await screen.findByRole("heading", { name: "Release Overview" })).toBeVisible();
     const releaseSelect = screen.getByDisplayValue("1.0.1 (Testing)");
@@ -2001,7 +2013,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.verifyCurrentUserPassword.mockRejectedValue(new Error("Current password is incorrect."));
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     await screen.findByRole("heading", { name: "Lantern Drift" });
     await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
@@ -2021,7 +2033,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     await screen.findByRole("heading", { name: "Lantern Drift" });
     await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
@@ -2040,7 +2052,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     await screen.findByRole("heading", { name: "Lantern Drift" });
     await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
@@ -2059,7 +2071,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     await screen.findByRole("heading", { name: "Lantern Drift" });
     await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
@@ -2080,7 +2092,7 @@ describe("App", () => {
     apiMocks.verifyCurrentUserPassword.mockResolvedValue({ verified: true });
     apiMocks.deleteTitle.mockResolvedValue(undefined);
 
-    renderApp("/develop?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-overview&studioId=studio-1&titleId=title-1");
 
     await screen.findByRole("heading", { name: "Lantern Drift" });
     await userEvent.click(screen.getByRole("button", { name: "Delete title" }));
@@ -2732,7 +2744,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+    await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." });
     await userEvent.click(screen.getByRole("button", { name: /open account/i }));
 
     expect(screen.getByRole("button", { name: "Profile" })).toBeVisible();
@@ -2785,7 +2797,7 @@ describe("App", () => {
 
     renderApp("/");
 
-    await screen.findByRole("heading", { level: 1, name: "Discover third-party Board games in one place." });
+    await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." });
     await userEvent.click(screen.getByRole("button", { name: "Open notifications" }));
 
     expect(await screen.findByText("Moderator follow-up on your report")).toBeVisible();
@@ -3975,7 +3987,7 @@ describe("App", () => {
       },
     });
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     await screen.findByRole("button", { name: "Create studio" });
     await userEvent.click(screen.getByRole("button", { name: "Create studio" }));
@@ -4027,7 +4039,7 @@ describe("App", () => {
         },
       });
 
-      renderApp("/develop");
+      renderApp("/developer");
 
       await screen.findByRole("button", { name: "Studios" });
       await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
@@ -4084,7 +4096,7 @@ describe("App", () => {
     try {
       seedDeveloperWorkspace();
 
-      renderApp("/develop");
+      renderApp("/developer");
 
       await screen.findByRole("button", { name: "Studios" });
       await userEvent.click(screen.getAllByRole("button", { name: "Create studio" })[0]);
@@ -4116,7 +4128,7 @@ describe("App", () => {
     try {
       seedDeveloperWorkspace();
 
-      renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+      renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
       const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
       expect(createTitleForm).not.toBeNull();
@@ -4142,7 +4154,7 @@ describe("App", () => {
   it("shows the selected title card preview immediately after upload", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
@@ -4213,7 +4225,7 @@ describe("App", () => {
   it("lets developers add multiple genres and remove only the selected chip in title create", async () => {
     seedDeveloperWorkspace();
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
@@ -4362,7 +4374,7 @@ describe("App", () => {
       ],
     });
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
@@ -4427,7 +4439,7 @@ describe("App", () => {
       }),
     );
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
@@ -4462,7 +4474,7 @@ describe("App", () => {
             displayName: "Lantern Drift",
             slug: "lantern-drift",
             contentKind: "game",
-            lifecycleStatus: "published",
+            lifecycleStatus: "active",
             visibility: "listed",
             genres: ["Adventure", "Puzzle", "Family"],
             genreInput: "",
@@ -4486,7 +4498,7 @@ describe("App", () => {
       }),
     );
 
-    renderApp("/develop?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
 
     const metadataForm = (await screen.findByRole("textbox", { name: /display name/i })).closest("form");
     expect(metadataForm).not.toBeNull();
@@ -4510,7 +4522,7 @@ describe("App", () => {
     seedDeveloperWorkspace();
     apiMocks.listAgeRatingAuthorities.mockRejectedValue(new Error("Could not find the table 'public.age_rating_authorities' in the schema cache"));
 
-    renderApp("/develop?domain=titles&workflow=titles-create&studioId=studio-1");
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
 
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
@@ -4588,7 +4600,7 @@ describe("App", () => {
     });
     apiMocks.listStudioTitles.mockResolvedValue({ titles: [] });
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     await screen.findByRole("heading", { name: "Studio links" });
     await screen.findByText("https://pine-labs.example");
@@ -4789,7 +4801,7 @@ describe("App", () => {
       }),
     );
 
-    renderApp("/develop");
+    renderApp("/developer");
 
     const editStudioForm = (await screen.findByRole("heading", { name: "Edit Studio" })).closest("form");
     expect(editStudioForm).not.toBeNull();

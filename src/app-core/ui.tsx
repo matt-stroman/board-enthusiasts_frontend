@@ -26,7 +26,6 @@ import {
   formatPlayerFilterSummary,
   getCatalogTitleAvailabilityNote,
   getCurrentUserAvatarUrl,
-  getFallbackArtworkUrl,
   getFallbackGradient,
   getInitials,
   getStudioAvatarImageUrl,
@@ -514,22 +513,37 @@ export function TitleCard({
 }) {
   const [cardImageFailed, setCardImageFailed] = useState(false);
   const [logoImageFailed, setLogoImageFailed] = useState(false);
-  const fallbackArtworkUrl = getFallbackArtworkUrl(title);
-  const cardImageUrl = !cardImageFailed && title.cardImageUrl ? title.cardImageUrl : fallbackArtworkUrl;
+  const cardImageUrl = !cardImageFailed && title.cardImageUrl ? title.cardImageUrl : null;
   const logoImageUrl = !logoImageFailed && title.logoImageUrl ? title.logoImageUrl : null;
   const genreTags = parseGenreTags(title.genreDisplay);
   const panelClassName = logoImageUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
+  const fallbackGradient = getFallbackGradient(title.genreDisplay);
   const cardBody = (
     <div className="relative flex h-full flex-col justify-end">
       <div className="absolute inset-0 overflow-hidden">
-        <img
-          className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.045] group-hover:brightness-105 group-hover:saturate-[1.08] group-focus-within:scale-[1.045] group-focus-within:brightness-105 group-focus-within:saturate-[1.08]"
-          src={cardImageUrl}
-          alt=""
-          aria-hidden="true"
-          onError={() => setCardImageFailed(true)}
-        />
+        {cardImageUrl ? (
+          <img
+            className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.045] group-hover:brightness-105 group-hover:saturate-[1.08] group-focus-within:scale-[1.045] group-focus-within:brightness-105 group-focus-within:saturate-[1.08]"
+            src={cardImageUrl}
+            alt=""
+            aria-hidden="true"
+            onError={() => setCardImageFailed(true)}
+          />
+        ) : (
+          <div
+            className="relative h-full w-full overflow-hidden transition duration-500 ease-out group-hover:scale-[1.045] group-hover:brightness-105 group-hover:saturate-[1.08] group-focus-within:scale-[1.045] group-focus-within:brightness-105 group-focus-within:saturate-[1.08]"
+            style={{ backgroundImage: fallbackGradient }}
+            aria-hidden="true"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.2),transparent_34%),linear-gradient(180deg,rgba(5,8,15,0.04),rgba(5,8,15,0.18)_52%,rgba(5,8,15,0.55))]" />
+            <div className="absolute -left-12 top-8 h-44 w-44 rounded-full bg-white/12 blur-3xl" />
+            <div className="absolute right-[-2.5rem] top-16 h-36 w-36 rounded-full bg-slate-950/25 blur-3xl" />
+            <div className="absolute bottom-16 left-10 h-28 w-28 rounded-[2.25rem] border border-white/10 bg-white/8 backdrop-blur-[2px]" />
+            <div className="absolute bottom-10 left-32 h-18 w-40 rounded-[1.8rem] border border-white/10 bg-slate-950/14" />
+            <div className="absolute right-12 top-28 h-20 w-20 rotate-12 rounded-[1.6rem] border border-white/10 bg-white/7" />
+          </div>
+        )}
       </div>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_30%),linear-gradient(180deg,rgba(7,9,14,0.02),rgba(7,9,14,0.07)_44%,rgba(7,9,14,0.22)_100%)]" />
       <div className="pointer-events-none absolute -left-10 top-0 h-40 w-48 -translate-x-8 bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.14),rgba(255,255,255,0))] opacity-0 blur-2xl transition duration-500 ease-out group-hover:translate-x-10 group-hover:opacity-60 group-focus-within:translate-x-10 group-focus-within:opacity-60" />

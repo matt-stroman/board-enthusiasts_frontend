@@ -1,4 +1,4 @@
-import type { BoardProfile, CatalogTitleSummary, CurrentUserResponse, PlayerTitleReportSummary, TitleReportDetail, UserNotification, UserProfile } from "@board-enthusiasts/migration-contract";
+import type { BoardProfile, CatalogTitleSummary, CurrentUserResponse, PlayerTitleReportSummary, StudioSummary, TitleReportDetail, UserNotification, UserProfile } from "@board-enthusiasts/migration-contract";
 import { useDeferredValue, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, Navigate, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -7,6 +7,7 @@ import {
   getBoardProfile,
   getCurrentUserNotifications,
   getDeveloperEnrollment,
+  getPlayerFollowedStudios,
   getPlayerLibrary,
   getPlayerTitleReport,
   getPlayerTitleReports,
@@ -14,6 +15,7 @@ import {
   getUserProfile,
   listManagedStudios,
   markCurrentUserNotificationRead,
+  removeStudioFromPlayerFollows,
   removeTitleFromPlayerLibrary,
   removeTitleFromPlayerWishlist,
   updateUserProfile,
@@ -33,6 +35,7 @@ import {
   EmptyState,
   ErrorPanel,
   Field,
+  getFallbackGradient,
   formatMembershipRole,
   formatNotificationCategory,
   formatNotificationTimestamp,
@@ -1016,6 +1019,7 @@ export function PlayerPage() {
   const [mfaPendingEnrollment, setMfaPendingEnrollment] = useState<{ id: string; qrCode: string; secret: string; friendlyName: string } | null>(null);
   const [libraryTitles, setLibraryTitles] = useState<CatalogTitleSummary[]>([]);
   const [wishlistTitles, setWishlistTitles] = useState<CatalogTitleSummary[]>([]);
+  const [followedStudios, setFollowedStudios] = useState<StudioSummary[]>([]);
   const [reports, setReports] = useState<PlayerTitleReportSummary[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(playerDraft.selectedReportId);
   const [selectedReport, setSelectedReport] = useState<TitleReportDetail | null>(null);
@@ -1225,12 +1229,13 @@ export function PlayerPage() {
 
     async function load(): Promise<void> {
       try {
-        const [profileResponse, enrollmentResponse, boardProfileResponse, libraryResponse, wishlistResponse] = await Promise.all([
+        const [profileResponse, enrollmentResponse, boardProfileResponse, libraryResponse, wishlistResponse, followedStudiosResponse] = await Promise.all([
           getUserProfile(appConfig.apiBaseUrl, accessToken),
           getDeveloperEnrollment(appConfig.apiBaseUrl, accessToken),
           loadBoardProfileSafe(),
           getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
           getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
+          getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken),
         ]);
         const reportsResponse = await getPlayerTitleReports(appConfig.apiBaseUrl, accessToken);
         const [mfaState, identities] = await Promise.all([loadMfaState(), loadConnectedAccountIdentities()]);
@@ -1255,6 +1260,7 @@ export function PlayerPage() {
         setConnectedAccountIdentities(identities);
         setLibraryTitles(libraryResponse.titles);
         setWishlistTitles(wishlistResponse.titles);
+        setFollowedStudios(followedStudiosResponse.studios);
         setReports(reportsResponse.reports);
         setSelectedReportId(
           reportsResponse.reports.find((report) => report.id === requestedReportId)?.id ??
@@ -1732,10 +1738,29 @@ export function PlayerPage() {
     }
   }
 
-  function getActiveWorkflow(): "library-games" | "library-wishlist" | "reported-titles" | "account-profile" | "account-settings" | "account-connected-accounts" {
+  async function handleFollowedStudioRemoval(studioId: string): Promise<void> {
+    setSaving(true);
+    try {
+      await removeStudioFromPlayerFollows(appConfig.apiBaseUrl, accessToken, studioId);
+      const response = await getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken);
+      setFollowedStudios(response.studios);
+      setMessage("Removed from your followed studios.");
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setMessage(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function getActiveWorkflow(): "library-games" | "library-wishlist" | "library-followed-studios" | "reported-titles" | "account-profile" | "account-settings" | "account-connected-accounts" {
     const workflow = searchParams.get("workflow");
     if (location.pathname.endsWith("/wishlist")) {
       return "library-wishlist";
+    }
+    if (workflow === "library-followed-studios") {
+      return "library-followed-studios";
     }
     if (workflow === "reported-titles") {
       return "reported-titles";
@@ -1784,6 +1809,9 @@ export function PlayerPage() {
       case "library-wishlist":
         navigate("/player/wishlist");
         return;
+      case "library-followed-studios":
+        navigate("/player?workflow=library-followed-studios");
+        return;
       case "reported-titles":
         navigate("/player?workflow=reported-titles");
         return;
@@ -1830,6 +1858,7 @@ export function PlayerPage() {
               {[
                 ["library-games", "My Games"],
                 ["library-wishlist", "Wishlist"],
+                ["library-followed-studios", "Studios You Follow"],
                 ["reported-titles", "Reported Titles"],
                 ["account-profile", "Profile"],
                 ["account-settings", "Account Settings"],
@@ -1912,6 +1941,73 @@ export function PlayerPage() {
                 ) : (
                   <div className="mt-6 space-y-4">
                     <CompactTitleList titles={wishlistTitles} emptyTitle="Your wishlist is empty" emptyDetail="Save titles here to revisit them later." />
+                    <div>
+                      <Link className="primary-button" to="/browse">
+                        Browse
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            {activeWorkflow === "library-followed-studios" ? (
+              <>
+                <h2 className="text-2xl font-semibold text-white">Studios You Follow</h2>
+                <p className="mt-3 text-sm leading-7 text-slate-300">The studios you follow show up here for quick access.</p>
+                {followedStudios.length > 0 ? (
+                  <div className="mt-6 grid gap-5 xl:grid-cols-2">
+                    {followedStudios.map((studio) => (
+                      <article key={studio.id} className="app-panel overflow-hidden p-0">
+                        <div
+                          className="min-h-[12rem] bg-cover bg-center"
+                          style={studio.bannerUrl ? { backgroundImage: `url('${studio.bannerUrl}')` } : { backgroundImage: getFallbackGradient(studio.description) }}
+                        >
+                          <div className="h-full bg-[linear-gradient(135deg,rgba(7,12,22,0.88),rgba(7,12,22,0.48),rgba(7,12,22,0.9))] p-5">
+                            <div className="flex min-w-0 items-start gap-4">
+                              {studio.avatarUrl || studio.logoUrl ? (
+                                <img className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-[1.15rem] border border-white/12 object-cover shadow-[0_12px_24px_rgba(0,0,0,0.26)]" src={studio.avatarUrl ?? studio.logoUrl ?? undefined} alt={`${studio.displayName} avatar`} />
+                              ) : (
+                                <div className="grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center rounded-[1.15rem] border border-white/12 bg-slate-950/60 text-xl font-bold text-slate-100 shadow-[0_12px_24px_rgba(0,0,0,0.22)]">
+                                  {studio.displayName.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="eyebrow">Studio</div>
+                                <h3 className="mt-2 truncate font-display text-2xl font-bold text-white">{studio.displayName}</h3>
+                                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200">
+                                  {studio.description?.trim() || "Followed studios appear here for quick access as their catalog grows."}
+                                </p>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <span className="rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
+                                    {studio.followerCount} follower{studio.followerCount === 1 ? "" : "s"}
+                                  </span>
+                                  {studio.links.length > 0 ? (
+                                    <span className="rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
+                                      {studio.links.length} link{studio.links.length === 1 ? "" : "s"}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-3 border-t border-white/8 bg-slate-950/38 p-5 sm:flex-row sm:items-center sm:justify-end">
+                          <Link className="secondary-button" to={`/studios/${studio.slug}`}>
+                            Open studio
+                          </Link>
+                          <button type="button" className="danger-button" disabled={saving} onClick={() => void handleFollowedStudioRemoval(studio.id)}>
+                            Unfollow
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-6 space-y-4">
+                    <div className="list-stack">
+                      <EmptyState title="You are not following any studios yet" detail="Follow a studio to keep it here." />
+                    </div>
                     <div>
                       <Link className="primary-button" to="/browse">
                         Browse
@@ -2037,11 +2133,11 @@ export function PlayerPage() {
                       ) : null}
                     </div>
                     <p className="mt-4 text-sm leading-7 text-slate-300">
-                      {developerAccessEnabled ? "Manage developer access from the Develop workspace." : "Enable developer access from the Develop workspace."}
+                      {developerAccessEnabled ? "Manage developer access from the Developer workspace." : "Enable developer access from the Developer workspace."}
                     </p>
                     <div className="mt-4">
-                      <Link className="secondary-button" to="/develop">
-                        Open Develop
+                      <Link className="secondary-button" to="/developer">
+                        Open Developer
                       </Link>
                     </div>
                   </div>

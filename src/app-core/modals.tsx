@@ -276,6 +276,7 @@ export function TitleQuickViewModal({
   const heroImageUrl = title ? getHeroImageUrl(title) : null;
   const reportedByCurrentUser = title ? Boolean(existingReport && existingReport.titleId === title.id) : false;
   const availabilityNote = title ? getCatalogTitleAvailabilityNote(title) : null;
+  const isComingSoon = availabilityNote === "Coming soon";
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>
@@ -317,11 +318,6 @@ export function TitleQuickViewModal({
               </div>
               {actionMessage ? <div className="rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">{actionMessage}</div> : null}
               {playerStateError ? <div className="rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{playerStateError}</div> : null}
-              {availabilityNote ? (
-                <div className="rounded-[1.5rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
-                  This title is {availabilityNote.toLowerCase()}. It remains visible here because it is already in your library or wishlist.
-                </div>
-              ) : null}
               {title.isReported ? (
                 <div className="rounded-[1.5rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
                   {reportedByCurrentUser
@@ -329,10 +325,17 @@ export function TitleQuickViewModal({
                     : "This title has been reported and is currently under moderator review."}
                 </div>
               ) : null}
-              <div
-                className="min-h-[20rem] rounded-[1.75rem] bg-cover bg-center"
-                style={heroImageUrl ? { backgroundImage: `linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('${heroImageUrl}')` } : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
-              />
+              <div className="relative">
+                <div
+                  className="min-h-[20rem] rounded-[1.75rem] bg-cover bg-center"
+                  style={heroImageUrl ? { backgroundImage: `linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('${heroImageUrl}')` } : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
+                />
+                {isComingSoon ? (
+                  <span className="coming-soon-chip-overlay absolute left-4 top-4">
+                    Coming Soon
+                  </span>
+                ) : null}
+              </div>
               <div className="surface-panel-soft flex flex-wrap items-start justify-between gap-4 rounded-[1.25rem] p-5">
                 <div>
                   <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Studio</div>
@@ -350,7 +353,7 @@ export function TitleQuickViewModal({
                     ))}
                   </div>
                   <p className="text-base leading-8 text-slate-200">{title.shortDescription}</p>
-                  {title.description ? <p className="text-sm leading-7 text-slate-300">{title.description}</p> : null}
+                  {title.description ? <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">{title.description}</p> : null}
                   {!session ? (
                     <div className="surface-panel-strong rounded-[1rem] p-4">
                       <p className="text-sm leading-7 text-slate-300">Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>

@@ -1,1 +1,1 @@
-export { BrowsePage, StudioDetailPage, TitleDetailPage } from "./pages";
+export { BrowsePage, StudioDetailPage, StudiosPage, TitleDetailPage } from "./pages";

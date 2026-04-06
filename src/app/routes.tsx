@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { appConfig, landingPrivacyRoute, LandingShell, ProtectedRoute, Shell } from "../app-core";
-import { BrowsePage, StudioDetailPage, TitleDetailPage } from "../browse";
+import { BrowsePage, StudioDetailPage, StudiosPage, TitleDetailPage } from "../browse";
 import { DevelopPage } from "../developer";
 import { HomePage, InstallGuidePage, LandingPage, LandingPrivacyPage, LivePrivacyPage, NotFoundPage, OfferingsPage, SupportPage } from "../general";
 import { ModeratePage } from "../moderator";
@@ -33,6 +33,7 @@ export function AppRoutes() {
         <Route path="/privacy" element={<LivePrivacyPage />} />
         <Route path="/browse" element={<BrowsePage />} />
         <Route path="/browse/:studioSlug/:titleSlug" element={<TitleDetailPage />} />
+        <Route path="/studios" element={<StudiosPage />} />
         <Route path="/studios/:studioSlug" element={<StudioDetailPage />} />
         <Route path="/install-guide" element={<InstallGuidePage />} />
         <Route path="/auth/signin" element={<SignInPage />} />
@@ -42,7 +43,7 @@ export function AppRoutes() {
         <Route path="/player/wishlist" element={protectedRoute("player", <PlayerPage />)} />
         <Route path="/account" element={protectedRoute("player", <Navigate to="/player?workflow=account-profile" replace />)} />
         <Route path="/account/board-profile" element={protectedRoute("player", <Navigate to="/player?workflow=account-profile" replace />)} />
-        <Route path="/develop" element={protectedRoute("player", <DevelopPage />)} />
+        <Route path="/developer" element={protectedRoute("player", <DevelopPage />)} />
         <Route path="/moderate" element={protectedRoute("moderator", <ModeratePage />)} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -31,7 +31,7 @@ export const landingSupportMailtoHref = "mailto:support@boardenthusiasts.com?sub
 export const landingMetadata = {
   defaultTitle: "Board Enthusiasts | Community Hub for Board Players and Builders",
   defaultDescription:
-    "Board Enthusiasts is the unofficial community hub for Board players and builders. Follow Board games and apps, discover BE resources, join the Discord, and get updates on the upcoming third-party library.",
+    "Board Enthusiasts is the unofficial community hub for Board players and builders. Follow indie Board games and apps, discover BE resources, join the Discord, and get updates on the upcoming BE library.",
   defaultCanonical: "https://boardenthusiasts.com/",
   privacyTitle: "Board Enthusiasts Privacy Snapshot | Board Players and Builders",
   privacyDescription:
@@ -41,7 +41,7 @@ export const landingMetadata = {
 export const liveMetadata = {
   homeTitle: "Board Enthusiasts | For Board Players and Builders",
   homeDescription:
-    "The BE Game Index is live. Browse third-party Board games and apps in one place, then explore the broader Board Enthusiasts ecosystem around it.",
+    "The BE Game Index is live. Browse indie Board games and apps in one place, then explore the broader Board Enthusiasts ecosystem around it.",
   homeCanonical: "https://boardenthusiasts.com/",
   offeringsTitle: "BE Offerings | Tools, Community, and Ecosystem Support for Board",
   offeringsDescription:
@@ -185,6 +185,7 @@ export interface MediaEditorState {
 
 export interface ReleaseCreateState {
   version: string;
+  expiresAt: string;
 }
 
 export interface ConnectionCreateState {
@@ -603,11 +604,9 @@ export function isCatalogTitlePubliclyAvailable(title: Pick<CatalogTitleSummary,
   return title.lifecycleStatus === "active" && title.visibility === "listed";
 }
 
-export function getCatalogTitleAvailabilityNote(title: Pick<CatalogTitleSummary, "lifecycleStatus" | "visibility">): string | null {
-  if (isCatalogTitlePubliclyAvailable(title)) {
-    return null;
-  }
-
+export function getCatalogTitleAvailabilityNote(
+  title: Pick<CatalogTitleSummary, "lifecycleStatus" | "visibility" | "acquisitionUrl"> & { currentRelease?: { id: string } | null }
+): string | null {
   if (title.lifecycleStatus === "archived") {
     return "Archived and no longer available";
   }
@@ -616,7 +615,15 @@ export function getCatalogTitleAvailabilityNote(title: Pick<CatalogTitleSummary,
     return "Still in draft and not publicly available";
   }
 
-  return "Unlisted and no longer available";
+  if (title.visibility !== "listed") {
+    return "Unlisted and no longer available";
+  }
+
+  if (!title.currentRelease && !title.acquisitionUrl) {
+    return "Coming soon";
+  }
+
+  return null;
 }
 
 export function createInitialTitleState(): TitleCreateState {
@@ -630,8 +637,8 @@ export function createInitialTitleState(): TitleCreateState {
     description: "",
     minPlayers: 1,
     maxPlayers: 4,
-    ageRatingAuthority: "ESRB",
-    ageRatingValue: "E10+",
+    ageRatingAuthority: "",
+    ageRatingValue: "",
     minAgeYears: 10,
   };
 }
@@ -653,8 +660,8 @@ export function createMetadataEditorState(title: DeveloperTitle | null): Metadat
     genreDisplay: title?.genreDisplay ?? "",
     minPlayers: title?.minPlayers ?? 1,
     maxPlayers: title?.maxPlayers ?? 1,
-    ageRatingAuthority: title?.ageRatingAuthority ?? "ESRB",
-    ageRatingValue: title?.ageRatingValue ?? "E10+",
+    ageRatingAuthority: title?.ageRatingAuthority ?? "",
+    ageRatingValue: title?.ageRatingValue ?? "",
     minAgeYears: title?.minAgeYears ?? 10,
   };
 }
@@ -682,10 +689,10 @@ export function getFallbackArtworkUrl(title: CatalogTitleSummary): string {
   const primaryGenre = parseGenreTags(title.genreDisplay).at(0) ?? formatContentKindLabel(title.contentKind);
   const palette =
     primaryGenre.toLowerCase() === "puzzle"
-      ? { start: "#dff7ea", end: "#4d75f4", accent: "#f3fff8" }
+      ? { start: "#def7e8", end: "#2453d5", accent: "#effff6", shadow: "#11243c" }
       : primaryGenre.toLowerCase().includes("adventure")
-        ? { start: "#ffe2b6", end: "#f39a2e", accent: "#fffbf0" }
-        : { start: "#f3b13a", end: "#2b405f", accent: "#f3fff8" };
+        ? { start: "#ffd7a0", end: "#f46b45", accent: "#fff7eb", shadow: "#311621" }
+        : { start: "#8af0cb", end: "#3659f3", accent: "#f3fff9", shadow: "#111b33" };
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200" role="img" aria-label="${escapeSvgText(title.displayName)} fallback artwork">
       <defs>
@@ -693,19 +700,22 @@ export function getFallbackArtworkUrl(title: CatalogTitleSummary): string {
           <stop offset="0%" stop-color="${palette.start}" />
           <stop offset="100%" stop-color="${palette.end}" />
         </linearGradient>
-        <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="rgba(255,255,255,0)" />
-          <stop offset="50%" stop-color="rgba(255,255,255,0.35)" />
-          <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+        <radialGradient id="glow" cx="50%" cy="18%" r="75%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.34" />
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
         </linearGradient>
       </defs>
       <rect width="900" height="1200" fill="url(#bg)" />
-      <circle cx="180" cy="220" r="180" fill="rgba(255,255,255,0.14)" />
-      <circle cx="760" cy="190" r="120" fill="rgba(0,0,0,0.18)" />
-      <path d="M0 960 C180 840 340 860 470 940 S760 1080 900 940 V1200 H0 Z" fill="rgba(8,10,16,0.34)" />
-      <rect x="120" y="126" width="660" height="2" fill="url(#shine)" opacity="0.7" />
-      <text x="120" y="890" fill="${palette.accent}" font-size="58" font-family="Public Sans, Segoe UI, sans-serif" letter-spacing="10">${escapeSvgText(primaryGenre.toUpperCase())}</text>
-      <text x="120" y="980" fill="#ffffff" font-size="92" font-weight="700" font-family="Syne, Trebuchet MS, sans-serif">${escapeSvgText(title.displayName)}</text>
+      <rect width="900" height="1200" fill="url(#glow)" />
+      <circle cx="178" cy="188" r="152" fill="#ffffff" fill-opacity="0.12" />
+      <circle cx="752" cy="244" r="104" fill="#070a12" fill-opacity="0.14" />
+      <path d="M0 968 C160 820 340 832 494 922 C652 1014 760 1032 900 962 V1200 H0 Z" fill="#090c16" fill-opacity="0.3" />
+      <path d="M338 850c0-72 44-126 112-150-24-28-38-64-38-102 0-98 78-176 176-176s176 78 176 176c0 38-14 74-38 102 68 24 112 78 112 150 0 18-2 34-8 52H346c-6-18-8-34-8-52Z" fill="${palette.shadow}" opacity="0.26"/>
+      <circle cx="450" cy="358" r="80" fill="${palette.accent}" opacity="0.96" />
+      <path d="M450 460c-80 0-138 60-138 140 0 22 4 42 12 62h252c8-20 12-40 12-62 0-80-58-140-138-140Z" fill="${palette.accent}" opacity="0.96" />
+      <path d="M286 724h328c14 0 26 12 26 26v34c0 14-12 26-26 26H286c-14 0-26-12-26-26v-34c0-14 12-26 26-26Z" fill="${palette.accent}" opacity="0.96" />
+      <path d="M232 810h436c18 0 32 14 32 32v34H200v-34c0-18 14-32 32-32Z" fill="${palette.accent}" opacity="0.96" />
+      <path d="M172 944h556v54H172z" fill="#ffffff" fill-opacity="0.2" />
     </svg>`;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;

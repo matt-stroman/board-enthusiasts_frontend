@@ -38,6 +38,7 @@ interface ReleaseValidationInput {
   version: string;
   status: string;
   acquisitionUrl: string;
+  expiresAt?: string;
 }
 
 function buildValidationResult(errors: ValidationErrors): ValidationResult {
@@ -54,6 +55,12 @@ function isAbsoluteUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function getMinimumReleaseExpirationDate(now = new Date()): Date {
+  const minimum = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  minimum.setSeconds(0, 0);
+  return minimum;
 }
 
 export function clampMinimumAge(value: number): number {
@@ -155,12 +162,12 @@ export function validateTitleFormInput(
     errors.description = `Keep the description at or under ${TITLE_DESCRIPTION_MAX_LENGTH} characters.`;
   }
 
-  if (!ageRatingAuthority) {
-    errors.ageRatingAuthority = "Age rating authority is required.";
+  if (ageRatingAuthority && !ageRatingValue) {
+    errors.ageRatingValue = "Add a rating value when you choose an age rating authority.";
   }
 
-  if (!ageRatingValue) {
-    errors.ageRatingValue = "Age rating value is required.";
+  if (!ageRatingAuthority && ageRatingValue) {
+    errors.ageRatingAuthority = "Choose an age rating authority when you add a rating value.";
   }
 
   if (!Number.isFinite(input.minPlayers) || input.minPlayers < 1) {
@@ -210,6 +217,21 @@ export function validateReleaseInput(input: ReleaseValidationInput): ValidationR
 
   if (input.acquisitionUrl.trim() && !isAbsoluteUrl(input.acquisitionUrl.trim())) {
     errors.acquisitionUrl = "Acquisition URL must be an absolute URL.";
+  }
+
+  if (input.status === "production" && input.expiresAt?.trim()) {
+    errors.expiresAt = "Only testing releases can have an expiration date.";
+  }
+
+  if (input.expiresAt?.trim() && Number.isNaN(Date.parse(input.expiresAt.trim()))) {
+    errors.expiresAt = "Expiration date must be a valid date and time.";
+  }
+
+  if (!errors.expiresAt && input.status === "testing" && input.expiresAt?.trim()) {
+    const expirationDate = new Date(input.expiresAt.trim());
+    if (expirationDate.getTime() < getMinimumReleaseExpirationDate().getTime()) {
+      errors.expiresAt = "Choose an expiration date at least 24 hours from now.";
+    }
   }
 
   return buildValidationResult(errors);

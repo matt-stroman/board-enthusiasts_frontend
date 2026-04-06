@@ -19,7 +19,11 @@ import type {
   GenreListResponse,
   MarketingSignupRequest,
   MarketingSignupResponse,
+  HomeSpotlightResponse,
+  CreateTitleShowcaseMediaRequest,
   PlayerCollectionMutationResponse,
+  PlayerFollowedStudioListResponse,
+  PlayerStudioFollowMutationResponse,
   PlayerTitleListResponse,
   PlayerTitleReportListResponse,
   PlayerTitleReportResponse,
@@ -36,8 +40,11 @@ import type {
   TitleMetadataVersionListResponse,
   TitleReleaseListResponse,
   TitleReleaseResponse,
+  TitleShowcaseMediaListResponse,
+  TitleShowcaseMediaResponse,
   TitleReportDetailResponse,
   TitleReportListResponse,
+  UpdateTitleShowcaseMediaRequest,
   UpdateDeveloperTitleRequest,
   UpsertTitleMediaAssetRequest,
   UpsertTitleMetadataRequest,
@@ -105,6 +112,22 @@ export interface SupportIssueReportRequest {
 
 export interface SupportIssueReportResponse {
   accepted: true;
+}
+
+export interface HomeOfferingSpotlightEntry {
+  slotNumber: number;
+  eyebrow: string;
+  title: string;
+  description: string;
+  statusLabel: string;
+  glyph: "api" | "discord" | "library" | "spark" | "toolkit" | "youtube";
+  actionLabel: string | null;
+  actionUrl: string | null;
+  actionExternal: boolean;
+}
+
+export interface HomeOfferingSpotlightResponse {
+  entries: HomeOfferingSpotlightEntry[];
 }
 
 function isTechnicalApiMessage(message: string): boolean {
@@ -245,6 +268,14 @@ export function getCatalogTitle(apiBaseUrl: string, studioSlug: string, titleSlu
   return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioSlug}/${titleSlug}`, {}, accessToken ?? undefined);
 }
 
+export function getHomeSpotlights(apiBaseUrl: string): Promise<HomeSpotlightResponse> {
+  return apiFetch<HomeSpotlightResponse>(apiBaseUrl, "/spotlights/home");
+}
+
+export function getHomeOfferingSpotlights(apiBaseUrl: string): Promise<HomeOfferingSpotlightResponse> {
+  return apiFetch<HomeOfferingSpotlightResponse>(apiBaseUrl, "/internal/home-offering-spotlights");
+}
+
 export function listGenres(apiBaseUrl: string): Promise<GenreListResponse> {
   return apiFetch<GenreListResponse>(apiBaseUrl, "/genres");
 }
@@ -348,6 +379,18 @@ export function addTitleToPlayerWishlist(apiBaseUrl: string, accessToken: string
 
 export function removeTitleFromPlayerWishlist(apiBaseUrl: string, accessToken: string, titleId: string): Promise<PlayerCollectionMutationResponse> {
   return apiFetch<PlayerCollectionMutationResponse>(apiBaseUrl, `/player/wishlist/titles/${titleId}`, { method: "DELETE" }, accessToken);
+}
+
+export function getPlayerFollowedStudios(apiBaseUrl: string, accessToken: string): Promise<PlayerFollowedStudioListResponse> {
+  return apiFetch<PlayerFollowedStudioListResponse>(apiBaseUrl, "/player/followed-studios", {}, accessToken);
+}
+
+export function addStudioToPlayerFollows(apiBaseUrl: string, accessToken: string, studioId: string): Promise<PlayerStudioFollowMutationResponse> {
+  return apiFetch<PlayerStudioFollowMutationResponse>(apiBaseUrl, `/player/followed-studios/${studioId}`, { method: "PUT" }, accessToken);
+}
+
+export function removeStudioFromPlayerFollows(apiBaseUrl: string, accessToken: string, studioId: string): Promise<PlayerStudioFollowMutationResponse> {
+  return apiFetch<PlayerStudioFollowMutationResponse>(apiBaseUrl, `/player/followed-studios/${studioId}`, { method: "DELETE" }, accessToken);
 }
 
 export function getPlayerTitleReports(apiBaseUrl: string, accessToken: string): Promise<PlayerTitleReportListResponse> {
@@ -612,6 +655,69 @@ export function uploadTitleMediaAsset(
 
 export function deleteTitleMediaAsset(apiBaseUrl: string, accessToken: string, titleId: string, mediaRole: string): Promise<void> {
   return apiFetch<void>(apiBaseUrl, `/developer/titles/${titleId}/media/${encodeURIComponent(mediaRole)}`, { method: "DELETE" }, accessToken);
+}
+
+export function getTitleShowcaseMedia(apiBaseUrl: string, accessToken: string, titleId: string): Promise<TitleShowcaseMediaListResponse> {
+  return apiFetch<TitleShowcaseMediaListResponse>(apiBaseUrl, `/developer/titles/${titleId}/showcase-media`, {}, accessToken);
+}
+
+export function createTitleShowcaseMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  request: CreateTitleShowcaseMediaRequest
+): Promise<TitleShowcaseMediaResponse> {
+  return apiFetch<TitleShowcaseMediaResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/showcase-media`,
+    {
+      method: "POST",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function updateTitleShowcaseMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  showcaseMediaId: string,
+  request: UpdateTitleShowcaseMediaRequest
+): Promise<TitleShowcaseMediaResponse> {
+  return apiFetch<TitleShowcaseMediaResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/showcase-media/${showcaseMediaId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function uploadTitleShowcaseMediaImage(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  showcaseMediaId: string,
+  file: File
+): Promise<TitleShowcaseMediaResponse> {
+  const formData = new FormData();
+  formData.set("media", file);
+  return apiFetch<TitleShowcaseMediaResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/showcase-media/${showcaseMediaId}/image-upload`,
+    {
+      method: "POST",
+      body: formData
+    },
+    accessToken
+  );
+}
+
+export function deleteTitleShowcaseMedia(apiBaseUrl: string, accessToken: string, titleId: string, showcaseMediaId: string): Promise<void> {
+  return apiFetch<void>(apiBaseUrl, `/developer/titles/${titleId}/showcase-media/${showcaseMediaId}`, { method: "DELETE" }, accessToken);
 }
 
 export function getDeveloperTitleReports(apiBaseUrl: string, accessToken: string, titleId: string): Promise<TitleReportListResponse> {
