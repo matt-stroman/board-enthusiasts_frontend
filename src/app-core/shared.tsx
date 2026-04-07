@@ -35,7 +35,7 @@ export const landingMetadata = {
   defaultCanonical: "https://boardenthusiasts.com/",
   privacyTitle: "Board Enthusiasts Privacy Snapshot | Board Players and Builders",
   privacyDescription:
-    "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+    "Read the Board Enthusiasts privacy snapshot covering update-list signups, support requests, limited site analytics, and the hosted services used to run the community site.",
   privacyCanonical: "https://boardenthusiasts.com/privacy",
 } as const;
 export const liveMetadata = {
@@ -53,7 +53,7 @@ export const liveMetadata = {
   supportCanonical: "https://boardenthusiasts.com/support",
   privacyTitle: "BE Privacy Snapshot | For Board Players and Builders",
   privacyDescription:
-    "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+    "Read the BE privacy snapshot covering account registration, optional social sign-in, catalog activity, developer submissions, support requests, and the hosted services used to run the live Board Enthusiasts experience.",
   privacyCanonical: "https://boardenthusiasts.com/privacy",
 } as const;
 export const supportedPublisherOptions = [
@@ -404,6 +404,44 @@ export function writeSessionStorageValue(key: string, value: string): void {
   } catch {
     // Ignore storage write failures and keep the in-memory flow moving.
   }
+}
+
+export function removeSessionStorageValue(key: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures and keep the in-memory flow moving.
+  }
+}
+
+export function readAuthRedirectMode(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const candidates = [window.location.search, window.location.hash.startsWith("#") ? `?${window.location.hash.slice(1)}` : ""];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const params = new URLSearchParams(candidate);
+    const explicitMode = params.get("mode")?.trim();
+    if (explicitMode) {
+      return explicitMode;
+    }
+
+    const authType = params.get("type")?.trim();
+    if (authType) {
+      return authType;
+    }
+  }
+
+  return null;
 }
 
 export function readAuthRedirectErrorMessage(): string | null {

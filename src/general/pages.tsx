@@ -507,20 +507,26 @@ export function LandingPrivacyPage() {
         <div className="eyebrow">Privacy</div>
         <h1 className="app-page-title">Board Enthusiasts Privacy Snapshot</h1>
         <p className="mt-4 text-base leading-8 text-slate-300">
-          Board Enthusiasts currently collects only the information needed to run this launch-updates signup flow and respond to direct contact requests.
+          Board Enthusiasts currently collects the information needed to run this hosted site, protect the updates signup flow, understand basic site usage, and respond to direct contact requests.
         </p>
         <div className="mt-6 list-stack">
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>What we collect</h2>
-            <p className="mt-2 text-sm leading-7 text-slate-300">Email address, optional first name, signup source metadata, consent timestamp, and anti-abuse verification data.</p>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Email address, optional first name, selected signup interests, signup source and consent details, support request details, limited browser or device context that helps us troubleshoot reported issues, anti-abuse verification data, and anonymous analytics or browser storage identifiers used to understand site usage.
+            </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>Why we collect it</h2>
-            <p className="mt-2 text-sm leading-7 text-slate-300">To send Board Enthusiasts launch updates, future invite emails, developer resources, and basic project announcements.</p>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              To operate the site, reduce abuse, send launch updates or invite emails when you ask for them, troubleshoot reported issues, and understand which public pages or actions are being used.
+            </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>Who processes it</h2>
-            <p className="mt-2 text-sm leading-7 text-slate-300">Cloudflare, Supabase, and Brevo support the current hosted site, signup system, and email delivery workflow.</p>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Cloudflare hosts the site and provides Turnstile plus site analytics tooling, Supabase supports BE application data, and Brevo supports signup and support email delivery. If you follow external links such as Discord or Board, those destinations apply their own privacy terms.
+            </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>How to reach us</h2>
@@ -545,25 +551,31 @@ export function LivePrivacyPage() {
       <section className="app-panel p-6">
         <h1 className="app-page-title">BE Privacy Snapshot</h1>
         <p className="mt-4 text-base leading-8 text-slate-300">
-          BE currently collects the information needed to create and secure accounts, run the live library and workspace flows, process developer submissions, and respond to contact or support requests.
+          BE currently collects the information needed to create and secure accounts, run the live catalog and workspace flows, understand basic product usage, and respond to support or privacy requests.
         </p>
         <div className="mt-6 list-stack">
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>What we collect</h2>
             <p className="mt-2 text-sm leading-7 text-slate-300">
-              Account email, username, authentication records managed by Supabase Auth, optional profile fields, player library and wishlist activity, title reports and messages, developer-submitted studio or title or release data, uploaded media metadata, and support or contact request details.
+              Account email, username, sign-in provider and account security records, optional profile and Board profile fields, player library, wishlist, followed studio, report, and message activity, developer-submitted studio, title, release, and showcase details, uploaded images and related metadata, support request details with limited troubleshooting context, optional marketing preferences, and anonymous analytics or browser storage identifiers used to understand product usage.
             </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>Why we collect it</h2>
             <p className="mt-2 text-sm leading-7 text-slate-300">
-              To run the BE Library, support sign-in and recovery, power player and developer workflows, operate moderation paths, send direct responses when you contact us, and maintain optional BE communications where offered.
+              To sign you in, protect accounts, power player, developer, and moderation workflows, display catalog listings and media that developers choose to share through BE, respond when you contact us, send optional BE emails when you ask for them, and understand how the product is being used.
+            </p>
+          </div>
+          <div className="surface-panel-strong rounded-[1rem] p-4">
+            <h2>What may be public</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              If a developer chooses to list a studio, title, release, image, or related profile detail on BE, that information can be shown on BE catalog pages for players and visitors. If you follow external acquisition, community, or publisher links from BE, those destinations handle their own privacy practices.
             </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">
             <h2>Who processes it</h2>
             <p className="mt-2 text-sm leading-7 text-slate-300">
-              Cloudflare, Supabase, and Brevo support the live BE web experience, account and storage systems, and any direct email delivery workflows still in use.
+              Cloudflare hosts the web and API surfaces and provides Turnstile plus internal analytics tooling. Supabase supports authentication, account security, database, and file storage. Brevo supports optional marketing and some direct email delivery. If you choose Discord, GitHub, or Google sign-in when those options are enabled, those providers also process your sign-in request.
             </p>
           </div>
           <div className="surface-panel-strong rounded-[1rem] p-4">

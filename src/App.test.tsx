@@ -156,6 +156,7 @@ vi.mock("./config", () => ({
 }));
 
 vi.mock("./auth", () => ({
+  passwordRecoveryRedirectStorageKey: "be-auth-password-recovery-pending",
   useAuth: () => ({
     client: authState.value.client ?? fallbackAuthClient,
     ...authState.value,
@@ -2383,6 +2384,37 @@ describe("App", () => {
     expect(await within(recoveryDialog).findByText(/If that email matches an account/i)).toBeVisible();
     expect(within(recoveryDialog).getByLabelText("Recovery code")).toBeVisible();
     expect(within(recoveryDialog).getByRole("button", { name: "Confirm code" })).toBeVisible();
+  });
+
+  it("routes password recovery callbacks from the site root into the reset-password screen", async () => {
+    authState.value = {
+      session: { access_token: "recovery-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Test User",
+        email: "new.player@example.com",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    window.sessionStorage.setItem("be-auth-password-recovery-pending", "true");
+
+    renderApp("/");
+
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Set new password" });
+    expect(await within(recoveryDialog).findByRole("heading", { name: "Set new password" })).toBeVisible();
+    expect(window.sessionStorage.getItem("be-auth-password-recovery-pending")).toBeNull();
   });
 
   it("advances recovery from code verification to password reset and returns to sign in after save", async () => {
@@ -4674,18 +4706,19 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Board Enthusiasts Privacy Snapshot" })).toBeVisible();
     expect(document.title).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
     expect(descriptionMeta.getAttribute("content")).toBe(
-      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+      "Read the Board Enthusiasts privacy snapshot covering update-list signups, support requests, limited site analytics, and the hosted services used to run the community site.",
     );
     expect(ogTitleMeta.getAttribute("content")).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
     expect(ogDescriptionMeta.getAttribute("content")).toBe(
-      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+      "Read the Board Enthusiasts privacy snapshot covering update-list signups, support requests, limited site analytics, and the hosted services used to run the community site.",
     );
     expect(ogUrlMeta.getAttribute("content")).toBe("https://boardenthusiasts.com/privacy");
     expect(twitterTitleMeta.getAttribute("content")).toBe("Board Enthusiasts Privacy Snapshot | Board Players and Builders");
     expect(twitterDescriptionMeta.getAttribute("content")).toBe(
-      "Read the Board Enthusiasts privacy snapshot covering launch-list signup data, direct contact requests, and the hosted services used to support the Board community site.",
+      "Read the Board Enthusiasts privacy snapshot covering update-list signups, support requests, limited site analytics, and the hosted services used to run the community site.",
     );
     expect(canonicalLink.getAttribute("href")).toBe("https://boardenthusiasts.com/privacy");
+    expect(screen.getByText(/anonymous analytics or browser storage identifiers/i)).toBeVisible();
 
     descriptionMeta.remove();
     ogTitleMeta.remove();
@@ -4737,19 +4770,21 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "BE Privacy Snapshot" })).toBeVisible();
     expect(document.title).toBe("BE Privacy Snapshot | For Board Players and Builders");
     expect(descriptionMeta.getAttribute("content")).toBe(
-      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+      "Read the BE privacy snapshot covering account registration, optional social sign-in, catalog activity, developer submissions, support requests, and the hosted services used to run the live Board Enthusiasts experience.",
     );
     expect(ogTitleMeta.getAttribute("content")).toBe("BE Privacy Snapshot | For Board Players and Builders");
     expect(ogDescriptionMeta.getAttribute("content")).toBe(
-      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+      "Read the BE privacy snapshot covering account registration, optional social sign-in, catalog activity, developer submissions, support requests, and the hosted services used to run the live Board Enthusiasts experience.",
     );
     expect(ogUrlMeta.getAttribute("content")).toBe("https://boardenthusiasts.com/privacy");
     expect(twitterTitleMeta.getAttribute("content")).toBe("BE Privacy Snapshot | For Board Players and Builders");
     expect(twitterDescriptionMeta.getAttribute("content")).toBe(
-      "Read the BE privacy snapshot covering account registration, library activity, developer submissions, direct contact requests, and the hosted services that power the live Board Enthusiasts experience.",
+      "Read the BE privacy snapshot covering account registration, optional social sign-in, catalog activity, developer submissions, support requests, and the hosted services used to run the live Board Enthusiasts experience.",
     );
     expect(canonicalLink.getAttribute("href")).toBe("https://boardenthusiasts.com/privacy");
-    expect(screen.getByText(/create and secure accounts, run the live library and workspace flows/i)).toBeVisible();
+    expect(screen.getByText(/optional profile and Board profile fields/i)).toBeVisible();
+    expect(screen.getByText(/Cloudflare hosts the web and API surfaces and provides Turnstile plus internal analytics tooling/i)).toBeVisible();
+    expect(screen.getByText(/If a developer chooses to list a studio, title, release, image, or related profile detail on BE/i)).toBeVisible();
 
     descriptionMeta.remove();
     ogTitleMeta.remove();

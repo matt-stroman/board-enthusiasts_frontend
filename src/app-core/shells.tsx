@@ -14,12 +14,14 @@ import {
   landingDiscordUrl,
   landingPrivacyRoute,
   landingSignupRoute,
+  readSessionStorageValue,
   renderCurrentUserAvatar,
 } from "./shared";
 import { getUserFacingErrorMessage, supportRoute } from "./errors";
 import { usePageAnalytics } from "./analytics";
 import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
+import { passwordRecoveryRedirectStorageKey } from "../auth";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
@@ -118,6 +120,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
     void loadNotifications();
   }, [accessToken]);
+
+  useEffect(() => {
+    const recoveryPending = readSessionStorageValue(passwordRecoveryRedirectStorageKey) === "true";
+    const alreadyOnRecoveryRoute = location.pathname === "/auth/signin" && new URLSearchParams(location.search).get("mode") === "recovery";
+    if (!recoveryPending || alreadyOnRecoveryRoute) {
+      return;
+    }
+
+    navigate("/auth/signin?mode=recovery", { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   return (
     <div className={homeShell ? "app-root landing-root" : "app-root"}>

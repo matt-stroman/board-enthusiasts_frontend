@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider, useAuth } from "./auth";
+import { AuthProvider, passwordRecoveryRedirectStorageKey, useAuth } from "./auth";
 
 const authClientMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -171,6 +171,31 @@ describe("AuthProvider", () => {
     });
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+  });
+
+  it("marks password recovery callbacks for the maintained reset-password route", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    getCurrentUserMock.mockResolvedValue(null);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+
+    await act(async () => {
+      authClientMocks.callback?.("PASSWORD_RECOVERY", {
+        access_token: "recovery-token",
+        user: {},
+      });
+      await Promise.resolve();
+    });
+
+    expect(window.sessionStorage.getItem(passwordRecoveryRedirectStorageKey)).toBe("true");
   });
 
   it("starts Discord sign-in with the maintained redirect target and skips repeat consent when possible", async () => {

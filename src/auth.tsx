@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { getCurrentUser } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
+import { readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
 import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig } from "./config";
 
@@ -53,6 +54,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const developerOrAboveRoles: readonly PlatformRole[] = ["developer", "verified_developer", "moderator", "admin", "super_admin"];
 const moderatorOrAboveRoles: readonly PlatformRole[] = ["moderator", "admin", "super_admin"];
 const oauthPendingStorageKey = "be-auth-pending-oauth";
+export const passwordRecoveryRedirectStorageKey = "be-auth-password-recovery-pending";
 
 type PendingOAuthState = {
   provider: SocialAuthProvider;
@@ -116,6 +118,10 @@ function clearPendingOAuthState(): void {
   } catch {
     // Ignore storage cleanup failures for the same reason as above.
   }
+}
+
+function markPasswordRecoveryPending(): void {
+  writeSessionStorageValue(passwordRecoveryRedirectStorageKey, "true");
 }
 
 function readFallbackAuthMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
@@ -289,6 +295,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap(): Promise<void> {
       setLoading(true);
+      if (readAuthRedirectMode() === "recovery") {
+        markPasswordRecoveryPending();
+      }
       const result = await supabase.auth.getSession();
       if (cancelled) {
         return;
@@ -306,6 +315,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const subscription = supabase.auth.onAuthStateChange((event, nextSession) => {
       void (async () => {
         try {
+          if (event === "PASSWORD_RECOVERY" || readAuthRedirectMode() === "recovery") {
+            markPasswordRecoveryPending();
+          }
           setSession(nextSession);
           const pendingOAuth =
             event === "SIGNED_IN" || event === "INITIAL_SESSION" ? await consumePendingOAuthState(nextSession) : null;

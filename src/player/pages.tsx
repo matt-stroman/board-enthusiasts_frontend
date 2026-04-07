@@ -20,7 +20,7 @@ import {
   removeTitleFromPlayerWishlist,
   updateUserProfile,
 } from "../api";
-import { hasPlatformRole, useAuth, type SignUpInput, type SocialAuthIntent, type SocialAuthProvider } from "../auth";
+import { hasPlatformRole, passwordRecoveryRedirectStorageKey, useAuth, type SignUpInput, type SocialAuthIntent, type SocialAuthProvider } from "../auth";
 import { buildAuthRedirectUrl } from "../auth-redirects";
 import { buildAcceptedMimeTypeError, normalizeImageUpload } from "../media-upload";
 import {
@@ -59,6 +59,7 @@ import {
   readSessionStorageJson,
   readSessionStorageValue,
   removeSessionStorageJson,
+  removeSessionStorageValue,
   renderCurrentUserAvatar,
   restoreAvatarEditorState,
   sanitizeReturnToPath,
@@ -199,6 +200,7 @@ export function SignInPage() {
 
   useEffect(() => {
     if (recoveryMode) {
+      removeSessionStorageValue(passwordRecoveryRedirectStorageKey);
       setRecoveryModalOpen(true);
       setRecoveryStep("reset");
       setRecoveryError(null);
