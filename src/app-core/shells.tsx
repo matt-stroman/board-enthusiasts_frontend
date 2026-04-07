@@ -1,7 +1,7 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
+import { clearCurrentUserNotifications, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import {
   appConfig,
@@ -42,6 +42,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsClearing, setNotificationsClearing] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
 
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
@@ -110,6 +111,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function handleClearNotifications(): Promise<void> {
+    if (!accessToken || notifications.length === 0 || notificationsClearing) {
+      return;
+    }
+
+    setNotificationsClearing(true);
+    setNotificationError(null);
+    try {
+      await clearCurrentUserNotifications(appConfig.apiBaseUrl, accessToken);
+      setNotifications([]);
+    } catch (nextError) {
+      setNotificationError(getUserFacingErrorMessage(nextError, "We couldn't clear your notifications right now. Please try again."));
+    } finally {
+      setNotificationsClearing(false);
+    }
+  }
+
   useEffect(() => {
     if (!accessToken) {
       setNotifications([]);
@@ -122,6 +140,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [accessToken]);
 
   useEffect(() => {
+    if (!session) {
+      return;
+    }
+
     const recoveryPending = readSessionStorageValue(passwordRecoveryRedirectStorageKey) === "true";
     const alreadyOnRecoveryRoute = location.pathname === "/auth/signin" && new URLSearchParams(location.search).get("mode") === "recovery";
     if (!recoveryPending || alreadyOnRecoveryRoute) {
@@ -129,7 +151,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
 
     navigate("/auth/signin?mode=recovery", { replace: true });
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, session]);
 
   return (
     <div className={homeShell ? "app-root landing-root" : "app-root"}>
@@ -204,11 +226,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
                             {notifications.length === 0 ? "No recent activity" : `${notifications.length} recent item${notifications.length === 1 ? "" : "s"}`}
                           </div>
                         </div>
-                        {unreadNotificationCount > 0 ? (
-                          <div className="rounded-full border border-amber-200/30 bg-amber-300/15 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-amber-100">
-                            {unreadNotificationCount} unread
-                          </div>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                          {notifications.length > 0 ? (
+                            <button
+                              className="rounded-full border border-white/15 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-200 transition hover:border-cyan-300/45 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              type="button"
+                              onClick={() => void handleClearNotifications()}
+                              disabled={notificationsClearing}
+                            >
+                              {notificationsClearing ? "Clearing..." : "Clear"}
+                            </button>
+                          ) : null}
+                          {unreadNotificationCount > 0 ? (
+                            <div className="rounded-full border border-amber-200/30 bg-amber-300/15 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                              {unreadNotificationCount} unread
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="border-t border-white/10" />
                       {notificationsLoading ? (

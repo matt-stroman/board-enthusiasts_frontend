@@ -13,10 +13,10 @@ describe("media upload helpers", () => {
 
   it("formats shared upload guidance from the maintained media policy", () => {
     expect(formatMediaUploadGuidance(migrationMediaUploadPolicies.avatars, { optional: true })).toBe(
-      "Optional. Recommended 512 x 512 px. Max 256 KB.",
+      "Optional. Recommended aspect ratio 1:1. Recommended 512 x 512 px. Max 256 KB.",
     );
     expect(formatMediaUploadGuidance(migrationMediaUploadPolicies.logoImages, { optional: true })).toBe(
-      "Optional. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.",
+      "Optional. Recommended aspect ratio 3:1. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.",
     );
   });
 
@@ -42,7 +42,7 @@ describe("media upload helpers", () => {
   });
 
   it("reduces oversized raster files instead of rejecting them immediately", async () => {
-    const mocked = mockRasterImageProcessing({ width: 900, height: 1280, blobSize: 2048, blobType: "image/webp" });
+    const mocked = mockRasterImageProcessing({ width: 900, height: 1200, blobSize: 2048, blobType: "image/webp" });
     restoreImageProcessing = mocked.restore;
 
     const upload = await normalizeImageUpload(

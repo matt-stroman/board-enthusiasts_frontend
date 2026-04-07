@@ -92,12 +92,18 @@ const titleMediaUploadPolicies = {
   logo: migrationMediaUploadPolicies.logoImages,
 } as const;
 
+function buildAspectRatioValue(width: number, height: number): string {
+  return `${width} / ${height}`;
+}
+
 type Domain = "studios" | "titles" | "releases";
 type Workflow =
   | "studios-create"
   | "studios-overview"
+  | "studios-analytics"
   | "titles-create"
   | "titles-overview"
+  | "titles-analytics"
   | "titles-metadata"
   | "titles-reports"
   | "releases-create"
@@ -488,11 +494,11 @@ function workflowForDomain(domain: Domain): Workflow {
 
 function isWorkflowAllowedForDomain(domain: Domain, workflow: Workflow): boolean {
   if (domain === "studios") {
-    return workflow === "studios-overview" || workflow === "studios-create";
+    return workflow === "studios-overview" || workflow === "studios-analytics" || workflow === "studios-create";
   }
 
   if (domain === "titles") {
-    return workflow === "titles-overview" || workflow === "titles-create" || workflow === "titles-metadata" || workflow === "titles-reports";
+    return workflow === "titles-overview" || workflow === "titles-analytics" || workflow === "titles-create" || workflow === "titles-metadata" || workflow === "titles-reports";
   }
 
   return workflow === "releases-overview" || workflow === "releases-create";
@@ -521,8 +527,10 @@ function loadWorkspaceState(searchParams: URLSearchParams, persisted: PersistedS
     workflow &&
     (workflow === "studios-create" ||
       workflow === "studios-overview" ||
+      workflow === "studios-analytics" ||
       workflow === "titles-create" ||
       workflow === "titles-overview" ||
+      workflow === "titles-analytics" ||
       workflow === "titles-metadata" ||
       workflow === "titles-reports" ||
       workflow === "releases-create" ||
@@ -945,6 +953,7 @@ function ImageField({
   state,
   previewUrl,
   guidance,
+  previewAspectRatio,
   error,
   accept,
   disabled,
@@ -957,6 +966,7 @@ function ImageField({
   state: TitleMediaDraft;
   previewUrl: string;
   guidance: string;
+  previewAspectRatio: string;
   error?: string | null;
   accept: string;
   disabled: boolean;
@@ -970,8 +980,8 @@ function ImageField({
   return (
     <section className="surface-panel-strong rounded-[1rem] p-4">
       <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{label}</div>
-      <div className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40">
-        {previewUrl ? <img className="h-28 w-full object-cover" src={previewUrl} alt={state.altText || `${label} media`} /> : <div className="grid h-28 place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>}
+      <div className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40" style={{ aspectRatio: previewAspectRatio }}>
+        {previewUrl ? <img className="h-full w-full object-cover" src={previewUrl} alt={state.altText || `${label} media`} /> : <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>}
       </div>
       <label className="field mt-3 block">
         <span>URL</span>
@@ -2701,11 +2711,15 @@ export function DevelopWorkspacePage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {(["card", "hero", "logo"] as const).map((mediaRole) => {
             const media = draft.media[mediaRole];
+            const policy = titleMediaUploadPolicies[mediaRole];
             return (
               <article key={mediaRole} className="rounded-[1rem] border border-white/10 bg-slate-950/40 p-3">
                 <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{mediaRole}</div>
-                <div className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/50">
-                  {media.url ? <img className="h-32 w-full object-cover" src={media.url} alt={media.altText || `${mediaRole} media`} /> : <div className="grid h-32 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image added</div>}
+                <div
+                  className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/50"
+                  style={{ aspectRatio: buildAspectRatioValue(policy.recommendedWidth, policy.recommendedHeight) }}
+                >
+                  {media.url ? <img className="h-full w-full object-cover" src={media.url} alt={media.altText || `${mediaRole} media`} /> : <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image added</div>}
                 </div>
                 {media.altText ? <p className="mt-3 text-sm text-slate-300">{media.altText}</p> : <p className="mt-3 text-sm text-slate-500">Alt text not added</p>}
               </article>
@@ -3223,6 +3237,7 @@ export function DevelopWorkspacePage() {
               state={draft.media[mediaRole]}
               previewUrl={previewMediaUrl(draft.media[mediaRole])}
               guidance={formatMediaUploadGuidance(titleMediaUploadPolicies[mediaRole], { optional: true })}
+              previewAspectRatio={buildAspectRatioValue(titleMediaUploadPolicies[mediaRole].recommendedWidth, titleMediaUploadPolicies[mediaRole].recommendedHeight)}
               error={(mode === "create" ? titleCreateMediaErrors : metadataMediaErrors)[mediaRole]}
               accept={titleMediaUploadPolicies[mediaRole].acceptedMimeTypes.join(",")}
               disabled={!editable}
@@ -3372,6 +3387,59 @@ export function DevelopWorkspacePage() {
     );
   }
 
+  function renderStudioAnalytics(): ReactNode {
+    if (!activeStudio) {
+      return <EmptyState title="No studio selected" detail="Select a studio to review follower activity." />;
+    }
+
+    return (
+      <div className="space-y-6">
+        <header className="surface-panel-strong rounded-[1.25rem] p-5">
+          <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio.displayName}</div>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Studio analytics</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">See how many players are following this studio across Board Enthusiasts right now.</p>
+        </header>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div className="develop-stat-card p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Follower count</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{activeStudio.followerCount ?? 0}</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">Players following this studio will see it more easily from their personal library area.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderTitleAnalytics(): ReactNode {
+    if (!activeTitle) {
+      return <EmptyState title="No title selected" detail="Select a title to review wishlist and library interest." />;
+    }
+
+    return (
+      <div className="space-y-6">
+        <header className="surface-panel-strong rounded-[1.25rem] p-5">
+          <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio?.displayName ?? activeTitle.studioSlug}</div>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Title analytics</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Track early player interest for this title before and after release.</p>
+        </header>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div className="develop-stat-card p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Wishlisted count</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.wishlistCount ?? 0}</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">How many players have saved this title to revisit later.</p>
+          </div>
+          <div className="develop-stat-card p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Added to library count</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.libraryCount ?? 0}</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">How many player libraries currently include this title.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   function renderWorkspaceMain(): ReactNode {
     if (workspaceLoading) {
       return (
@@ -3387,6 +3455,10 @@ export function DevelopWorkspacePage() {
 
     if (workspace.workflow === "studios-overview") {
       return activeStudio ? renderStudioForm("overview") : <EmptyState title="No studio selected" detail="Create a studio to get started." />;
+    }
+
+    if (workspace.workflow === "studios-analytics") {
+      return renderStudioAnalytics();
     }
 
     if (workspace.workflow === "titles-create") {
@@ -3541,6 +3613,10 @@ export function DevelopWorkspacePage() {
       ) : (
         <EmptyState title="No title selected" detail="Create a title or choose one to continue." />
       );
+    }
+
+    if (workspace.workflow === "titles-analytics") {
+      return renderTitleAnalytics();
     }
 
     if (workspace.workflow === "titles-metadata") {
@@ -3841,10 +3917,14 @@ export function DevelopWorkspacePage() {
 
   const workflowButtons =
     workspace.domain === "studios"
-      ? [{ key: "studios-overview" as Workflow, label: "Overview", disabled: !activeStudio }]
+      ? [
+          { key: "studios-overview" as Workflow, label: "Overview", disabled: !activeStudio },
+          { key: "studios-analytics" as Workflow, label: "Analytics", disabled: !activeStudio },
+        ]
       : workspace.domain === "titles"
         ? [
             { key: "titles-overview" as Workflow, label: "Overview", disabled: !activeTitle },
+            { key: "titles-analytics" as Workflow, label: "Analytics", disabled: !activeTitle },
             { key: "titles-metadata" as Workflow, label: "Metadata", disabled: !activeTitle },
             { key: "titles-reports" as Workflow, label: "Reports", disabled: !activeTitle },
           ]

@@ -16,6 +16,8 @@ import {
 import { hasPlatformRole, useAuth } from "../auth";
 import {
   appConfig,
+  formatTitleLibraryInterestLabel,
+  formatTitleWishlistInterestLabel,
   formatContentKindLabel,
   formatMembershipRole,
   formatReportStatus,
@@ -277,6 +279,14 @@ export function TitleQuickViewModal({
   const reportedByCurrentUser = title ? Boolean(existingReport && existingReport.titleId === title.id) : false;
   const availabilityNote = title ? getCatalogTitleAvailabilityNote(title) : null;
   const isComingSoon = availabilityNote === "Coming soon";
+  const titleWishlistCount = title?.wishlistCount ?? 0;
+  const titleLibraryCount = title?.libraryCount ?? 0;
+  const publicInterestChips = [
+    titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
+    titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
+  ].filter((label): label is string => label !== null);
+  const showOwnedAndReportActions = !isComingSoon;
+  const showReportingSurface = !isComingSoon;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>
@@ -311,6 +321,8 @@ export function TitleQuickViewModal({
                   isOwned={titleInLibrary}
                   isReported={Boolean(existingReport)}
                   canReport={!existingReport}
+                  showOwnedAction={showOwnedAndReportActions}
+                  showReportAction={showOwnedAndReportActions}
                   onToggleWishlist={() => void handleWishlistToggle(!titleInWishlist)}
                   onToggleOwned={() => void handleLibraryToggle(!titleInLibrary)}
                   onReport={() => setReportModalOpen(true)}
@@ -341,6 +353,15 @@ export function TitleQuickViewModal({
                   <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Studio</div>
                   <div className="mt-2 text-lg font-semibold text-white">{title.studioDisplayName}</div>
                 </div>
+                {publicInterestChips.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {publicInterestChips.map((label) => (
+                      <div key={label} className="rounded-full border border-white/15 bg-slate-950/45 px-4 py-2 text-sm font-semibold text-slate-100">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
                 <div className="space-y-5">
@@ -364,7 +385,7 @@ export function TitleQuickViewModal({
                       </div>
                     </div>
                   ) : null}
-                  {existingReport ? (
+                  {showReportingSurface && existingReport ? (
                     <div className="surface-panel-strong rounded-[1rem] p-4">
                       <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Report status</div>
                       <div className="mt-2 text-lg font-semibold text-white">{formatReportStatus(existingReport.status)}</div>
@@ -418,7 +439,7 @@ export function TitleQuickViewModal({
           ) : null}
         </section>
       </div>
-      {title && reportModalOpen ? (
+      {title && showReportingSurface && reportModalOpen ? (
         <ReportTitleModal
           titleDisplayName={title.displayName}
           reportReason={reportReason}

@@ -444,6 +444,31 @@ export function readAuthRedirectMode(): string | null {
   return null;
 }
 
+export function hasAuthRedirectCallbackParams(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const candidates = [window.location.search, window.location.hash.startsWith("#") ? `?${window.location.hash.slice(1)}` : ""];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const params = new URLSearchParams(candidate);
+    if (
+      params.has("access_token") ||
+      params.has("refresh_token") ||
+      params.has("token_hash") ||
+      params.has("code")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function readAuthRedirectErrorMessage(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -662,6 +687,14 @@ export function getCatalogTitleAvailabilityNote(
   }
 
   return null;
+}
+
+export function formatTitleWishlistInterestLabel(count: number): string {
+  return `Wishlisted by ${count}`;
+}
+
+export function formatTitleLibraryInterestLabel(count: number): string {
+  return count === 1 ? "In 1 library" : `In ${count} libraries`;
 }
 
 export function createInitialTitleState(): TitleCreateState {

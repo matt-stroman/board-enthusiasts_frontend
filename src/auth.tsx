@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { getCurrentUser } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
-import { readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
+import { hasAuthRedirectCallbackParams, readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
 import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig } from "./config";
 
@@ -55,6 +55,8 @@ const developerOrAboveRoles: readonly PlatformRole[] = ["developer", "verified_d
 const moderatorOrAboveRoles: readonly PlatformRole[] = ["moderator", "admin", "super_admin"];
 const oauthPendingStorageKey = "be-auth-pending-oauth";
 export const passwordRecoveryRedirectStorageKey = "be-auth-password-recovery-pending";
+export const passwordRecoveryExpectedStorageKey = "be-auth-password-recovery-expected";
+const passwordRecoveryExpectedTtlMs = 6 * 60 * 60 * 1000;
 
 type PendingOAuthState = {
   provider: SocialAuthProvider;
@@ -121,7 +123,64 @@ function clearPendingOAuthState(): void {
 }
 
 function markPasswordRecoveryPending(): void {
+  clearPasswordRecoveryExpected();
   writeSessionStorageValue(passwordRecoveryRedirectStorageKey, "true");
+}
+
+function markPasswordRecoveryExpected(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(passwordRecoveryExpectedStorageKey, String(Date.now()));
+  } catch {
+    // Ignore storage write failures and keep the recovery request flow moving.
+  }
+}
+
+function clearPasswordRecoveryExpected(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(passwordRecoveryExpectedStorageKey);
+  } catch {
+    // Ignore storage cleanup failures and keep the auth flow moving.
+  }
+}
+
+function hasExpectedPasswordRecovery(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(passwordRecoveryExpectedStorageKey);
+    if (!raw) {
+      return false;
+    }
+
+    const requestedAt = Number.parseInt(raw, 10);
+    if (!Number.isFinite(requestedAt) || requestedAt <= 0) {
+      clearPasswordRecoveryExpected();
+      return false;
+    }
+
+    if (Date.now() - requestedAt > passwordRecoveryExpectedTtlMs) {
+      clearPasswordRecoveryExpected();
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function shouldTreatCurrentLocationAsRecoveryCallback(): boolean {
+  return readAuthRedirectMode() === "recovery" || (hasAuthRedirectCallbackParams() && hasExpectedPasswordRecovery());
 }
 
 function readFallbackAuthMetadataString(metadata: Record<string, unknown>, ...keys: string[]): string | null {
@@ -295,7 +354,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap(): Promise<void> {
       setLoading(true);
-      if (readAuthRedirectMode() === "recovery") {
+      if (shouldTreatCurrentLocationAsRecoveryCallback()) {
         markPasswordRecoveryPending();
       }
       const result = await supabase.auth.getSession();
@@ -315,7 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const subscription = supabase.auth.onAuthStateChange((event, nextSession) => {
       void (async () => {
         try {
-          if (event === "PASSWORD_RECOVERY" || readAuthRedirectMode() === "recovery") {
+          if (event === "PASSWORD_RECOVERY" || shouldTreatCurrentLocationAsRecoveryCallback()) {
             markPasswordRecoveryPending();
           }
           setSession(nextSession);
@@ -349,6 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       githubAuthEnabled: appConfig.githubAuthEnabled,
       googleAuthEnabled: appConfig.googleAuthEnabled,
       async signIn(email: string, password: string): Promise<void> {
+        clearPasswordRecoveryExpected();
         setLoading(true);
         const result = await supabase.auth.signInWithPassword({ email, password });
         if (result.error) {
@@ -365,6 +425,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         intent: SocialAuthIntent = "sign-in",
         options?: SocialAuthSignInOptions
       ): Promise<void> {
+        clearPasswordRecoveryExpected();
         trackAnalyticsEvent({
           event: "oauth_started",
           path: `${window.location.pathname}${window.location.search}`,
@@ -400,6 +461,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       async signUp(input: SignUpInput): Promise<{ requiresEmailConfirmation: boolean }> {
+        clearPasswordRecoveryExpected();
         const userName = input.userName?.trim() || null;
         const firstName = input.firstName?.trim() || null;
         const lastName = input.lastName?.trim() || null;
@@ -456,8 +518,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.error) {
           throw new Error(getUserFacingErrorMessage(result.error));
         }
+
+        markPasswordRecoveryExpected();
       },
       async verifyEmailCode(email: string, token: string): Promise<void> {
+        clearPasswordRecoveryExpected();
         setLoading(true);
         const result = await supabase.auth.verifyOtp({ email, token, type: "signup" });
         if (result.error) {
@@ -486,8 +551,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.error) {
           throw new Error(getUserFacingErrorMessage(result.error));
         }
+
+        clearPasswordRecoveryExpected();
       },
       async signOut(options?: { tolerateNetworkFailure?: boolean }): Promise<void> {
+        clearPasswordRecoveryExpected();
         try {
           const result = await supabase.auth.signOut();
           if (result.error) {

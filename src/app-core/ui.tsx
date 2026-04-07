@@ -353,6 +353,8 @@ export function TitlePlayerActionButtons({
   isOwned,
   isReported,
   canReport,
+  showOwnedAction = true,
+  showReportAction = true,
   compact,
   onToggleWishlist,
   onToggleOwned,
@@ -364,6 +366,8 @@ export function TitlePlayerActionButtons({
   isOwned: boolean;
   isReported: boolean;
   canReport: boolean;
+  showOwnedAction?: boolean;
+  showReportAction?: boolean;
   compact?: boolean;
   onToggleWishlist: () => void;
   onToggleOwned: () => void;
@@ -398,38 +402,42 @@ export function TitlePlayerActionButtons({
           <path d="M12 21 4.7 13.8a4.9 4.9 0 0 1 6.9-6.9L12 7.3l.4-.4a4.9 4.9 0 0 1 6.9 6.9Z" />
         </svg>
       </button>
-      <button
-        className={getButtonClass(isOwned)}
-        type="button"
-        title={isOwned ? "Remove from my games" : "Add to my games"}
-        aria-label={isOwned ? "Remove from my games" : "Add to my games"}
-        onClick={(event) => handleAction(event, onToggleOwned)}
-        disabled={isBusy}
-      >
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2" aria-hidden="true">
-          {isOwned ? (
-            <path d="m5 12 4.2 4.2L19 6.5" />
-          ) : (
-            <>
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </>
-          )}
-        </svg>
-      </button>
-      <button
-        className={getButtonClass(isReported)}
-        type="button"
-        title={canReport ? "Report title" : "Report already submitted"}
-        aria-label={canReport ? "Report title" : "Report already submitted"}
-        onClick={(event) => handleAction(event, onReport)}
-        disabled={isBusy || !canReport}
-      >
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2" aria-hidden="true">
-          <path d="M6 3v18" />
-          <path d="M6 4h9l-1.5 3L15 10H6" />
-        </svg>
-      </button>
+      {showOwnedAction ? (
+        <button
+          className={getButtonClass(isOwned)}
+          type="button"
+          title={isOwned ? "Remove from my games" : "Add to my games"}
+          aria-label={isOwned ? "Remove from my games" : "Add to my games"}
+          onClick={(event) => handleAction(event, onToggleOwned)}
+          disabled={isBusy}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2" aria-hidden="true">
+            {isOwned ? (
+              <path d="m5 12 4.2 4.2L19 6.5" />
+            ) : (
+              <>
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </>
+            )}
+          </svg>
+        </button>
+      ) : null}
+      {showReportAction ? (
+        <button
+          className={getButtonClass(isReported)}
+          type="button"
+          title={canReport ? "Report title" : "Report already submitted"}
+          aria-label={canReport ? "Report title" : "Report already submitted"}
+          onClick={(event) => handleAction(event, onReport)}
+          disabled={isBusy || !canReport}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2" aria-hidden="true">
+            <path d="M6 3v18" />
+            <path d="M6 4h9l-1.5 3L15 10H6" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -518,6 +526,7 @@ export function TitleCard({
   const genreTags = parseGenreTags(title.genreDisplay);
   const panelClassName = logoImageUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
+  const allowOwnedAndReportActions = availabilityNote !== "Coming soon";
   const fallbackGradient = getFallbackGradient(title.genreDisplay);
   const cardBody = (
     <div className="relative flex h-full flex-col justify-end">
@@ -575,14 +584,14 @@ export function TitleCard({
               <div className="text-[1.85rem] font-bold leading-tight text-white">{title.displayName}</div>
             )}
           </div>
-          <div className="overflow-hidden transition-all duration-300 ease-out max-h-0 translate-y-2 opacity-0 group-hover:mt-3 group-hover:max-h-44 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:mt-3 group-focus-within:max-h-44 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-            <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/75">{title.studioDisplayName}</div>
-            <div className="mt-3 flex flex-nowrap gap-2 overflow-hidden text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyan-100/85">
+          <div className="overflow-hidden transition-all duration-300 ease-out max-h-0 translate-y-2 opacity-0 group-hover:mt-3 group-hover:max-h-[22rem] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:mt-3 group-focus-within:max-h-[22rem] group-focus-within:translate-y-0 group-focus-within:opacity-100">
+            <div className="text-xs uppercase tracking-[0.22em] text-cyan-50/85">{title.studioDisplayName}</div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyan-50/90">
               <span className="shrink-0 rounded-full border border-white/15 px-3 py-1">{formatContentKindLabel(title.contentKind)}</span>
               <span className="shrink-0 rounded-full border border-white/15 px-3 py-1">{title.playerCountDisplay}</span>
             </div>
             <p
-              className="mt-4 text-sm leading-6 text-slate-200"
+              className="mt-4 text-sm leading-6 text-slate-50/95"
               style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
             >
               {title.shortDescription}
@@ -592,7 +601,7 @@ export function TitleCard({
                 {availabilityNote}
               </div>
             ) : null}
-            <div className="mt-3 flex flex-nowrap gap-2 overflow-hidden">
+            <div className="mt-3 flex flex-wrap gap-2">
               {genreTags.map((tag) => (
                 <span key={tag} className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-100">
                   {tag}
@@ -618,6 +627,8 @@ export function TitleCard({
               isOwned={playerActions.isOwned}
               isReported={playerActions.isReported}
               canReport={playerActions.canReport}
+              showOwnedAction={allowOwnedAndReportActions}
+              showReportAction={allowOwnedAndReportActions}
               onToggleWishlist={playerActions.onToggleWishlist}
               onToggleOwned={playerActions.onToggleOwned}
               onReport={playerActions.onReport}

@@ -31,6 +31,8 @@ import {
   ErrorPanel,
   Field,
   formatContentKindLabel,
+  formatTitleLibraryInterestLabel,
+  formatTitleWishlistInterestLabel,
   formatMembershipRole,
   formatReportStatus,
   formatTimestamp,
@@ -189,8 +191,18 @@ function BrowseSpotlightRail() {
   return (
     <section className="app-panel overflow-hidden p-0">
       <div className="grid gap-0 xl:grid-cols-[1.4fr_0.78fr]">
-        <div className="relative min-h-[19rem] bg-slate-950">
-          {activeSpotlightImage ? <img className="h-full w-full object-cover" src={activeSpotlightImage} alt={activeSpotlight.title.displayName} /> : null}
+        <div
+          className="relative h-[19rem] overflow-hidden bg-slate-950 sm:h-[22rem] lg:h-[26rem] xl:h-[32rem]"
+          data-testid="browse-spotlight-media-frame"
+        >
+          {activeSpotlightImage ? (
+            <img
+              className="absolute inset-0 h-full w-full object-cover"
+              data-testid="browse-spotlight-media-image"
+              src={activeSpotlightImage}
+              alt={activeSpotlight.title.displayName}
+            />
+          ) : null}
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,10,18,0.08),rgba(6,10,18,0.14)_48%,rgba(6,10,18,0.76))]" />
           {spotlightEntries.length > 1 ? (
             <>
@@ -1736,6 +1748,14 @@ export function TitleDetailPage() {
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
   const isComingSoon = availabilityNote === "Coming soon";
+  const titleWishlistCount = title.wishlistCount ?? 0;
+  const titleLibraryCount = title.libraryCount ?? 0;
+  const publicInterestChips = [
+    titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
+    titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
+  ].filter((label): label is string => label !== null);
+  const showOwnedAndReportActions = !isComingSoon;
+  const showReportingSurface = !isComingSoon;
   const showcaseMedia = title.showcaseMedia ?? [];
   const selectedShowcaseMedia =
     selectedShowcase.kind === "showcase" ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null : null;
@@ -1874,6 +1894,15 @@ export function TitleDetailPage() {
                   imageClassName="block max-h-24 w-auto max-w-full object-contain object-left"
                 />
                 <div className="mt-4 text-sm font-semibold uppercase tracking-[0.22em] text-cyan-100/75">{title.studioDisplayName}</div>
+                {publicInterestChips.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {publicInterestChips.map((label) => (
+                      <div key={label} className="rounded-full border border-white/15 bg-slate-950/45 px-4 py-2 text-sm font-semibold text-slate-100">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="mt-4 text-base leading-8 text-slate-200">{title.shortDescription}</p>
               </div>
               {title.currentRelease ? (
@@ -1920,6 +1949,8 @@ export function TitleDetailPage() {
                   isOwned={titleInLibrary}
                   isReported={Boolean(existingReport)}
                   canReport={!existingReport}
+                  showOwnedAction={showOwnedAndReportActions}
+                  showReportAction={showOwnedAndReportActions}
                   onToggleWishlist={() => void handleWishlistToggle(!titleInWishlist)}
                   onToggleOwned={() => void handleLibraryToggle(!titleInLibrary)}
                   onReport={() => {
@@ -1963,7 +1994,11 @@ export function TitleDetailPage() {
       <section className={`grid gap-6 ${canViewMetadata ? "lg:grid-cols-[1.15fr_0.85fr]" : ""}`}>
         <section className="app-panel p-6">
           <h2 className="text-xl font-semibold text-white">Player reporting</h2>
-          {!session ? (
+          {!showReportingSurface ? (
+            <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
+              <p>Reporting opens once this title has a release players can access.</p>
+            </div>
+          ) : !session ? (
             <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
               <p>Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>
               <div className="mt-4">

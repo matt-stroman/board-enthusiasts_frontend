@@ -72,6 +72,7 @@ const apiMocks = vi.hoisted(() => ({
   getUserProfile: vi.fn(),
   getDeveloperEnrollment: vi.fn(),
   getCurrentUserNotifications: vi.fn(),
+  clearCurrentUserNotifications: vi.fn(),
   markCurrentUserNotificationRead: vi.fn(),
   getPlayerLibrary: vi.fn(),
   addTitleToPlayerLibrary: vi.fn(),
@@ -318,6 +319,7 @@ describe("App", () => {
       },
     });
     apiMocks.getCurrentUserNotifications.mockResolvedValue({ notifications: [] });
+    apiMocks.clearCurrentUserNotifications.mockResolvedValue(undefined);
     apiMocks.markCurrentUserNotificationRead.mockImplementation(async (_baseUrl: string, _token: string, notificationId: string) => ({
       notification: {
         id: notificationId,
@@ -427,6 +429,7 @@ describe("App", () => {
           avatarUrl: "/seed-catalog/studios/blue-harbor-games/avatar.svg",
           logoUrl: "/seed-catalog/studios/blue-harbor-games/logo.svg",
           bannerUrl: "/seed-catalog/studios/blue-harbor-games/banner.svg",
+          followerCount: 42,
           role: "owner",
           links: [
             { id: "studio-link-1", label: "Website", url: "https://blue-harbor-games.example", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" },
@@ -467,6 +470,8 @@ describe("App", () => {
           minAgeYears: 10,
           playerCountDisplay: "1-4 players",
           ageDisplay: "ESRB E10+",
+          wishlistCount: 18,
+          libraryCount: 7,
           cardImageUrl: "/seed-catalog/lantern-drift/card.png",
           logoImageUrl: "/seed-catalog/lantern-drift/logo.png",
           acquisitionUrl: "https://blue-harbor-games.example/titles/lantern-drift",
@@ -494,6 +499,8 @@ describe("App", () => {
         minAgeYears: 10,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E10+",
+        wishlistCount: 18,
+        libraryCount: 7,
         currentMetadataRevision: 3,
         acquisitionUrl: "https://blue-harbor-games.example/titles/lantern-drift",
         currentRelease: {
@@ -534,7 +541,7 @@ describe("App", () => {
           altText: "Lantern Drift card art",
           mimeType: "image/png",
           width: 900,
-          height: 1280,
+          height: 1200,
           createdAt: "2026-03-08T12:00:00Z",
           updatedAt: "2026-03-08T12:00:00Z",
         },
@@ -1135,6 +1142,207 @@ describe("App", () => {
     expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null);
   });
 
+  it("keeps the browse spotlight image inside a fixed cropped frame", async () => {
+    apiMocks.getHomeSpotlights.mockResolvedValue({
+      entries: [
+        {
+          slotNumber: 1,
+          title: {
+            id: "title-spotlight-1",
+            studioId: "studio-1",
+            studioSlug: "board-enthusiasts",
+            studioDisplayName: "Board Enthusiasts",
+            slug: "be-home-for-board",
+            displayName: "BE Home For Board",
+            shortDescription: "Browse the BE indie game index, right on your Board",
+            description: "A spotlight entry with unusually tall source artwork should still stay inside the same viewport.",
+            genreDisplay: "Utility",
+            contentKind: "app",
+            visibility: "listed",
+            lifecycleStatus: "active",
+            isReported: false,
+            currentMetadataRevision: 1,
+            playerCountDisplay: "1-1 players",
+            ageDisplay: "ESRB E10+",
+            acquisitionUrl: "https://example.com/be-home",
+            cardImageUrl: "/seed-catalog/be-home/tall-card.png",
+            logoImageUrl: null,
+            mediaAssets: [],
+            showcaseMedia: [],
+            createdAt: "2026-03-08T12:00:00Z",
+            updatedAt: "2026-03-08T12:00:00Z",
+          },
+        },
+      ],
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByText("BE Home For Board")).toBeVisible();
+
+    const spotlightFrame = screen.getByTestId("browse-spotlight-media-frame");
+    const spotlightImage = screen.getByTestId("browse-spotlight-media-image");
+
+    expect(spotlightFrame).toHaveClass("overflow-hidden");
+    expect(spotlightFrame).toHaveClass("h-[19rem]");
+    expect(spotlightFrame).toHaveClass("xl:h-[32rem]");
+    expect(spotlightImage).toHaveClass("absolute");
+    expect(spotlightImage).toHaveClass("inset-0");
+    expect(spotlightImage).toHaveClass("object-cover");
+  });
+
+  it("shows public title interest counts in quick view", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          wishlistCount: 24,
+          libraryCount: 9,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 24,
+        libraryCount: 9,
+        acquisitionUrl: "https://example.com/lantern-drift",
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByRole("button", { name: /lantern drift/i })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
+
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.getByText("Wishlisted by 24")).toBeVisible();
+    expect(screen.getByText("In 9 libraries")).toBeVisible();
+  });
+
+  it("hides zero-value public title interest counts in quick view", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          wishlistCount: 0,
+          libraryCount: 0,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 0,
+        libraryCount: 0,
+        acquisitionUrl: "https://example.com/lantern-drift",
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByRole("button", { name: /lantern drift/i })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
+
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.queryByText(/^Wishlisted by 0$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
+  });
+
   it("applies the restored live studio-scoped search filters without leaving the studio page", async () => {
     apiMocks.getPublicStudio.mockResolvedValue({
       studio: {
@@ -1422,6 +1630,218 @@ describe("App", () => {
     expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", "player-token");
   });
 
+  it("hides library and report actions for coming-soon titles in browse cards and quick view", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerFollowedStudios.mockResolvedValue({ studios: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          wishlistCount: 4,
+          libraryCount: 0,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: null,
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 4,
+        libraryCount: 0,
+        acquisitionUrl: null,
+        currentRelease: undefined,
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByLabelText("Search")).toBeVisible();
+    const card = screen.getByRole("button", { name: /lantern drift/i }).closest("article") as HTMLElement;
+    const cardScope = within(card);
+    expect(cardScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(cardScope.queryByLabelText("Add to my games")).not.toBeInTheDocument();
+    expect(cardScope.queryByLabelText("Report title")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const dialogScope = within(dialog);
+    expect(dialog).toBeVisible();
+    expect(dialogScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(dialogScope.queryByLabelText("Add to my games")).not.toBeInTheDocument();
+    expect(dialogScope.queryByLabelText("Report title")).not.toBeInTheDocument();
+  });
+
+  it("shows public title interest counts and keeps report actions unavailable on coming-soon title detail pages", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 11,
+        libraryCount: 3,
+        acquisitionUrl: null,
+        currentRelease: undefined,
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByText("Wishlisted by 11")).toBeVisible();
+    expect(screen.getByText("In 3 libraries")).toBeVisible();
+    expect(screen.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(screen.queryByLabelText("Add to my games")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Report title")).not.toBeInTheDocument();
+    expect(screen.getByText("Reporting opens once this title has a release players can access.")).toBeVisible();
+  });
+
+  it("hides zero-value public title interest counts on the title detail page", async () => {
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 0,
+        libraryCount: 0,
+        acquisitionUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.queryByText(/^Wishlisted by 0$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
+  });
+
   it("prefers a title logo on browse cards when one is available", async () => {
     apiMocks.listCatalogTitles.mockResolvedValue({
       titles: [
@@ -1458,6 +1878,56 @@ describe("App", () => {
 
     expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(screen.getByAltText("Lantern Drift logo")).toBeVisible();
+  });
+
+  it("allows browse card hover details to expand and wrap metadata chips", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "coming_soon",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals before sunrise.",
+          genreDisplay: "Puzzle, Family, Strategy, Co-op",
+          minPlayers: 2,
+          maxPlayers: 16,
+          playerCountDisplay: "2-16 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E10+",
+          minAgeYears: 10,
+          ageDisplay: "ESRB E10+",
+          cardImageUrl: "https://example.com/lantern-drift-card.png",
+          logoImageUrl: "https://example.com/lantern-drift-logo.png",
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByLabelText("Search")).toBeVisible();
+    const card = screen.getByRole("button", { name: "Lantern Drift" }).closest("article") as HTMLElement;
+    const cardScope = within(card);
+    const detailsRegion = cardScope.getByText("Blue Harbor Games").parentElement as HTMLElement;
+    expect(detailsRegion.className).toContain("group-hover:max-h-[22rem]");
+    expect(detailsRegion.className).not.toContain("group-hover:max-h-44");
+
+    const summaryRow = cardScope.getByText("2-16 players").parentElement as HTMLElement;
+    expect(summaryRow.className).toContain("flex-wrap");
+    expect(summaryRow.className).not.toContain("flex-nowrap");
+
+    const genreRow = cardScope.getByText("Strategy").parentElement as HTMLElement;
+    expect(genreRow.className).toContain("flex-wrap");
+    expect(genreRow.className).not.toContain("flex-nowrap");
   });
 
   it("filters browse results by adjustable minimum and maximum player range", async () => {
@@ -1658,6 +2128,30 @@ describe("App", () => {
     sidebar = screen.getByText("Section").closest("aside");
     expect(sidebar).not.toBeNull();
     expect(within(sidebar as HTMLElement).getAllByRole("combobox")).toHaveLength(3);
+  });
+
+  it("shows studio analytics inside the developer console", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=studios&workflow=studios-analytics&studioId=studio-1");
+
+    expect(await screen.findByRole("heading", { name: "Studio analytics" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
+    expect(screen.getByText("Follower count")).toBeVisible();
+    expect(screen.getByText("42")).toBeVisible();
+  });
+
+  it("shows title analytics inside the developer console", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
+    expect(screen.getByText("Wishlisted count")).toBeVisible();
+    expect(screen.getByText("18")).toBeVisible();
+    expect(screen.getByText("Added to library count")).toBeVisible();
+    expect(screen.getByText("7")).toBeVisible();
   });
 
   it("restores the maintained title overview as summary cards instead of inline editors", async () => {
@@ -2841,6 +3335,73 @@ describe("App", () => {
     await waitFor(() => {
       expect(apiMocks.markCurrentUserNotificationRead).toHaveBeenCalledWith("http://127.0.0.1:8787", "player-token", "notification-1");
     });
+  });
+
+  it("clears notifications from the header tray with the top clear action", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Emma Torres",
+        email: "emma.torres@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player", "developer"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getCurrentUserNotifications.mockResolvedValue({
+      notifications: [
+        {
+          id: "notification-1",
+          category: "title_report",
+          title: "Moderator follow-up on your report",
+          body: "Open the report thread in Play.",
+          actionUrl: "/player?workflow=reported-titles&reportId=report-1",
+          isRead: false,
+          readAt: null,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        {
+          id: "notification-2",
+          category: "title_report",
+          title: "Developer replied to a title report",
+          body: "Open the report thread in Play.",
+          actionUrl: "/player?workflow=reported-titles&reportId=report-2",
+          isRead: true,
+          readAt: "2026-03-08T12:10:00Z",
+          createdAt: "2026-03-08T12:05:00Z",
+          updatedAt: "2026-03-08T12:10:00Z",
+        },
+      ],
+    });
+
+    renderApp("/");
+
+    await screen.findByRole("heading", { level: 1, name: "Discover indie Board games in one place." });
+    await userEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+
+    expect(await screen.findByText("Moderator follow-up on your report")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    await waitFor(() => {
+      expect(apiMocks.clearCurrentUserNotifications).toHaveBeenCalledWith("http://127.0.0.1:8787", "player-token");
+    });
+
+    expect(await screen.findByText("No notifications yet.")).toBeVisible();
+    expect(screen.queryByText("Moderator follow-up on your report")).not.toBeInTheDocument();
   });
 
   it("hides developer-only report messages from the player reported titles workflow", async () => {
@@ -4084,7 +4645,7 @@ describe("App", () => {
       expect(avatarPanel).not.toBeNull();
       expect(logoPanel).not.toBeNull();
       expect(within(avatarPanel as HTMLElement).getByText("Optional. Recommended 512 x 512 px. Max 256 KB.")).toBeVisible();
-      expect(within(logoPanel as HTMLElement).getByText("Optional. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).getByText("Optional. Recommended aspect ratio 3:1. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.")).toBeVisible();
 
       await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /studio display name/i }), "Signal Harbor Studio");
       await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /description/i }), "A coastal co-op studio profile.");
@@ -4155,7 +4716,7 @@ describe("App", () => {
   });
 
   it("reduces oversized title card uploads locally before submission", async () => {
-    const mockedImageProcessing = mockRasterImageProcessing({ width: 900, height: 1280, blobSize: 4096, blobType: "image/webp" });
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 900, height: 1200, blobSize: 4096, blobType: "image/webp" });
 
     try {
       seedDeveloperWorkspace();
@@ -4213,9 +4774,9 @@ describe("App", () => {
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
       naturalWidth = 900;
-      naturalHeight = 1280;
+      naturalHeight = 1200;
       width = 900;
-      height = 1280;
+      height = 1200;
 
       set src(_value: string) {
         setTimeout(() => this.onload?.(), 0);

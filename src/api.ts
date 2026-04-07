@@ -345,6 +345,10 @@ export function getCurrentUserNotifications(apiBaseUrl: string, accessToken: str
   return apiFetch<UserNotificationListResponse>(apiBaseUrl, "/identity/me/notifications", {}, accessToken);
 }
 
+export function clearCurrentUserNotifications(apiBaseUrl: string, accessToken: string): Promise<void> {
+  return apiFetch<void>(apiBaseUrl, "/identity/me/notifications", { method: "DELETE" }, accessToken);
+}
+
 export function markCurrentUserNotificationRead(
   apiBaseUrl: string,
   accessToken: string,

@@ -165,6 +165,24 @@ export function formatRecommendedResolution(policy: Pick<MigrationMediaUploadPol
   return `${policy.recommendedWidth} x ${policy.recommendedHeight} px`;
 }
 
+function greatestCommonDivisor(left: number, right: number): number {
+  let currentLeft = Math.abs(left);
+  let currentRight = Math.abs(right);
+
+  while (currentRight !== 0) {
+    const next = currentLeft % currentRight;
+    currentLeft = currentRight;
+    currentRight = next;
+  }
+
+  return currentLeft || 1;
+}
+
+export function formatRecommendedAspectRatio(policy: Pick<MigrationMediaUploadPolicy, "recommendedWidth" | "recommendedHeight">): string {
+  const divisor = greatestCommonDivisor(policy.recommendedWidth, policy.recommendedHeight);
+  return `${policy.recommendedWidth / divisor}:${policy.recommendedHeight / divisor}`;
+}
+
 export function formatMediaUploadGuidance(
   policy: MigrationMediaUploadPolicy,
   options: { optional?: boolean } = {},
@@ -174,9 +192,11 @@ export function formatMediaUploadGuidance(
     guidance.push("Optional.");
   }
   if (policy.acceptedMimeTypes.includes(SVG_MIME_TYPE)) {
+    guidance.push(`Recommended aspect ratio ${formatRecommendedAspectRatio(policy)}.`);
     guidance.push(`Recommended raster size ${formatRecommendedResolution(policy)}.`);
     guidance.push("SVG also supported.");
   } else {
+    guidance.push(`Recommended aspect ratio ${formatRecommendedAspectRatio(policy)}.`);
     guidance.push(`Recommended ${formatRecommendedResolution(policy)}.`);
   }
   guidance.push(`Max ${formatBinaryFileSize(policy.maxUploadBytes)}.`);

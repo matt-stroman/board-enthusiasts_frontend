@@ -1,10 +1,11 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider, passwordRecoveryRedirectStorageKey, useAuth } from "./auth";
+import { AuthProvider, passwordRecoveryExpectedStorageKey, passwordRecoveryRedirectStorageKey, useAuth } from "./auth";
 
 const authClientMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
   signInWithOAuth: vi.fn(),
   signUp: vi.fn(),
   updateUser: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
     auth: {
       getSession: authClientMocks.getSession,
+      resetPasswordForEmail: authClientMocks.resetPasswordForEmail,
       signInWithOAuth: authClientMocks.signInWithOAuth,
       signUp: authClientMocks.signUp,
       updateUser: authClientMocks.updateUser,
@@ -64,11 +66,14 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 function AuthProbe() {
-  const { loading, currentUser, signInWithSocialAuth, signUp } = useAuth();
+  const { loading, currentUser, requestPasswordReset, signInWithSocialAuth, signUp } = useAuth();
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
       <div data-testid="email">{currentUser?.email ?? ""}</div>
+      <button type="button" onClick={() => void requestPasswordReset("player@example.com")}>
+        Trigger Password Reset
+      </button>
       <button type="button" onClick={() => void signInWithSocialAuth("discord")}>
         Trigger Discord Sign-In
       </button>
@@ -104,6 +109,7 @@ describe("AuthProvider", () => {
   beforeEach(() => {
     authClientMocks.getSession.mockReset();
     authClientMocks.onAuthStateChange.mockReset();
+    authClientMocks.resetPasswordForEmail.mockReset();
     authClientMocks.signInWithOAuth.mockReset();
     authClientMocks.signUp.mockReset();
     authClientMocks.updateUser.mockReset();
@@ -112,11 +118,16 @@ describe("AuthProvider", () => {
       data: { user: null },
       error: null,
     });
+    authClientMocks.resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: null,
+    });
     authClientMocks.callback = null;
     getCurrentUserMock.mockReset();
     trackAnalyticsEventMock.mockReset();
     window.sessionStorage.clear();
     window.localStorage.clear();
+    window.history.replaceState(null, document.title, "/");
   });
 
   it("does not re-enter loading on auth token refresh after bootstrap", async () => {
@@ -196,6 +207,48 @@ describe("AuthProvider", () => {
     });
 
     expect(window.sessionStorage.getItem(passwordRecoveryRedirectStorageKey)).toBe("true");
+  });
+
+  it("remembers password reset requests for same-browser recovery callbacks", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    getCurrentUserMock.mockResolvedValue(null);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Password Reset" }).click();
+      await Promise.resolve();
+    });
+
+    expect(window.localStorage.getItem(passwordRecoveryExpectedStorageKey)).toMatch(/^\d+$/);
+  });
+
+  it("promotes expected same-browser recovery callbacks even without an explicit recovery mode", async () => {
+    window.localStorage.setItem(passwordRecoveryExpectedStorageKey, String(Date.now()));
+    window.history.replaceState(null, document.title, "/#access_token=recovery-token&refresh_token=refresh-token");
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: { access_token: "recovery-token" } },
+    });
+    getCurrentUserMock.mockResolvedValue(null);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+
+    expect(window.sessionStorage.getItem(passwordRecoveryRedirectStorageKey)).toBe("true");
+    expect(window.localStorage.getItem(passwordRecoveryExpectedStorageKey)).toBeNull();
   });
 
   it("starts Discord sign-in with the maintained redirect target and skips repeat consent when possible", async () => {
