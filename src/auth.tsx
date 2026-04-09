@@ -5,6 +5,7 @@ import { getCurrentUser } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
 import { hasAuthRedirectCallbackParams, readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
+import { publishBeHomeAuthState } from "./be-home-bridge";
 import { buildAuthRedirectUrl } from "./auth-redirects";
 import { readAppConfig } from "./config";
 
@@ -224,6 +225,18 @@ function buildFallbackCurrentUser(authUser: SupabaseAuthUser | null | undefined)
   };
 }
 
+function publishEmbeddedAuthSnapshot(session: Session | null, currentUser: CurrentUserResponse | null, loading: boolean): void {
+  if (loading) {
+    return;
+  }
+
+  publishBeHomeAuthState({
+    authenticated: Boolean(session?.access_token && currentUser),
+    roles: currentUser?.roles ?? [],
+    displayName: currentUser?.displayName ?? null,
+  });
+}
+
 export function hasPlatformRole(roles: PlatformRole[], required: "player" | "developer" | "moderator"): boolean {
   const roleSet = new Set(roles);
   if (required === "player") {
@@ -396,6 +409,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    publishEmbeddedAuthSnapshot(session, currentUser, loading);
+  }, [session, currentUser, loading]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

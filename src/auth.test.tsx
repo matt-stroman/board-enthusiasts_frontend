@@ -15,6 +15,7 @@ const authClientMocks = vi.hoisted(() => ({
 
 const getCurrentUserMock = vi.hoisted(() => vi.fn());
 const trackAnalyticsEventMock = vi.hoisted(() => vi.fn());
+const publishBeHomeAuthStateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./config", () => ({
   readAppConfig: () => ({
@@ -41,6 +42,14 @@ vi.mock("./api", async (importOriginal) => {
 vi.mock("./app-core/analytics", () => ({
   trackAnalyticsEvent: trackAnalyticsEventMock,
 }));
+
+vi.mock("./be-home-bridge", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./be-home-bridge")>();
+  return {
+    ...actual,
+    publishBeHomeAuthState: publishBeHomeAuthStateMock,
+  };
+});
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => ({
@@ -125,6 +134,7 @@ describe("AuthProvider", () => {
     authClientMocks.callback = null;
     getCurrentUserMock.mockReset();
     trackAnalyticsEventMock.mockReset();
+    publishBeHomeAuthStateMock.mockReset();
     window.sessionStorage.clear();
     window.localStorage.clear();
     window.history.replaceState(null, document.title, "/");
@@ -556,5 +566,52 @@ describe("AuthProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
     expect(screen.getByTestId("email")).toHaveTextContent("fallback.player@example.com");
+  });
+
+  it("publishes BE Home auth bridge state after bootstrap completes", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: { access_token: "token-1" } },
+    });
+    getCurrentUserMock.mockResolvedValue({
+      subject: "user-1",
+      displayName: "Emma Torres",
+      email: "emma.torres@boardtpl.local",
+      emailVerified: true,
+      identityProvider: "email",
+      roles: ["developer"],
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(publishBeHomeAuthStateMock).toHaveBeenLastCalledWith({
+      authenticated: true,
+      roles: ["developer"],
+      displayName: "Emma Torres",
+    });
+  });
+
+  it("publishes a signed-out BE Home auth bridge state when no session is active", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    getCurrentUserMock.mockResolvedValue(null);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(publishBeHomeAuthStateMock).toHaveBeenLastCalledWith({
+      authenticated: false,
+      roles: [],
+      displayName: null,
+    });
   });
 });
