@@ -4346,124 +4346,7 @@ describe("App", () => {
     expect(screen.queryByText(/developer only/i)).not.toBeInTheDocument();
   });
 
-  it("shows the first showcase image in wishlist rows using the catalog media aspect ratio", async () => {
-    authState.value = {
-      session: { access_token: "player-token" },
-      currentUser: {
-        subject: "user-1",
-        displayName: "Ava Garcia",
-        email: "ava.garcia@boardtpl.local",
-        emailVerified: true,
-        identityProvider: "email",
-        roles: ["player"],
-        avatarUrl: null,
-      },
-      loading: false,
-      authError: null,
-      signIn: vi.fn(),
-      signUp: vi.fn(),
-      requestPasswordReset: vi.fn(),
-      verifyEmailCode: vi.fn(),
-      verifyRecoveryCode: vi.fn(),
-      updatePassword: vi.fn(),
-      signOut: vi.fn(),
-      refreshCurrentUser: vi.fn(),
-    };
-    apiMocks.getUserProfile.mockResolvedValue({
-      profile: {
-        subject: "user-1",
-        displayName: "Ava Garcia",
-        userName: "ava.garcia",
-        firstName: "Ava",
-        lastName: "Garcia",
-        email: "ava.garcia@boardtpl.local",
-        emailVerified: true,
-        avatarUrl: null,
-        avatarDataUrl: null,
-        initials: "AG",
-        updatedAt: "2026-03-08T12:00:00Z",
-      },
-    });
-    apiMocks.listCatalogMediaTypes.mockResolvedValue({
-      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) =>
-        definition.key === "title_showcase"
-          ? {
-              ...definition,
-              recommendedWidth: 2048,
-              recommendedHeight: 1152,
-              acceptedMimeTypes: [...definition.acceptedMimeTypes],
-            }
-          : {
-              ...definition,
-              acceptedMimeTypes: [...definition.acceptedMimeTypes],
-            },
-      ),
-    });
-    apiMocks.getPlayerWishlist.mockResolvedValue({
-      titles: [
-        {
-          id: "title-1",
-          studioId: "studio-1",
-          studioSlug: "pine-lantern-labs",
-          studioDisplayName: "Pine Lantern Labs",
-          slug: "the-shapers-oracle",
-          contentKind: "game",
-          lifecycleStatus: "active",
-          visibility: "listed",
-          isReported: false,
-          currentMetadataRevision: 1,
-          displayName: "The Shaper's Oracle",
-          shortDescription: "Shape clues and spot patterns together.",
-          genreDisplay: "Puzzle, Family",
-          minPlayers: 1,
-          maxPlayers: 4,
-          maxPlayersOrMore: false,
-          playerCountDisplay: "1-4 players",
-          ageRatingAuthority: null,
-          ageRatingValue: null,
-          minAgeYears: 8,
-          ageDisplay: "8+",
-          wishlistCount: 4,
-          libraryCount: 2,
-          cardImageUrl: null,
-          logoImageUrl: null,
-          acquisitionUrl: null,
-          catalogMediaEntries: [
-            {
-              id: "showcase-1",
-              ownerKind: "title",
-              studioId: "studio-1",
-              titleId: "title-1",
-              mediaTypeKey: "title_showcase",
-              kind: "image",
-              sourceUrl: "https://cdn.example.com/titles/the-shapers-oracle/showcase-1.webp",
-              storagePath: null,
-              previewImageUrl: null,
-              previewStoragePath: null,
-              videoUrl: null,
-              altText: "The Shaper's Oracle showcase image",
-              mimeType: "image/webp",
-              width: 2048,
-              height: 1152,
-              displayOrder: 0,
-              createdAt: "2026-03-08T12:00:00Z",
-              updatedAt: "2026-03-08T12:00:00Z",
-            },
-          ],
-        },
-      ],
-    });
-
-    renderApp("/player/wishlist");
-
-    expect(await screen.findByRole("heading", { name: "Wishlist" })).toBeVisible();
-    expect(screen.getByAltText("The Shaper's Oracle showcase image")).toHaveAttribute("src", "https://cdn.example.com/titles/the-shapers-oracle/showcase-1.webp");
-    expect(screen.getByTestId("wishlist-showcase-title-1")).toHaveStyle({ aspectRatio: "2048 / 1152" });
-    expect(screen.getByRole("link", { name: "Open title" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Remove from wishlist" })).toBeVisible();
-  });
-
-  it("falls back to title avatar and browse-style placeholder art in wishlist rows when showcase media is missing", async () => {
+  it("prefers title avatar media in wishlist rows and locks to the expected avatar aspect ratio", async () => {
     authState.value = {
       session: { access_token: "player-token" },
       currentUser: {
@@ -4519,7 +4402,145 @@ describe("App", () => {
     apiMocks.getPlayerWishlist.mockResolvedValue({
       titles: [
         {
-          id: "title-avatar-only",
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "pine-lantern-labs",
+          studioDisplayName: "Pine Lantern Labs",
+          slug: "the-shapers-oracle",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "The Shaper's Oracle",
+          shortDescription: "Shape clues and spot patterns together.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          maxPlayersOrMore: false,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 8,
+          ageDisplay: "8+",
+          wishlistCount: 4,
+          libraryCount: 2,
+          cardImageUrl: null,
+          logoImageUrl: "https://cdn.example.com/titles/the-shapers-oracle/logo.webp",
+          acquisitionUrl: null,
+          catalogMediaEntries: [
+            {
+              id: "showcase-1",
+              ownerKind: "title",
+              studioId: "studio-1",
+              titleId: "title-1",
+              mediaTypeKey: "title_showcase",
+              kind: "image",
+              sourceUrl: "https://cdn.example.com/titles/the-shapers-oracle/showcase-1.webp",
+              storagePath: null,
+              previewImageUrl: null,
+              previewStoragePath: null,
+              videoUrl: null,
+              altText: "The Shaper's Oracle showcase image",
+              mimeType: "image/webp",
+              width: 2048,
+              height: 1152,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+            {
+              id: "avatar-1",
+              ownerKind: "title",
+              studioId: "studio-1",
+              titleId: "title-1",
+              mediaTypeKey: "title_avatar",
+              kind: "image",
+              sourceUrl: "https://cdn.example.com/titles/the-shapers-oracle/avatar.webp",
+              storagePath: null,
+              previewImageUrl: null,
+              previewStoragePath: null,
+              videoUrl: null,
+              altText: "The Shaper's Oracle avatar",
+              mimeType: "image/webp",
+              width: 700,
+              height: 900,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    renderApp("/player/wishlist");
+
+    expect(await screen.findByRole("heading", { name: "Wishlist" })).toBeVisible();
+    expect(screen.getByAltText("The Shaper's Oracle avatar")).toHaveAttribute("src", "https://cdn.example.com/titles/the-shapers-oracle/avatar.webp");
+    expect(screen.queryByAltText("The Shaper's Oracle showcase image")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wishlist-showcase-title-1")).toHaveStyle({ aspectRatio: "640 / 640" });
+    expect(screen.getByRole("link", { name: "Open title" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Remove from wishlist" })).toBeVisible();
+  });
+
+  it("falls back to title logo media and then placeholder art in wishlist rows when avatar media is missing", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) =>
+        definition.key === "title_logo"
+          ? {
+              ...definition,
+              recommendedWidth: 1440,
+              recommendedHeight: 480,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            }
+          : {
+              ...definition,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            },
+      ),
+    });
+    apiMocks.getPlayerWishlist.mockResolvedValue({
+      titles: [
+        {
+          id: "title-logo-only",
           studioId: "studio-1",
           studioSlug: "pine-lantern-labs",
           studioDisplayName: "Pine Lantern Labs",
@@ -4547,21 +4568,21 @@ describe("App", () => {
           acquisitionUrl: null,
           catalogMediaEntries: [
             {
-              id: "avatar-1",
+              id: "logo-1",
               ownerKind: "title",
               studioId: "studio-1",
-              titleId: "title-avatar-only",
-              mediaTypeKey: "title_avatar",
+              titleId: "title-logo-only",
+              mediaTypeKey: "title_logo",
               kind: "image",
-              sourceUrl: "https://cdn.example.com/titles/lantern-puzzle/avatar.webp",
+              sourceUrl: "https://cdn.example.com/titles/lantern-puzzle/logo.webp",
               storagePath: null,
               previewImageUrl: null,
               previewStoragePath: null,
               videoUrl: null,
-              altText: "Lantern Puzzle avatar",
+              altText: "Lantern Puzzle logo",
               mimeType: "image/webp",
-              width: 640,
-              height: 640,
+              width: 1440,
+              height: 480,
               displayOrder: 0,
               createdAt: "2026-03-08T12:00:00Z",
               updatedAt: "2026-03-08T12:00:00Z",
@@ -4603,11 +4624,11 @@ describe("App", () => {
     renderApp("/player/wishlist");
 
     expect(await screen.findByRole("heading", { name: "Wishlist" })).toBeVisible();
-    expect(screen.getByAltText("Lantern Puzzle avatar")).toHaveAttribute("src", "https://cdn.example.com/titles/lantern-puzzle/avatar.webp");
-    expect(screen.getByTestId("wishlist-showcase-title-avatar-only")).toHaveStyle({ aspectRatio: "640 / 640" });
+    expect(screen.getByAltText("Lantern Puzzle logo")).toHaveAttribute("src", "https://cdn.example.com/titles/lantern-puzzle/logo.webp");
+    expect(screen.getByTestId("wishlist-showcase-title-logo-only")).toHaveStyle({ aspectRatio: "1440 / 480" });
     const placeholderImage = screen.getByAltText("Placeholder Only fallback artwork");
     expect(placeholderImage.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
-    expect(screen.getByTestId("wishlist-showcase-title-placeholder-only")).toHaveStyle({ aspectRatio: "640 / 640" });
+    expect(screen.getByTestId("wishlist-showcase-title-placeholder-only")).toHaveStyle({ aspectRatio: "512 / 512" });
   });
 
   it("renders followed studios as compact rows with logo media and prominent link buttons", async () => {

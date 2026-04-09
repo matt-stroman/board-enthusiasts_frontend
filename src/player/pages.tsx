@@ -1854,8 +1854,8 @@ export function PlayerPage() {
   const activeWorkflow = getActiveWorkflow();
   const activeDomain = activeWorkflow.startsWith("account-") ? "account" : "library";
   const hasDeveloperRole = currentUser?.roles.includes("developer") ?? false;
-  const titleShowcaseAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_showcase");
   const titleAvatarAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_avatar");
+  const titleLogoAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_logo");
   const studioLogoAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "studio_logo");
 
   useEffect(() => {
@@ -1999,15 +1999,19 @@ export function PlayerPage() {
                 {wishlistTitles.length > 0 ? (
                   <div className="mt-6 list-stack">
                     {wishlistTitles.map((title) => {
-                      const showcaseImage = getFirstCatalogImageByType(title, "title_showcase");
                       const titleAvatarImage = getFirstCatalogImageByType(title, "title_avatar");
-                      const previewImage = showcaseImage ?? titleAvatarImage;
-                      const previewAspectRatio = showcaseImage ? titleShowcaseAspectRatio : titleAvatarAspectRatio;
-                      const previewWidthClass = showcaseImage ? "max-w-[12rem]" : "max-w-[8rem]";
-                      const previewSource = previewImage?.sourceUrl ?? getFallbackArtworkUrl(title);
-                      const previewAlt =
-                        previewImage?.altText ??
-                        (showcaseImage ? `${title.displayName} showcase preview` : titleAvatarImage ? `${title.displayName} avatar` : `${title.displayName} fallback artwork`);
+                      const titleLogoImage = getFirstCatalogImageByType(title, "title_logo");
+                      const previewImage = titleAvatarImage ?? titleLogoImage;
+                      const previewAspectRatio = titleAvatarImage ? titleAvatarAspectRatio : (titleLogoImage ?? title.logoImageUrl) ? titleLogoAspectRatio : titleAvatarAspectRatio;
+                      const previewWidthClass = titleAvatarImage || !previewImage ? "max-w-[8rem]" : "max-w-[12rem]";
+                      const previewSource = previewImage?.sourceUrl ?? title.logoImageUrl ?? getFallbackArtworkUrl(title);
+                      const previewAlt = titleAvatarImage
+                        ? (titleAvatarImage.altText ?? `${title.displayName} avatar`)
+                        : titleLogoImage
+                          ? (titleLogoImage.altText ?? `${title.displayName} logo`)
+                          : title.logoImageUrl
+                            ? `${title.displayName} logo`
+                            : `${title.displayName} fallback artwork`;
 
                       return (
                         <article key={title.id} className="list-item">
