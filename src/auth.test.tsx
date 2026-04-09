@@ -1,12 +1,16 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "./api";
 import { AuthProvider, passwordRecoveryExpectedStorageKey, passwordRecoveryRedirectStorageKey, useAuth } from "./auth";
 
 const authClientMocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  signInWithPassword: vi.fn(),
   signInWithOAuth: vi.fn(),
+  signOut: vi.fn(),
   signUp: vi.fn(),
   updateUser: vi.fn(),
   unsubscribe: vi.fn(),
@@ -56,7 +60,9 @@ vi.mock("@supabase/supabase-js", () => ({
     auth: {
       getSession: authClientMocks.getSession,
       resetPasswordForEmail: authClientMocks.resetPasswordForEmail,
+      signInWithPassword: authClientMocks.signInWithPassword,
       signInWithOAuth: authClientMocks.signInWithOAuth,
+      signOut: authClientMocks.signOut,
       signUp: authClientMocks.signUp,
       updateUser: authClientMocks.updateUser,
       onAuthStateChange: (callback: (event: string, session: { access_token: string; user?: { user_metadata?: Record<string, unknown> } } | null) => void) => {
@@ -75,13 +81,25 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 function AuthProbe() {
-  const { loading, currentUser, requestPasswordReset, signInWithSocialAuth, signUp } = useAuth();
+  const { loading, currentUser, requestPasswordReset, signIn, signInWithSocialAuth, signUp } = useAuth();
+  const [signInError, setSignInError] = useState("");
   return (
     <div>
       <div data-testid="loading">{String(loading)}</div>
       <div data-testid="email">{currentUser?.email ?? ""}</div>
+      <div data-testid="sign-in-error">{signInError}</div>
       <button type="button" onClick={() => void requestPasswordReset("player@example.com")}>
         Trigger Password Reset
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void signIn("player@example.com", "Player!234").catch((error: unknown) => {
+            setSignInError(error instanceof Error ? error.message : String(error));
+          })
+        }
+      >
+        Trigger Email Sign-In
       </button>
       <button type="button" onClick={() => void signInWithSocialAuth("discord")}>
         Trigger Discord Sign-In
@@ -119,7 +137,9 @@ describe("AuthProvider", () => {
     authClientMocks.getSession.mockReset();
     authClientMocks.onAuthStateChange.mockReset();
     authClientMocks.resetPasswordForEmail.mockReset();
+    authClientMocks.signInWithPassword.mockReset();
     authClientMocks.signInWithOAuth.mockReset();
+    authClientMocks.signOut.mockReset();
     authClientMocks.signUp.mockReset();
     authClientMocks.updateUser.mockReset();
     authClientMocks.unsubscribe.mockReset();
@@ -129,6 +149,9 @@ describe("AuthProvider", () => {
     });
     authClientMocks.resetPasswordForEmail.mockResolvedValue({
       data: {},
+      error: null,
+    });
+    authClientMocks.signOut.mockResolvedValue({
       error: null,
     });
     authClientMocks.callback = null;
@@ -566,6 +589,72 @@ describe("AuthProvider", () => {
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
     expect(screen.getByTestId("email")).toHaveTextContent("fallback.player@example.com");
+  });
+
+  it("clears local auth state when the current-user api reports an inactive session", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token-1",
+          user: {
+            id: "user-1",
+            email: "expired.player@example.com",
+          },
+        },
+      },
+    });
+    getCurrentUserMock.mockRejectedValue(new ApiError("Your session is no longer active. Please sign in again and try once more.", 401));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(screen.getByTestId("email")).toHaveTextContent("");
+    expect(authClientMocks.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(publishBeHomeAuthStateMock).toHaveBeenLastCalledWith({
+      authenticated: false,
+      roles: [],
+      displayName: null,
+    });
+  });
+
+  it("rejects email sign-in when the refreshed current-user session is already inactive", async () => {
+    authClientMocks.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    authClientMocks.signInWithPassword.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "token-2",
+          user: {
+            id: "user-2",
+            email: "expired.player@example.com",
+          },
+        },
+      },
+      error: null,
+    });
+    getCurrentUserMock.mockRejectedValue(new ApiError("Your session is no longer active. Please sign in again and try once more.", 401));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    await act(async () => {
+      screen.getByRole("button", { name: "Trigger Email Sign-In" }).click();
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("sign-in-error")).toHaveTextContent("Your session is no longer active. Please sign in again and try once more."),
+    );
+    expect(screen.getByTestId("email")).toHaveTextContent("");
+    expect(authClientMocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
   it("publishes BE Home auth bridge state after bootstrap completes", async () => {

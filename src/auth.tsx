@@ -1,7 +1,7 @@
 import type { CurrentUserResponse, PlatformRole } from "@board-enthusiasts/migration-contract";
 import { createClient, type Session, type SupabaseClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { getCurrentUser } from "./api";
+import { ApiError, getCurrentUser } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
 import { hasAuthRedirectCallbackParams, readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
@@ -225,6 +225,10 @@ function buildFallbackCurrentUser(authUser: SupabaseAuthUser | null | undefined)
   };
 }
 
+function isInactiveSessionError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 function publishEmbeddedAuthSnapshot(session: Session | null, currentUser: CurrentUserResponse | null, loading: boolean): void {
   if (loading) {
     return;
@@ -277,7 +281,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function refreshCurrentUser(nextSession = session): Promise<void> {
+  async function clearInactiveSession(): Promise<void> {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Fall back to clearing local state even if the auth client cannot confirm local sign-out.
+    }
+
+    clearLocalAuthState();
+  }
+
+  async function refreshCurrentUser(
+    nextSession = session,
+    options?: {
+      throwOnInvalidSession?: boolean;
+    },
+  ): Promise<void> {
     if (!nextSession?.access_token) {
       setCurrentUser(null);
       setAuthError(null);
@@ -298,6 +317,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         lastError = error;
       }
+    }
+
+    if (isInactiveSessionError(lastError)) {
+      const message = getUserFacingErrorMessage(lastError, "Your session is no longer active. Please sign in again and try once more.");
+      await clearInactiveSession();
+      if (options?.throwOnInvalidSession) {
+        throw new Error(message);
+      }
+
+      return;
     }
 
     setCurrentUser(buildFallbackCurrentUser(nextSession.user));
@@ -434,7 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setSession(result.data.session);
-        await refreshCurrentUser(result.data.session);
+        await refreshCurrentUser(result.data.session, { throwOnInvalidSession: true });
         setLoading(false);
       },
       async signInWithSocialAuth(
@@ -519,7 +548,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setSession(result.data.session);
         if (result.data.session) {
-          await refreshCurrentUser(result.data.session);
+          await refreshCurrentUser(result.data.session, { throwOnInvalidSession: true });
         }
 
         return {
@@ -548,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setSession(result.data.session);
-        await refreshCurrentUser(result.data.session);
+        await refreshCurrentUser(result.data.session, { throwOnInvalidSession: true });
         setLoading(false);
       },
       async verifyRecoveryCode(email: string, token: string): Promise<void> {
@@ -560,7 +589,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setSession(result.data.session);
-        await refreshCurrentUser(result.data.session);
+        await refreshCurrentUser(result.data.session, { throwOnInvalidSession: true });
         setLoading(false);
       },
       async updatePassword(password: string): Promise<void> {
