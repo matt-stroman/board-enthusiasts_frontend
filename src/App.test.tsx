@@ -842,6 +842,16 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Join the list" })).not.toBeInTheDocument();
   });
 
+  it("suppresses the site header and footer for Board embedded browse routes", async () => {
+    renderApp("/browse?embed=board");
+
+    expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
+    expect(window.sessionStorage.getItem("be-shell-embedded-surface")).toBe("board");
+    expect(screen.queryByText("For Board Players And Builders")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Get Board" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Install Guide" })).not.toBeInTheDocument();
+  });
+
   it("keeps Browse highlighted only on browse routes", async () => {
     renderApp("/");
 

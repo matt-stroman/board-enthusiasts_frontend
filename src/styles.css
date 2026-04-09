@@ -193,6 +193,10 @@
     @apply mx-auto flex-1 w-full max-w-[108rem] px-4 py-8 sm:px-6 lg:px-8;
   }
 
+  .app-main--embedded {
+    @apply max-w-none px-0 py-0;
+  }
+
   .landing-main {
     @apply max-w-[108rem];
   }

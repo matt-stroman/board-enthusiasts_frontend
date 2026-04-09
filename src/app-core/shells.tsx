@@ -15,6 +15,7 @@ import {
   landingPrivacyRoute,
   landingSignupRoute,
   readSessionStorageValue,
+  writeSessionStorageValue,
   renderCurrentUserAvatar,
 } from "./shared";
 import { getUserFacingErrorMessage, supportRoute } from "./errors";
@@ -23,16 +24,20 @@ import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 import { passwordRecoveryRedirectStorageKey } from "../auth";
 
+const embeddedBoardShellStorageKey = "be-shell-embedded-surface";
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const embeddedBoardShellRequested = new URLSearchParams(location.search).get("embed") === "board";
   const currentYear = new Date().getFullYear();
   const accessToken = session?.access_token ?? "";
   const homeShell = location.pathname === "/";
   const browseActive = isBrowsePath(location.pathname);
   const offeringsActive = location.pathname.startsWith("/offerings");
   const installActive = location.pathname.startsWith("/install-guide");
+  const embeddedBoardShell = embeddedBoardShellRequested || readSessionStorageValue(embeddedBoardShellStorageKey) === "board";
   const showSignedInSections = Boolean(session && currentUser);
   const accountReady = Boolean(currentUser);
   const showModerateSection = currentUser ? hasPlatformRole(currentUser.roles, "moderator") : false;
@@ -153,12 +158,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
     navigate("/auth/signin?mode=recovery", { replace: true });
   }, [location.pathname, location.search, navigate, session]);
 
+  useEffect(() => {
+    if (!embeddedBoardShellRequested) {
+      return;
+    }
+
+    writeSessionStorageValue(embeddedBoardShellStorageKey, "board");
+  }, [embeddedBoardShellRequested]);
+
+  const appRootClassName = `${homeShell ? "app-root landing-root" : "app-root"}${embeddedBoardShell ? " app-root--embedded" : ""}`;
+  const appMainClassName = `${homeShell ? "app-main landing-main" : "app-main"}${embeddedBoardShell ? " app-main--embedded" : ""}`;
+
   return (
-    <div className={homeShell ? "app-root landing-root" : "app-root"}>
+    <div className={appRootClassName}>
       {userMenuOpen || notificationsOpen ? (
         <button className="fixed inset-0 z-40 cursor-default bg-transparent" type="button" aria-label="Close navigation menus" onClick={closeOverlays} />
       ) : null}
-      <header className="app-header">
+      {!embeddedBoardShell ? (
+        <header className="app-header">
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
@@ -377,13 +394,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             Get Board
           </a>
         </div>
-      </header>
+        </header>
+      ) : null}
 
-      <main className={homeShell ? "app-main landing-main" : "app-main"}>
+      <main className={appMainClassName}>
         <div className="page-shell">{children}</div>
       </main>
 
-      <footer className="app-footer">
+      {!embeddedBoardShell ? (
+        <footer className="app-footer">
         <div className="app-footer-inner">
           <div className="landing-footer-copy-block">
             <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Independent and community-built.</div>
@@ -404,7 +423,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             Board Enthusiasts is an independent community project and is not affiliated with, endorsed by, or sponsored by Harris Hill Products, Inc. or Board.
           </div>
         </div>
-      </footer>
+        </footer>
+      ) : null}
     </div>
   );
 }
