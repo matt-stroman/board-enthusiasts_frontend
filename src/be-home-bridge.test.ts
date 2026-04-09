@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BE_HOME_AUTH_STATE_MESSAGE_TYPE, publishBeHomeAuthState } from "./be-home-bridge";
+import {
+  BE_HOME_AUTH_STATE_MESSAGE_TYPE,
+  BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
+  hasBeHomeBridge,
+  openBeHomeExternalUrl,
+  publishBeHomeAuthState,
+} from "./be-home-bridge";
 
 describe("BE Home bridge", () => {
   beforeEach(() => {
@@ -48,6 +54,25 @@ describe("BE Home bridge", () => {
       authenticated: false,
       roles: [],
       displayName: null,
+    });
+  });
+
+  it("reports whether the BE Home bridge is available", () => {
+    expect(hasBeHomeBridge()).toBe(false);
+    window.Unity = { call: vi.fn() };
+    expect(hasBeHomeBridge()).toBe(true);
+  });
+
+  it("publishes external URL requests through the Unity bridge", () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    openBeHomeExternalUrl("https://www.youtube.com/watch?v=demo");
+
+    expect(unityCall).toHaveBeenCalledOnce();
+    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
+      type: BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
+      url: "https://www.youtube.com/watch?v=demo",
     });
   });
 });

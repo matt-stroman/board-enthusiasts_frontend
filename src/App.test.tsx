@@ -242,6 +242,8 @@ describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    delete window.Unity;
+    delete window.webkit;
     authState.value = {
       session: null,
       currentUser: null,
@@ -924,6 +926,21 @@ describe("App", () => {
       "href",
       "https://docs.dev.board.fun/getting-started/deploy#board-developer-bridge-bdb",
     );
+  });
+
+  it("opens target-blank external links through the BE Home bridge when hosted in the Unity web view", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    renderApp("/install-guide");
+
+    await userEvent.click(await screen.findByRole("link", { name: "Board Developer Bridge (bdb)" }));
+
+    expect(unityCall).toHaveBeenCalledOnce();
+    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
+      type: "be-home-open-external-url",
+      url: "https://dev.board.fun/#:~:text=Board%20Developer%20Bridge%20(bdb)",
+    });
   });
 
   it("renders the support page with the support email address", async () => {

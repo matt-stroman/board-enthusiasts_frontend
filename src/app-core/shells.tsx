@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { clearCurrentUserNotifications, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
+import { hasBeHomeBridge, openBeHomeExternalUrl } from "../be-home-bridge";
 import {
   appConfig,
   formatNotificationCategory,
@@ -165,6 +166,47 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
     writeSessionStorageValue(embeddedBoardShellStorageKey, "board");
   }, [embeddedBoardShellRequested]);
+
+  useEffect(() => {
+    if (!hasBeHomeBridge()) {
+      return;
+    }
+
+    const handleExternalLinkClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const anchor = target.closest("a[href]");
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+      }
+
+      if (anchor.target !== "_blank") {
+        return;
+      }
+
+      const href = anchor.href?.trim();
+      if (!href) {
+        return;
+      }
+
+      const protocol = new URL(href, window.location.href).protocol.toLowerCase();
+      if (protocol === "javascript:") {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      openBeHomeExternalUrl(href);
+    };
+
+    document.addEventListener("click", handleExternalLinkClick, true);
+    return () => {
+      document.removeEventListener("click", handleExternalLinkClick, true);
+    };
+  }, []);
 
   const appRootClassName = `${homeShell ? "app-root landing-root" : "app-root"}${embeddedBoardShell ? " app-root--embedded" : ""}`;
   const appMainClassName = `${homeShell ? "app-main landing-main" : "app-main"}${embeddedBoardShell ? " app-main--embedded" : ""}`;

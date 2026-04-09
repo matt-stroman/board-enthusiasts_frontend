@@ -4,6 +4,7 @@ import type { PlatformRole } from "@board-enthusiasts/migration-contract";
  * The message type used when the hosted site publishes auth state to the BE Home Unity shell.
  */
 export const BE_HOME_AUTH_STATE_MESSAGE_TYPE = "be-home-auth-state";
+export const BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE = "be-home-open-external-url";
 
 /**
  * Lightweight auth state snapshot mirrored from the hosted site into the BE Home shell.
@@ -16,6 +17,11 @@ export interface BeHomeAuthStateSnapshot {
 
 interface BeHomeBridgeMessage extends BeHomeAuthStateSnapshot {
   type: typeof BE_HOME_AUTH_STATE_MESSAGE_TYPE;
+}
+
+interface BeHomeOpenExternalUrlMessage {
+  type: typeof BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE;
+  url: string;
 }
 
 declare global {
@@ -62,5 +68,39 @@ export function publishBeHomeAuthState(snapshot: BeHomeAuthStateSnapshot): void 
     }
   } catch {
     // Keep hosted auth resilient even if the embedding shell bridge is unavailable or rejects the message.
+  }
+}
+
+export function hasBeHomeBridge(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return typeof window.Unity?.call === "function"
+    || typeof window.webkit?.messageHandlers?.unityControl?.postMessage === "function";
+}
+
+export function openBeHomeExternalUrl(url: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const payload: BeHomeOpenExternalUrlMessage = {
+    type: BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
+    url,
+  };
+  const message = JSON.stringify(payload);
+
+  try {
+    if (typeof window.Unity?.call === "function") {
+      window.Unity.call(message);
+      return;
+    }
+
+    if (typeof window.webkit?.messageHandlers?.unityControl?.postMessage === "function") {
+      window.webkit.messageHandlers.unityControl.postMessage(message);
+    }
+  } catch {
+    // Keep the hosted surface resilient even if the embedding shell bridge rejects the request.
   }
 }
