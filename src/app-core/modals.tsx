@@ -286,6 +286,14 @@ export function TitleQuickViewModal({
     titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
     titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
   ].filter((label): label is string => label !== null);
+  const metadataChips = title
+    ? [
+        title.contentKind?.trim() ? formatContentKindLabel(title.contentKind) : null,
+        title.playerCountDisplay?.trim() ? title.playerCountDisplay.trim() : null,
+        title.ageDisplay?.trim() ? title.ageDisplay.trim() : null,
+        ...parseGenreTags(title.genreDisplay),
+      ].filter((label): label is string => Boolean(label?.trim()))
+    : [];
   const showOwnedActions = !isComingSoon;
   const shareUrl = title ? getTitleSharePageUrl(title.studioId, title.id) : null;
   const titleDetailPath = title ? getTitleDetailPath(title.studioSlug, title.slug) : getTitleDetailPath(studioIdentifier, titleIdentifier);
@@ -359,11 +367,8 @@ export function TitleQuickViewModal({
               <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
                 <div className="space-y-5">
                   <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100/80">
-                    <span className="rounded-full border border-white/15 px-3 py-1">{formatContentKindLabel(title.contentKind)}</span>
-                    <span className="rounded-full border border-white/15 px-3 py-1">{title.playerCountDisplay}</span>
-                    <span className="rounded-full border border-white/15 px-3 py-1">{title.ageDisplay}</span>
-                    {parseGenreTags(title.genreDisplay).map((tag) => (
-                      <span key={tag} className="rounded-full border border-white/15 px-3 py-1">{tag}</span>
+                    {metadataChips.map((chip) => (
+                      <span key={chip} className="rounded-full border border-white/15 px-3 py-1">{chip}</span>
                     ))}
                   </div>
                   <p className="text-base leading-8 text-slate-200">{title.shortDescription}</p>

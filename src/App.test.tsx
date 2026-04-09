@@ -1574,6 +1574,80 @@ describe("App", () => {
     expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
   });
 
+  it("hides empty metadata chips in quick view", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "board-enthusiasts",
+          studioDisplayName: "Board Enthusiasts (BE)",
+          slug: "the-shapers-oracle",
+          contentKind: "game",
+          lifecycleStatus: "coming_soon",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "The Shaper's Oracle",
+          shortDescription: "Shape destiny to your ends in this strategic card game of pattern recognition and memory.",
+          genreDisplay: "Planning, Companion",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 8,
+          ageDisplay: "",
+          wishlistCount: 0,
+          libraryCount: 0,
+          cardImageUrl: "https://cdn.example.com/titles/the-shapers-oracle/card.webp",
+          logoImageUrl: "https://cdn.example.com/titles/the-shapers-oracle/logo.webp",
+          acquisitionUrl: null,
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "board-enthusiasts",
+        studioDisplayName: "Board Enthusiasts (BE)",
+        slug: "the-shapers-oracle",
+        displayName: "The Shaper's Oracle",
+        shortDescription: "Shape destiny to your ends in this strategic card game of pattern recognition and memory.",
+        description: "You play as a Shaper, a mystical being capable of altering the course of destiny.",
+        genreDisplay: "Planning, Companion",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "coming_soon",
+        isReported: false,
+        currentMetadataRevision: 1,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "",
+        wishlistCount: 0,
+        libraryCount: 0,
+        acquisitionUrl: null,
+        currentRelease: null,
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByRole("button", { name: /the shaper's oracle/i })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /the shaper's oracle/i }));
+
+    const quickViewDialog = await screen.findByRole("dialog", { name: "The Shaper's Oracle" });
+    const metadataRow = within(quickViewDialog).getByText("1-4 players").parentElement as HTMLElement;
+    const metadataChips = Array.from(metadataRow.querySelectorAll("span")).map((chip) => chip.textContent?.trim() ?? "");
+
+    expect(metadataChips).toEqual(["Game", "1-4 players", "Planning", "Companion"]);
+  });
+
   it("applies the restored live studio-scoped search filters without leaving the studio page", async () => {
     apiMocks.getPublicStudio.mockResolvedValue({
       studio: {
