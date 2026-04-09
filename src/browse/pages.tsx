@@ -1,6 +1,6 @@
 import type { CatalogTitleResponse, CatalogTitleSummary, DeveloperStudioSummary, HomeSpotlightEntry, PlayerTitleReportSummary, StudioSummary, TitleMediaAsset } from "@board-enthusiasts/migration-contract";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import keyboardArrowLeftGlyph from "../assets/landing-glyphs/keyboard_arrow_left_24dp.svg?raw";
 import keyboardArrowRightGlyph from "../assets/landing-glyphs/keyboard_arrow_right_24dp.svg?raw";
 import {
@@ -12,7 +12,6 @@ import {
   getHomeSpotlights,
   getPlayerFollowedStudios,
   getPlayerLibrary,
-  getPlayerTitleReport,
   getPlayerTitleReports,
   getPlayerWishlist,
   getPublicStudio,
@@ -33,13 +32,18 @@ import {
   formatContentKindLabel,
   formatTitleLibraryInterestLabel,
   formatTitleWishlistInterestLabel,
+  getCatalogMediaAspectRatioValue,
   formatMembershipRole,
   formatReportStatus,
   formatTimestamp,
+  getStudioDetailPath,
+  getTitleDetailPath,
+  getTitleSharePageUrl,
   getUserFacingErrorMessage,
   getCatalogTitleAvailabilityNote,
   getFallbackGradient,
   getHeroImageUrl,
+  getPrimaryTitleShowcaseImageUrl,
   getStudioAvatarImageUrl,
   isKnownStudioLink,
   LoadingPanel,
@@ -47,7 +51,7 @@ import {
   PLAYER_FILTER_MAX,
   PLAYER_FILTER_MIN,
   PlayerRangeField,
-  ReportTitleModal,
+  ShareTitleModal,
   StudioLinkIcon,
   trackAnalyticsEvent,
   StudioCard,
@@ -84,8 +88,7 @@ function resolveInitialShowcaseSelection(title: CatalogTitleResponse["title"]): 
 
 function getSpotlightImage(entry: HomeSpotlightEntry): string | null {
   return (
-    entry.title.showcaseMedia[0]?.imageUrl ??
-    entry.title.mediaAssets.find((asset) => asset.mediaRole === "hero")?.sourceUrl ??
+    getPrimaryTitleShowcaseImageUrl(entry.title) ??
     entry.title.cardImageUrl ??
     null
   );
@@ -288,15 +291,11 @@ export function BrowsePage() {
   const [ownedTitleIds, setOwnedTitleIds] = useState<Set<string>>(new Set());
   const [wishlistedTitleIds, setWishlistedTitleIds] = useState<Set<string>>(new Set());
   const [followedStudioIds, setFollowedStudioIds] = useState<Set<string>>(new Set());
-  const [reportedTitleIds, setReportedTitleIds] = useState<Set<string>>(new Set());
   const [busyTitleIds, setBusyTitleIds] = useState<Set<string>>(new Set());
   const [playerActionErrorMessage, setPlayerActionErrorMessage] = useState<string | null>(null);
   const [playerActionStatusMessage, setPlayerActionStatusMessage] = useState<string | null>(null);
-  const [reportTarget, setReportTarget] = useState<{ id: string; displayName: string } | null>(null);
-  const [reportReason, setReportReason] = useState("");
-  const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
-  const [quickViewTarget, setQuickViewTarget] = useState<{ studioSlug: string; titleSlug: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string } | null>(null);
+  const [quickViewTarget, setQuickViewTarget] = useState<{ studioIdentifier: string; titleIdentifier: string } | null>(null);
   const deferredQuery = useDeferredValue(query);
   const lastTrackedBrowseFilterKeyRef = useRef("");
 
@@ -305,22 +304,19 @@ export function BrowsePage() {
       setOwnedTitleIds(new Set());
       setWishlistedTitleIds(new Set());
       setFollowedStudioIds(new Set());
-      setReportedTitleIds(new Set());
       return;
     }
 
     setPlayerStateLoading(true);
     try {
-      const [libraryResponse, wishlistResponse, followedStudiosResponse, reportsResponse] = await Promise.all([
+      const [libraryResponse, wishlistResponse, followedStudiosResponse] = await Promise.all([
         getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
         getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
         getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken),
-        getPlayerTitleReports(appConfig.apiBaseUrl, accessToken),
       ]);
       setOwnedTitleIds(new Set(libraryResponse.titles.map((title) => title.id)));
       setWishlistedTitleIds(new Set(wishlistResponse.titles.map((title) => title.id)));
       setFollowedStudioIds(new Set(followedStudiosResponse.studios.map((followedStudio) => followedStudio.id)));
-      setReportedTitleIds(new Set(reportsResponse.reports.map((report) => report.titleId)));
       setPlayerActionErrorMessage(null);
     } catch (nextError) {
       setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
@@ -610,41 +606,6 @@ export function BrowsePage() {
     }
   }
 
-  function openReportModal(titleId: string, titleDisplayName: string): void {
-    if (!playerAccessEnabled || reportedTitleIds.has(titleId)) {
-      return;
-    }
-
-    setReportTarget({ id: titleId, displayName: titleDisplayName });
-    setReportReason("");
-    setReportErrorMessage(null);
-  }
-
-  async function submitReport(): Promise<void> {
-    if (!reportTarget || reportSubmitting) {
-      return;
-    }
-
-    setReportSubmitting(true);
-    setPlayerActionErrorMessage(null);
-    setPlayerActionStatusMessage(null);
-    setReportErrorMessage(null);
-    try {
-      const response = await createPlayerTitleReport(appConfig.apiBaseUrl, accessToken, {
-        titleId: reportTarget.id,
-        reason: reportReason.trim(),
-      });
-      setReportedTitleIds((current) => new Set(current).add(response.report.titleId));
-      setPlayerActionStatusMessage(`${reportTarget.displayName} has been reported for moderator review.`);
-      setReportTarget(null);
-      setReportReason("");
-    } catch (nextError) {
-      setReportErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't submit that report right now. Please try again."));
-    } finally {
-      setReportSubmitting(false);
-    }
-  }
-
   return (
     <section className="space-y-8">
       {loading ? <LoadingPanel title="Loading browse surface..." /> : null}
@@ -796,17 +757,18 @@ export function BrowsePage() {
                     <TitleCard
                       key={title.id}
                       title={title}
-                      onOpenQuickView={(selectedTitle) => setQuickViewTarget({ studioSlug: selectedTitle.studioSlug, titleSlug: selectedTitle.slug })}
+                      onOpenQuickView={(selectedTitle) => setQuickViewTarget({ studioIdentifier: selectedTitle.studioId, titleIdentifier: selectedTitle.id })}
                       playerActions={{
                         visible: playerAccessEnabled,
                         isBusy: playerStateLoading || busyTitleIds.has(title.id),
                         isWishlisted: wishlistedTitleIds.has(title.id),
                         isOwned: ownedTitleIds.has(title.id),
-                        isReported: reportedTitleIds.has(title.id),
-                        canReport: !reportedTitleIds.has(title.id),
                         onToggleWishlist: () => void toggleWishlist(title.id, title.displayName),
                         onToggleOwned: () => void toggleOwned(title.id, title.displayName),
-                        onReport: () => openReportModal(title.id, title.displayName),
+                        onShare: () => setShareTarget({
+                          displayName: title.displayName,
+                          shareUrl: getTitleSharePageUrl(title.studioId, title.id),
+                        }),
                       }}
                     />
                   ))}
@@ -829,24 +791,16 @@ export function BrowsePage() {
 
           {quickViewTarget ? (
             <TitleQuickViewModal
-              studioSlug={quickViewTarget.studioSlug}
-              titleSlug={quickViewTarget.titleSlug}
+              studioIdentifier={quickViewTarget.studioIdentifier}
+              titleIdentifier={quickViewTarget.titleIdentifier}
               onClose={() => setQuickViewTarget(null)}
             />
           ) : null}
-          {reportTarget ? (
-            <ReportTitleModal
-              titleDisplayName={reportTarget.displayName}
-              reportReason={reportReason}
-              reportErrorMessage={reportErrorMessage}
-              submitting={reportSubmitting}
-              onReportReasonChange={setReportReason}
-              onClose={() => {
-                setReportTarget(null);
-                setReportReason("");
-                setReportErrorMessage(null);
-              }}
-              onSubmit={() => void submitReport()}
+          {shareTarget ? (
+            <ShareTitleModal
+              titleDisplayName={shareTarget.displayName}
+              shareUrl={shareTarget.shareUrl}
+              onClose={() => setShareTarget(null)}
             />
           ) : null}
         </>
@@ -922,7 +876,9 @@ export function StudiosPage() {
 export function StudioDetailPage() {
   const { session, currentUser } = useAuth();
   const params = useParams<{ studioSlug: string }>();
-  const studioSlug = params.studioSlug ?? "";
+  const studioIdentifier = params.studioSlug ?? "";
+  const navigate = useNavigate();
+  const location = useLocation();
   const accessToken = session?.access_token ?? "";
   const playerAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "player") : false;
   const [studio, setStudio] = useState<StudioSummary | null>(null);
@@ -939,15 +895,11 @@ export function StudioDetailPage() {
   const [ownedTitleIds, setOwnedTitleIds] = useState<Set<string>>(new Set());
   const [wishlistedTitleIds, setWishlistedTitleIds] = useState<Set<string>>(new Set());
   const [followedStudioIds, setFollowedStudioIds] = useState<Set<string>>(new Set());
-  const [reportedTitleIds, setReportedTitleIds] = useState<Set<string>>(new Set());
   const [busyTitleIds, setBusyTitleIds] = useState<Set<string>>(new Set());
   const [playerActionErrorMessage, setPlayerActionErrorMessage] = useState<string | null>(null);
   const [playerActionStatusMessage, setPlayerActionStatusMessage] = useState<string | null>(null);
-  const [reportTarget, setReportTarget] = useState<{ id: string; displayName: string } | null>(null);
-  const [reportReason, setReportReason] = useState("");
-  const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
-  const [quickViewTarget, setQuickViewTarget] = useState<{ studioSlug: string; titleSlug: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string } | null>(null);
+  const [quickViewTarget, setQuickViewTarget] = useState<{ studioIdentifier: string; titleIdentifier: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"catalog" | "about">("catalog");
   const deferredQuery = useDeferredValue(query);
 
@@ -956,22 +908,19 @@ export function StudioDetailPage() {
       setOwnedTitleIds(new Set());
       setWishlistedTitleIds(new Set());
       setFollowedStudioIds(new Set());
-      setReportedTitleIds(new Set());
       return;
     }
 
     setPlayerStateLoading(true);
     try {
-      const [libraryResponse, wishlistResponse, followedStudiosResponse, reportsResponse] = await Promise.all([
+      const [libraryResponse, wishlistResponse, followedStudiosResponse] = await Promise.all([
         getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
         getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
         getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken),
-        getPlayerTitleReports(appConfig.apiBaseUrl, accessToken),
       ]);
       setOwnedTitleIds(new Set(libraryResponse.titles.map((title) => title.id)));
       setWishlistedTitleIds(new Set(wishlistResponse.titles.map((title) => title.id)));
       setFollowedStudioIds(new Set(followedStudiosResponse.studios.map((followedStudio) => followedStudio.id)));
-      setReportedTitleIds(new Set(reportsResponse.reports.map((report) => report.titleId)));
       setPlayerActionErrorMessage(null);
     } catch (nextError) {
       setPlayerActionErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
@@ -985,16 +934,17 @@ export function StudioDetailPage() {
 
     async function load(): Promise<void> {
       try {
-        const [studioResponse, catalogResponse] = await Promise.all([
-          getPublicStudio(appConfig.apiBaseUrl, studioSlug),
-          listCatalogTitles(appConfig.apiBaseUrl, { studioSlug }),
-        ]);
+        const studioResponse = await getPublicStudio(appConfig.apiBaseUrl, studioIdentifier);
+        const catalogResponse = await listCatalogTitles(appConfig.apiBaseUrl, { studioSlug: studioResponse.studio.slug });
         if (cancelled) {
           return;
         }
 
         setStudio(studioResponse.studio);
         setTitles(catalogResponse.titles);
+        if (studioIdentifier !== studioResponse.studio.slug) {
+          navigate({ pathname: getStudioDetailPath(studioResponse.studio.slug), search: location.search }, { replace: true });
+        }
         setError(null);
       } catch (nextError) {
         if (!cancelled) {
@@ -1011,7 +961,7 @@ export function StudioDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [studioSlug]);
+  }, [location.search, navigate, studioIdentifier]);
 
   useEffect(() => {
     void refreshPlayerState();
@@ -1019,7 +969,7 @@ export function StudioDetailPage() {
 
   useEffect(() => {
     setActiveTab("catalog");
-  }, [studioSlug]);
+  }, [studioIdentifier]);
 
   const availableGenres = useMemo(
     () => Array.from(new Set(titles.flatMap((title) => parseGenreTags(title.genreDisplay)))).sort((left, right) => left.localeCompare(right)),
@@ -1059,7 +1009,7 @@ export function StudioDetailPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [contentKind, deferredQuery, resultsPerPage, selectedGenres, sort, studioSlug]);
+  }, [contentKind, deferredQuery, resultsPerPage, selectedGenres, sort, studioIdentifier]);
 
   const normalizedResultsPerPage = resultsPerPage === "all" ? 0 : Number(resultsPerPage);
   const totalPages = normalizedResultsPerPage <= 0 ? 1 : Math.max(1, Math.ceil(filteredTitles.length / normalizedResultsPerPage));
@@ -1193,41 +1143,6 @@ export function StudioDetailPage() {
     }
   }
 
-  function openReportModal(titleId: string, titleDisplayName: string): void {
-    if (!playerAccessEnabled || reportedTitleIds.has(titleId)) {
-      return;
-    }
-
-    setReportTarget({ id: titleId, displayName: titleDisplayName });
-    setReportReason("");
-    setReportErrorMessage(null);
-  }
-
-  async function submitReport(): Promise<void> {
-    if (!reportTarget || reportSubmitting) {
-      return;
-    }
-
-    setReportSubmitting(true);
-    setPlayerActionErrorMessage(null);
-    setPlayerActionStatusMessage(null);
-    setReportErrorMessage(null);
-    try {
-      const response = await createPlayerTitleReport(appConfig.apiBaseUrl, accessToken, {
-        titleId: reportTarget.id,
-        reason: reportReason.trim(),
-      });
-      setReportedTitleIds((current) => new Set(current).add(response.report.titleId));
-      setPlayerActionStatusMessage(`${reportTarget.displayName} has been reported for moderator review.`);
-      setReportTarget(null);
-      setReportReason("");
-    } catch (nextError) {
-      setReportErrorMessage(getUserFacingErrorMessage(nextError, "We couldn't submit that report right now. Please try again."));
-    } finally {
-      setReportSubmitting(false);
-    }
-  }
-
   if (loading) {
     return <LoadingPanel title="Loading studio..." />;
   }
@@ -1243,6 +1158,7 @@ export function StudioDetailPage() {
   const prominentStudioLinks = studio.links.filter((link) => isKnownStudioLink(link.url));
   const additionalStudioLinks = studio.links.filter((link) => !isKnownStudioLink(link.url));
   const studioAvatarUrl = getStudioAvatarImageUrl(studio);
+  const studioAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "studio_avatar");
   const studioFollowed = followedStudioIds.has(studio.id);
 
   return (
@@ -1280,7 +1196,11 @@ export function StudioDetailPage() {
                   </div>
                 </div>
               </div>
-              {studioAvatarUrl ? <img className="surface-panel-strong h-20 w-20 rounded-[1.5rem] object-cover shadow-[0_12px_32px_rgba(0,0,0,0.35)] md:h-24 md:w-24" src={studioAvatarUrl} alt={`${studio.displayName} avatar`} /> : null}
+              {studioAvatarUrl ? (
+                <div className="surface-panel-strong w-20 shrink-0 overflow-hidden rounded-[1.5rem] shadow-[0_12px_32px_rgba(0,0,0,0.35)] md:w-24" style={{ aspectRatio: studioAvatarAspectRatio }}>
+                  <img className="h-full w-full object-cover" src={studioAvatarUrl} alt={`${studio.displayName} avatar`} />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1407,17 +1327,18 @@ export function StudioDetailPage() {
                     <TitleCard
                       key={title.id}
                       title={title}
-                      onOpenQuickView={(selectedTitle) => setQuickViewTarget({ studioSlug: selectedTitle.studioSlug, titleSlug: selectedTitle.slug })}
+                      onOpenQuickView={(selectedTitle) => setQuickViewTarget({ studioIdentifier: selectedTitle.studioId, titleIdentifier: selectedTitle.id })}
                       playerActions={{
                         visible: playerAccessEnabled,
                         isBusy: playerStateLoading || busyTitleIds.has(title.id),
                         isWishlisted: wishlistedTitleIds.has(title.id),
                         isOwned: ownedTitleIds.has(title.id),
-                        isReported: reportedTitleIds.has(title.id),
-                        canReport: !reportedTitleIds.has(title.id),
                         onToggleWishlist: () => void toggleWishlist(title.id, title.displayName),
                         onToggleOwned: () => void toggleOwned(title.id, title.displayName),
-                        onReport: () => openReportModal(title.id, title.displayName),
+                        onShare: () => setShareTarget({
+                          displayName: title.displayName,
+                          shareUrl: getTitleSharePageUrl(title.studioId, title.id),
+                        }),
                       }}
                     />
                   ))}
@@ -1459,24 +1380,16 @@ export function StudioDetailPage() {
 
       {quickViewTarget ? (
         <TitleQuickViewModal
-          studioSlug={quickViewTarget.studioSlug}
-          titleSlug={quickViewTarget.titleSlug}
+          studioIdentifier={quickViewTarget.studioIdentifier}
+          titleIdentifier={quickViewTarget.titleIdentifier}
           onClose={() => setQuickViewTarget(null)}
         />
       ) : null}
-      {reportTarget ? (
-        <ReportTitleModal
-          titleDisplayName={reportTarget.displayName}
-          reportReason={reportReason}
-          reportErrorMessage={reportErrorMessage}
-          submitting={reportSubmitting}
-          onReportReasonChange={setReportReason}
-          onClose={() => {
-            setReportTarget(null);
-            setReportReason("");
-            setReportErrorMessage(null);
-          }}
-          onSubmit={() => void submitReport()}
+      {shareTarget ? (
+        <ShareTitleModal
+          titleDisplayName={shareTarget.displayName}
+          shareUrl={shareTarget.shareUrl}
+          onClose={() => setShareTarget(null)}
         />
       ) : null}
     </section>
@@ -1487,9 +1400,10 @@ export function StudioDetailPage() {
 export function TitleDetailPage() {
   const { session, currentUser } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const params = useParams<{ studioSlug: string; titleSlug: string }>();
-  const studioSlug = params.studioSlug ?? "";
-  const titleSlug = params.titleSlug ?? "";
+  const studioIdentifier = params.studioSlug ?? "";
+  const titleIdentifier = params.titleSlug ?? "";
   const [title, setTitle] = useState<CatalogTitleResponse["title"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1501,6 +1415,7 @@ export function TitleDetailPage() {
   const [reportReason, setReportReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [selectedShowcase, setSelectedShowcase] = useState<TitleShowcaseSelection>({ kind: "hero" });
   const [managedStudioIds, setManagedStudioIds] = useState<Set<string>>(new Set());
   const thumbnailRailRef = useRef<HTMLDivElement | null>(null);
@@ -1540,12 +1455,15 @@ export function TitleDetailPage() {
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug, accessToken || null);
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null);
         if (cancelled) {
           return;
         }
 
         setTitle(response.title);
+        if (studioIdentifier !== response.title.studioSlug || titleIdentifier !== response.title.slug) {
+          navigate({ pathname: getTitleDetailPath(response.title.studioSlug, response.title.slug), search: location.search }, { replace: true });
+        }
         if (accessToken && playerAccessEnabled) {
           await refreshPlayerState(response.title.id);
         } else {
@@ -1570,7 +1488,7 @@ export function TitleDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, playerAccessEnabled, studioSlug, titleSlug]);
+  }, [accessToken, location.search, navigate, playerAccessEnabled, studioIdentifier, titleIdentifier]);
 
   useEffect(() => {
     if (!title) {
@@ -1743,7 +1661,8 @@ export function TitleDetailPage() {
     return <ErrorPanel title="Title not found" detail="The requested title could not be loaded." />;
   }
 
-  const heroImageUrl = getHeroImageUrl(title);
+  const heroImageUrl = getPrimaryTitleShowcaseImageUrl(title);
+  const showcaseThumbnailAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_showcase");
   const canViewMetadata = moderatorAccessEnabled || managedStudioIds.has(title.studioId);
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
@@ -1766,7 +1685,9 @@ export function TitleDetailPage() {
     null;
   const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia.videoUrl);
   const spotlightThumbnails = showcaseMedia;
-  const galleryThumbnailCount = (heroImageUrl ? 1 : 0) + spotlightThumbnails.length;
+  const showPrimaryFallbackThumbnail = showcaseMedia.length === 0 && Boolean(heroImageUrl);
+  const galleryThumbnailCount = (showPrimaryFallbackThumbnail ? 1 : 0) + spotlightThumbnails.length;
+  const shareUrl = getTitleSharePageUrl(title.studioId, title.id);
 
   function scrollThumbnailRail(direction: -1 | 1): void {
     const rail = thumbnailRailRef.current;
@@ -1838,11 +1759,12 @@ export function TitleDetailPage() {
                   className="scrollbar-hidden flex gap-3 overflow-x-auto overflow-y-hidden pb-1 sm:px-14"
                   style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x", overscrollBehaviorX: "contain", scrollSnapType: "x mandatory" }}
                 >
-                  {heroImageUrl ? (
+                  {showPrimaryFallbackThumbnail && heroImageUrl ? (
                     <button
-                      className={`relative h-20 w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selectedShowcase.kind === "hero" ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
+                      className={`relative w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selectedShowcase.kind === "hero" ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
                       type="button"
                       data-showcase-selected={selectedShowcase.kind === "hero"}
+                      style={{ aspectRatio: showcaseThumbnailAspectRatio }}
                       onClick={() => setSelectedShowcase({ kind: "hero" })}
                     >
                       <img className="h-full w-full object-cover" src={heroImageUrl} alt={`${title.displayName} hero`} />
@@ -1854,9 +1776,10 @@ export function TitleDetailPage() {
                     return (
                       <button
                         key={mediaItem.id}
-                        className={`relative h-20 w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selected ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
+                        className={`relative w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selected ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
                         type="button"
                         data-showcase-selected={selected}
+                        style={{ aspectRatio: showcaseThumbnailAspectRatio }}
                         onClick={() => setSelectedShowcase({ kind: "showcase", showcaseMediaId: mediaItem.id })}
                       >
                         {mediaItem.imageUrl ? <img className="h-full w-full object-cover" src={mediaItem.imageUrl} alt={mediaItem.altText ?? `${title.displayName} preview`} /> : null}
@@ -1953,6 +1876,7 @@ export function TitleDetailPage() {
                   showReportAction={showOwnedAndReportActions}
                   onToggleWishlist={() => void handleWishlistToggle(!titleInWishlist)}
                   onToggleOwned={() => void handleLibraryToggle(!titleInLibrary)}
+                  onShare={() => setShareModalOpen(true)}
                   onReport={() => {
                     if (!existingReport) {
                       const reportField = document.getElementById("title-report-field");
@@ -2002,7 +1926,7 @@ export function TitleDetailPage() {
             <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
               <p>Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>
               <div className="mt-4">
-                <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(`/browse/${studioSlug}/${titleSlug}`)}`}>
+                <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(getTitleDetailPath(title.studioSlug, title.slug))}`}>
                   Sign In
                 </Link>
               </div>
@@ -2076,6 +2000,14 @@ export function TitleDetailPage() {
           </section>
         ) : null}
       </section>
+
+      {shareModalOpen ? (
+        <ShareTitleModal
+          titleDisplayName={title.displayName}
+          shareUrl={shareUrl}
+          onClose={() => setShareModalOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

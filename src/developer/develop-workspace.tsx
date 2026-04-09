@@ -2,22 +2,26 @@ import {
   maintainedAgeRatingAuthorities,
   maintainedGenres,
   AgeRatingAuthorityDefinition,
+  catalogMediaTypeDefinitions,
+  CatalogMediaEntry,
+  CatalogMediaTypeDefinition,
+  CatalogMediaTypeKey,
   CatalogTitleSummary,
   DeveloperStudioSummary,
   DeveloperTitle,
   GenreDefinition,
+  MigrationMediaUploadPolicy,
   StudioLink,
-  TitleMediaAsset,
   TitleMetadataVersion,
   TitleRelease,
   TitleShowcaseMedia,
   TitleReportDetail,
   TitleReportSummary,
-  migrationMediaUploadPolicies,
   normalizeGenreSlug,
 } from "@board-enthusiasts/migration-contract";
 import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getWorkspaceWorkflowButtonClass } from "../app-core";
 import {
   addDeveloperTitleReportMessage,
   activateTitle,
@@ -25,22 +29,24 @@ import {
   activateTitleMetadataVersion,
   activateTitleRelease,
   createStudio,
+  createStudioCatalogMedia,
   createStudioLink,
   createTitle,
-  createTitleShowcaseMedia,
+  createTitleCatalogMedia,
   createTitleRelease,
+  deleteStudioCatalogMedia,
   deleteStudio,
   deleteStudioLink,
-  deleteTitleMediaAsset,
-  deleteTitleShowcaseMedia,
+  deleteTitleCatalogMedia,
+  createTitleShowcaseMedia,
   enrollAsDeveloper,
   getDeveloperEnrollment,
   getDeveloperTitle,
   getDeveloperTitleReport,
   getDeveloperTitleReports,
+  listCatalogMediaTypes,
   listAgeRatingAuthorities,
   listGenres,
-  getTitleMediaAssets,
   getTitleMetadataVersions,
   getTitleReleases,
   getTitleShowcaseMedia,
@@ -48,17 +54,19 @@ import {
   listStudioLinks,
   listStudioTitles,
   deleteTitle,
+  deleteTitleShowcaseMedia,
   unarchiveTitle,
   verifyCurrentUserPassword as verifyCurrentUserPasswordApi,
   updateTitle,
   updateTitleRelease,
+  updateTitleCatalogMedia,
   updateTitleShowcaseMedia,
   updateStudio,
+  updateStudioCatalogMedia,
   updateStudioLink,
-  uploadStudioMedia,
-  uploadTitleMediaAsset,
+  uploadStudioCatalogMediaImage,
+  uploadTitleCatalogMediaImage,
   uploadTitleShowcaseMediaImage,
-  upsertTitleMediaAsset,
   upsertTitleMetadata,
 } from "../api";
 import { useAuth } from "../auth";
@@ -75,26 +83,111 @@ import {
   validateTitleFormInput,
 } from "./develop-validation";
 import {
-  formatMediaUploadGuidance,
+  formatBinaryFileSize,
   normalizeImageUpload,
 } from "../media-upload";
 
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";
-const studioMediaUploadPolicies = {
-  avatar: migrationMediaUploadPolicies.avatars,
-  logo: migrationMediaUploadPolicies.logoImages,
-  banner: migrationMediaUploadPolicies.heroImages,
-} as const;
-const titleMediaUploadPolicies = {
-  card: migrationMediaUploadPolicies.cardImages,
-  hero: migrationMediaUploadPolicies.heroImages,
-  logo: migrationMediaUploadPolicies.logoImages,
-} as const;
+
+function buildUploadPolicy(
+  definition: Pick<CatalogMediaTypeDefinition, "bucket" | "maxUploadBytes" | "acceptedMimeTypes" | "recommendedWidth" | "recommendedHeight">,
+): MigrationMediaUploadPolicy {
+  return {
+    bucket: definition.bucket,
+    maxUploadBytes: definition.maxUploadBytes,
+    acceptedMimeTypes: [...definition.acceptedMimeTypes],
+    recommendedWidth: definition.recommendedWidth,
+    recommendedHeight: definition.recommendedHeight,
+  };
+}
+
+const fallbackCatalogMediaTypes = Object.values(catalogMediaTypeDefinitions);
+const fallbackCatalogMediaTypeDefinitionByKey = fallbackCatalogMediaTypes.reduce<Record<CatalogMediaTypeKey, CatalogMediaTypeDefinition>>(
+  (definitionsByKey, definition) => {
+    definitionsByKey[definition.key] = definition;
+    return definitionsByKey;
+  },
+  {} as Record<CatalogMediaTypeKey, CatalogMediaTypeDefinition>,
+);
 
 function buildAspectRatioValue(width: number, height: number): string {
   return `${width} / ${height}`;
 }
+
+function formatCatalogMediaAspectRatio(definition: Pick<CatalogMediaTypeDefinition, "aspectWidth" | "aspectHeight">): string {
+  return `${definition.aspectWidth}:${definition.aspectHeight}`;
+}
+
+function formatCatalogMediaRecommendedResolution(definition: Pick<CatalogMediaTypeDefinition, "recommendedWidth" | "recommendedHeight">): string {
+  return `${definition.recommendedWidth} x ${definition.recommendedHeight} px`;
+}
+
+function formatCatalogMediaAcceptedFileTypes(definition: Pick<CatalogMediaTypeDefinition, "acceptedFileTypes">): string {
+  return definition.acceptedFileTypes.join(", ");
+}
+
+function getCatalogMediaTypeDefinition(
+  definitions: readonly CatalogMediaTypeDefinition[],
+  key: CatalogMediaTypeKey,
+): CatalogMediaTypeDefinition {
+  return definitions.find((definition) => definition.key === key) ?? fallbackCatalogMediaTypeDefinitionByKey[key];
+}
+
+function CatalogMediaSpecSummary({
+  definition,
+  className = "",
+}: {
+  definition: Pick<CatalogMediaTypeDefinition, "aspectWidth" | "aspectHeight" | "recommendedWidth" | "recommendedHeight" | "maxUploadBytes" | "acceptedFileTypes">;
+  className?: string;
+}) {
+  return (
+    <div className={`space-y-1 text-[11px] uppercase tracking-[0.18em] text-slate-400 xl:whitespace-nowrap ${className}`.trim()}>
+      <p>Expected {formatCatalogMediaAspectRatio(definition)} aspect ratio</p>
+      <p>Recommended {formatCatalogMediaRecommendedResolution(definition)}</p>
+      <p>Max {formatBinaryFileSize(definition.maxUploadBytes)}</p>
+      <p>Accepted {formatCatalogMediaAcceptedFileTypes(definition)}</p>
+    </div>
+  );
+}
+
+const titleSingleMediaTypeKeys = ["title_avatar", "title_card", "title_quick_view_banner", "title_logo"] as const;
+const studioMediaDraftKeys = ["avatar", "logo", "banner"] as const;
+type TitleSingleMediaTypeKey = (typeof titleSingleMediaTypeKeys)[number];
+type TitleMediaDraftKey = "avatar" | "card" | "quickViewBanner" | "logo";
+type StudioMediaDraftKey = "avatar" | "logo" | "banner";
+
+const titleMediaDraftKeyByTypeKey: Record<TitleSingleMediaTypeKey, TitleMediaDraftKey> = {
+  title_avatar: "avatar",
+  title_card: "card",
+  title_quick_view_banner: "quickViewBanner",
+  title_logo: "logo",
+};
+
+const titleMediaTypeKeyByDraftKey: Record<TitleMediaDraftKey, TitleSingleMediaTypeKey> = {
+  avatar: "title_avatar",
+  card: "title_card",
+  quickViewBanner: "title_quick_view_banner",
+  logo: "title_logo",
+};
+
+const legacyTitleMediaRoleByDraftKey: Partial<Record<TitleMediaDraftKey, "card" | "hero" | "logo">> = {
+  card: "card",
+  quickViewBanner: "hero",
+  logo: "logo",
+};
+
+const studioMediaTypeKeyByDraftKey: Record<StudioMediaDraftKey, CatalogMediaTypeKey> = {
+  avatar: "studio_avatar",
+  logo: "studio_logo",
+  banner: "studio_banner",
+};
+
+const studioMediaLabelByDraftKey: Record<StudioMediaDraftKey, string> = {
+  avatar: "Avatar",
+  logo: "Logo",
+  banner: "Banner",
+};
 
 type Domain = "studios" | "titles" | "releases";
 type Workflow =
@@ -137,7 +230,6 @@ type TitleShowcaseMediaDraft = {
   kind: "image" | "external_video";
   videoUrl: string;
   altText: string;
-  displayOrder: number;
   imageUrl: string;
   previewUrl: string;
   fileName: string | null;
@@ -167,10 +259,11 @@ type TitleDraft = {
   description: string;
   minPlayers: number;
   maxPlayers: number;
+  maxPlayersOrMore: boolean;
   ageRatingAuthority: string;
   ageRatingValue: string;
   minAgeYears: number;
-  media: Record<"card" | "hero" | "logo", TitleMediaDraft>;
+  media: Record<TitleMediaDraftKey, TitleMediaDraft>;
 };
 
 type ReleaseDraft = {
@@ -187,13 +280,13 @@ type PersistedStudioDraft = Omit<StudioDraft, "avatar" | "logo" | "banner"> & {
 };
 
 type PersistedTitleDraft = Omit<TitleDraft, "media"> & {
-  media: Record<"card" | "hero" | "logo", { url: string; previewUrl?: string; altText: string; fileName?: string | null }>;
+  media: Record<TitleMediaDraftKey, { url: string; previewUrl?: string; altText: string; fileName?: string | null }>;
 };
 
 type PersistedTitleMediaDraft = PersistedTitleDraft["media"][keyof PersistedTitleDraft["media"]];
 type PersistedStudioMediaDraft = PersistedStudioDraft["avatar"];
-type TitleMediaErrors = Record<"card" | "hero" | "logo", string | null>;
-type StudioMediaErrors = Record<"avatar" | "logo" | "banner", string | null>;
+type TitleMediaErrors = Record<TitleMediaDraftKey, string | null>;
+type StudioMediaErrors = Record<StudioMediaDraftKey, string | null>;
 
 type PersistedState = {
   workspace: WorkspaceState;
@@ -214,6 +307,10 @@ function studioDraftsMatch(left: StudioDraft, right: StudioDraft): boolean {
 
 function slugifyValue(value: string): string {
   return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['’`]/g, "")
+    .replace(/&/g, " and ")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
@@ -300,19 +397,63 @@ function normalizeAuthorityCode(value: string): string {
 }
 
 function createStudioDraft(studio?: DeveloperStudioSummary | null, links: StudioLink[] = []): StudioDraft {
+  const avatarEntry = findCatalogMediaImageEntry(studio?.catalogMediaEntries, "studio_avatar");
+  const logoEntry = findCatalogMediaImageEntry(studio?.catalogMediaEntries, "studio_logo");
+  const bannerEntry = findCatalogMediaImageEntry(studio?.catalogMediaEntries, "studio_banner");
+
   return {
     displayName: studio?.displayName ?? "",
     slug: studio?.slug ?? "",
     description: studio?.description ?? "",
-    avatar: createStudioMediaDraft(studio?.avatarUrl),
-    logo: createStudioMediaDraft(studio?.logoUrl),
-    banner: createStudioMediaDraft(studio?.bannerUrl),
+    avatar: createStudioMediaDraft(avatarEntry?.sourceUrl ?? studio?.avatarUrl),
+    logo: createStudioMediaDraft(logoEntry?.sourceUrl ?? studio?.logoUrl),
+    banner: createStudioMediaDraft(bannerEntry?.sourceUrl ?? studio?.bannerUrl),
     links: links.length > 0 ? links.map((link) => ({ id: link.id, label: link.label, url: link.url })) : [{ label: "", url: "" }],
   };
 }
 
-function createTitleDraft(title?: DeveloperTitle | null, mediaAssets: TitleMediaAsset[] = []): TitleDraft {
-  const mediaByRole = Object.fromEntries(mediaAssets.map((asset) => [asset.mediaRole, asset])) as Partial<Record<"card" | "hero" | "logo", TitleMediaAsset>>;
+function findCatalogMediaImageEntry(entries: CatalogMediaEntry[] | undefined, mediaTypeKey: CatalogMediaTypeKey): CatalogMediaEntry | null {
+  return (
+    entries
+      ?.filter((entry) => entry.mediaTypeKey === mediaTypeKey && entry.kind === "image" && entry.sourceUrl)
+      .sort((left, right) => left.displayOrder - right.displayOrder || left.createdAt.localeCompare(right.createdAt))[0] ?? null
+  );
+}
+
+function createTitleMediaDraftFromEntry(entry: CatalogMediaEntry | null, fallback?: { url?: string | null; altText?: string | null }): TitleMediaDraft {
+  const sourceUrl = entry?.sourceUrl ?? fallback?.url ?? "";
+  return {
+    url: sourceUrl,
+    previewUrl: sourceUrl,
+    altText: entry?.altText ?? fallback?.altText ?? "",
+    fileName: null,
+    file: null,
+  };
+}
+
+function findLegacyTitleMediaAsset(
+  title: DeveloperTitle | null | undefined,
+  mediaRole: "card" | "hero" | "logo",
+): DeveloperTitle["mediaAssets"][number] | null {
+  return title?.mediaAssets?.find((asset) => asset.mediaRole === mediaRole) ?? null;
+}
+
+function findSingleCatalogMediaEntry(entries: CatalogMediaEntry[] | undefined, mediaTypeKey: TitleSingleMediaTypeKey): CatalogMediaEntry | null {
+  return entries?.find((entry) => entry.mediaTypeKey === mediaTypeKey) ?? null;
+}
+
+function buildPendingCatalogMediaUrl(mediaTypeKey: CatalogMediaTypeKey): string {
+  return `https://boardenthusiasts.invalid/pending-${mediaTypeKey}`;
+}
+
+function createTitleDraft(title?: DeveloperTitle | null): TitleDraft {
+  const avatarEntry = findCatalogMediaImageEntry(title?.catalogMediaEntries, "title_avatar");
+  const cardEntry = findCatalogMediaImageEntry(title?.catalogMediaEntries, "title_card");
+  const quickViewBannerEntry = findCatalogMediaImageEntry(title?.catalogMediaEntries, "title_quick_view_banner");
+  const logoEntry = findCatalogMediaImageEntry(title?.catalogMediaEntries, "title_logo");
+  const legacyCardAsset = findLegacyTitleMediaAsset(title, "card");
+  const legacyQuickViewAsset = title?.showcaseMedia?.length ? null : findLegacyTitleMediaAsset(title, "hero");
+  const legacyLogoAsset = findLegacyTitleMediaAsset(title, "logo");
   return {
     displayName: title?.displayName ?? "",
     slug: title?.slug ?? "title",
@@ -326,13 +467,15 @@ function createTitleDraft(title?: DeveloperTitle | null, mediaAssets: TitleMedia
     description: title?.description ?? "",
     minPlayers: title?.minPlayers ?? 1,
     maxPlayers: title?.maxPlayers ?? 4,
+    maxPlayersOrMore: title?.maxPlayersOrMore ?? false,
     ageRatingAuthority: title?.ageRatingAuthority ?? "",
     ageRatingValue: title?.ageRatingValue ?? "",
     minAgeYears: title?.minAgeYears ?? 10,
     media: {
-      card: { url: mediaByRole.card?.sourceUrl ?? "", previewUrl: mediaByRole.card?.sourceUrl ?? "", altText: mediaByRole.card?.altText ?? "", fileName: null, file: null },
-      hero: { url: mediaByRole.hero?.sourceUrl ?? "", previewUrl: mediaByRole.hero?.sourceUrl ?? "", altText: mediaByRole.hero?.altText ?? "", fileName: null, file: null },
-      logo: { url: mediaByRole.logo?.sourceUrl ?? "", previewUrl: mediaByRole.logo?.sourceUrl ?? "", altText: mediaByRole.logo?.altText ?? "", fileName: null, file: null },
+      avatar: createTitleMediaDraftFromEntry(avatarEntry),
+      card: createTitleMediaDraftFromEntry(cardEntry, { url: legacyCardAsset?.sourceUrl ?? title?.cardImageUrl, altText: legacyCardAsset?.altText }),
+      quickViewBanner: createTitleMediaDraftFromEntry(quickViewBannerEntry, { url: legacyQuickViewAsset?.sourceUrl, altText: legacyQuickViewAsset?.altText }),
+      logo: createTitleMediaDraftFromEntry(logoEntry, { url: legacyLogoAsset?.sourceUrl, altText: legacyLogoAsset?.altText }),
     },
   };
 }
@@ -346,13 +489,12 @@ function createReleaseDraft(release?: TitleRelease | null): ReleaseDraft {
   };
 }
 
-function createTitleShowcaseMediaDraft(item?: TitleShowcaseMedia | null, displayOrder = 0): TitleShowcaseMediaDraft {
+function createTitleShowcaseMediaDraft(item?: TitleShowcaseMedia | null): TitleShowcaseMediaDraft {
   return {
     id: item?.id,
     kind: item?.kind ?? "image",
     videoUrl: item?.videoUrl ?? "",
     altText: item?.altText ?? "",
-    displayOrder: item?.displayOrder ?? displayOrder,
     imageUrl: item?.imageUrl ?? "",
     previewUrl: item?.imageUrl ?? "",
     fileName: null,
@@ -431,12 +573,14 @@ function toPersistedTitleDraft(draft: TitleDraft): PersistedTitleDraft {
     description: draft.description ?? "",
     minPlayers: Number.isFinite(draft.minPlayers) ? draft.minPlayers : 1,
     maxPlayers: Number.isFinite(draft.maxPlayers) ? draft.maxPlayers : 4,
+    maxPlayersOrMore: draft.maxPlayersOrMore === true,
     ageRatingAuthority: draft.ageRatingAuthority ?? "",
     ageRatingValue: draft.ageRatingValue ?? "",
     minAgeYears: Number.isFinite(draft.minAgeYears) ? draft.minAgeYears : 0,
     media: {
+      avatar: normalizeMedia(draft.media.avatar),
       card: normalizeMedia(draft.media.card),
-      hero: normalizeMedia(draft.media.hero),
+      quickViewBanner: normalizeMedia(draft.media.quickViewBanner),
       logo: normalizeMedia(draft.media.logo),
     },
   };
@@ -469,12 +613,14 @@ function fromPersistedTitleDraft(draft: PersistedTitleDraft): TitleDraft {
     description: draft?.description ?? fallback.description,
     minPlayers: typeof draft?.minPlayers === "number" ? draft.minPlayers : fallback.minPlayers,
     maxPlayers: typeof draft?.maxPlayers === "number" ? draft.maxPlayers : fallback.maxPlayers,
+    maxPlayersOrMore: draft?.maxPlayersOrMore === true,
     ageRatingAuthority: draft?.ageRatingAuthority ?? fallback.ageRatingAuthority,
     ageRatingValue: draft?.ageRatingValue ?? fallback.ageRatingValue,
     minAgeYears: typeof draft?.minAgeYears === "number" ? draft.minAgeYears : fallback.minAgeYears,
     media: {
+      avatar: restoreMedia(draft?.media?.avatar),
       card: restoreMedia(draft?.media?.card),
-      hero: restoreMedia(draft?.media?.hero),
+      quickViewBanner: restoreMedia(draft?.media?.quickViewBanner ?? (draft?.media as Record<string, Partial<PersistedTitleMediaDraft> | undefined> | undefined)?.hero),
       logo: restoreMedia(draft?.media?.logo),
     },
   };
@@ -663,6 +809,14 @@ function formatMinimumAge(value: number): string {
   return value >= 18 ? "18+" : String(value);
 }
 
+function formatPlayerCount(value: Pick<TitleDraft, "minPlayers" | "maxPlayers" | "maxPlayersOrMore">): string {
+  if (value.maxPlayersOrMore) {
+    return value.minPlayers === value.maxPlayers ? `${value.maxPlayers}+ players` : `${value.minPlayers}-${value.maxPlayers}+ players`;
+  }
+
+  return value.minPlayers === value.maxPlayers ? `${value.minPlayers} player${value.minPlayers === 1 ? "" : "s"}` : `${value.minPlayers}-${value.maxPlayers} players`;
+}
+
 function createEmptyStudioMediaErrors(): StudioMediaErrors {
   return {
     avatar: null,
@@ -673,10 +827,19 @@ function createEmptyStudioMediaErrors(): StudioMediaErrors {
 
 function createEmptyTitleMediaErrors(): TitleMediaErrors {
   return {
+    avatar: null,
     card: null,
-    hero: null,
+    quickViewBanner: null,
     logo: null,
   };
+}
+
+function hasConfiguredTitleMedia(media: TitleMediaDraft): boolean {
+  return Boolean(media.url.trim() || media.previewUrl.trim() || media.file || media.fileName);
+}
+
+function deriveActiveTitleMediaTypeKeys(draft: TitleDraft): TitleSingleMediaTypeKey[] {
+  return titleSingleMediaTypeKeys.filter((mediaTypeKey) => hasConfiguredTitleMedia(draft.media[titleMediaDraftKeyByTypeKey[mediaTypeKey]]));
 }
 
 function previewMediaUrl(media: Pick<TitleMediaDraft, "previewUrl" | "url">): string {
@@ -771,11 +934,7 @@ function WorkflowButton({
 }) {
   return (
     <button
-      className={
-        active
-          ? "w-full rounded-[0.9rem] border border-cyan-300/45 bg-cyan-300/15 px-3 py-2 text-left text-sm text-cyan-50"
-          : "surface-panel-strong w-full rounded-[0.9rem] px-3 py-2 text-left text-sm text-slate-200 transition hover:border-cyan-300/45 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-      }
+      className={getWorkspaceWorkflowButtonClass(active)}
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -948,81 +1107,107 @@ function TokenField({
   );
 }
 
-function ImageField({
-  label,
+function TitleMediaListItem({
+  mediaTypeKey,
+  definition,
+  availableTypeLabels,
+  availableTypeKeys,
   state,
-  previewUrl,
-  guidance,
-  previewAspectRatio,
   error,
-  accept,
   disabled,
+  onTypeChange,
   onUrlChange,
   onAltTextChange,
   onFileChange,
   onRemove,
 }: {
-  label: string;
+  mediaTypeKey: TitleSingleMediaTypeKey;
+  definition: CatalogMediaTypeDefinition;
+  availableTypeLabels: Record<TitleSingleMediaTypeKey, string>;
+  availableTypeKeys: TitleSingleMediaTypeKey[];
   state: TitleMediaDraft;
-  previewUrl: string;
-  guidance: string;
-  previewAspectRatio: string;
   error?: string | null;
-  accept: string;
   disabled: boolean;
+  onTypeChange: (nextTypeKey: TitleSingleMediaTypeKey) => void;
   onUrlChange: (value: string) => void;
   onAltTextChange: (value: string) => void;
   onFileChange: (file: File | null) => void;
   onRemove: () => void;
 }) {
-  const hasSelection = Boolean(previewUrl || state.file);
+  const currentPreviewUrl = previewMediaUrl(state);
+  const typeSelectId = useId();
 
   return (
-    <section className="surface-panel-strong rounded-[1rem] p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{label}</div>
-      <div className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40" style={{ aspectRatio: previewAspectRatio }}>
-        {previewUrl ? <img className="h-full w-full object-cover" src={previewUrl} alt={state.altText || `${label} media`} /> : <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>}
+    <article className="surface-panel-strong rounded-[1rem] p-4" data-title-media-type={mediaTypeKey}>
+      <div className="grid gap-4 xl:grid-cols-[15.5rem_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40" style={{ aspectRatio: buildAspectRatioValue(definition.recommendedWidth, definition.recommendedHeight) }}>
+            {currentPreviewUrl ? (
+              <img className="h-full w-full object-cover" src={currentPreviewUrl} alt={state.altText || `${definition.displayName} media`} />
+            ) : (
+              <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>
+            )}
+          </div>
+          <CatalogMediaSpecSummary definition={definition} />
+        </div>
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.42fr)_auto]">
+            <Field label="Media type" asLabel={false} inputId={typeSelectId}>
+              <select id={typeSelectId} value={mediaTypeKey} onChange={(event) => onTypeChange(event.currentTarget.value as TitleSingleMediaTypeKey)} disabled={disabled}>
+                {availableTypeKeys.map((typeKey) => {
+                  return (
+                    <option key={typeKey} value={typeKey}>
+                      {availableTypeLabels[typeKey]}
+                    </option>
+                  );
+                })}
+              </select>
+            </Field>
+            <div className="flex items-end justify-start lg:justify-end">
+              <button className="danger-button" type="button" onClick={onRemove} disabled={disabled}>
+                Remove item
+              </button>
+            </div>
+          </div>
+          <p className="text-sm leading-7 text-slate-300">{definition.usageSummary}</p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Field label="URL">
+              <input value={state.url} onChange={(event) => onUrlChange(event.currentTarget.value)} disabled={disabled} placeholder="https://..." />
+            </Field>
+            <Field label="Alt text">
+              <input value={state.altText} onChange={(event) => onAltTextChange(event.currentTarget.value)} disabled={disabled} />
+            </Field>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={`secondary-button inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
+              Upload image
+              <input className="sr-only" type="file" accept={definition.acceptedMimeTypes.join(",")} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
+            </label>
+            <span className="text-sm text-slate-400">{state.fileName ?? "No upload selected"}</span>
+          </div>
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        </div>
       </div>
-      <label className="field mt-3 block">
-        <span>URL</span>
-        <input className="mt-2 w-full" value={state.url} onChange={(event) => onUrlChange(event.currentTarget.value)} disabled={disabled} placeholder="https://..." />
-      </label>
-      <label className="field mt-3 block">
-        <span>Alt text</span>
-        <input className="mt-2 w-full" value={state.altText} onChange={(event) => onAltTextChange(event.currentTarget.value)} disabled={disabled} />
-      </label>
-      <label className={`secondary-button mt-3 inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
-        Upload image
-        <input className="sr-only" type="file" accept={accept} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
-      </label>
-      <p className="mt-2 text-xs text-slate-400">{guidance}</p>
-      {state.fileName ? <p className="mt-2 text-sm text-slate-400">{state.fileName}</p> : null}
-      {hasSelection ? (
-        <button className="secondary-button mt-3" type="button" onClick={onRemove} disabled={disabled}>
-          Remove media
-        </button>
-      ) : null}
-      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-    </section>
+    </article>
   );
 }
 
-function StudioImageField({
+function StudioMediaListItem({
+  mediaRole,
   label,
   state,
-  guidance,
+  definition,
   error,
-  accept,
   disabled,
   onUrlChange,
   onFileChange,
   onRemove,
 }: {
+  mediaRole: StudioMediaDraftKey;
   label: string;
   state: StudioMediaDraft;
-  guidance: string;
+  definition: CatalogMediaTypeDefinition;
   error?: string | null;
-  accept: string;
   disabled: boolean;
   onUrlChange: (value: string) => void;
   onFileChange: (file: File | null) => void;
@@ -1031,30 +1216,44 @@ function StudioImageField({
   const previewUrl = getStudioMediaPreview(state);
 
   return (
-    <section className="surface-panel-strong rounded-[1rem] p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{label}</div>
-      <div className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40">
-        {previewUrl ? <img className="h-32 w-full object-cover" src={previewUrl} alt={`${label} preview`} /> : <div className="grid h-32 place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>}
+    <article className="surface-panel-strong rounded-[1rem] p-4" data-studio-media-role={mediaRole}>
+      <div className="grid gap-4 xl:grid-cols-[15.5rem_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/40" style={{ aspectRatio: buildAspectRatioValue(definition.recommendedWidth, definition.recommendedHeight) }}>
+            {previewUrl ? (
+              <img className="h-full w-full object-cover" src={previewUrl} alt={`${label} preview`} />
+            ) : (
+              <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-400">No image added</div>
+            )}
+          </div>
+          <CatalogMediaSpecSummary definition={definition} />
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75">{label}</p>
+              <p className="mt-2 text-sm leading-7 text-slate-300">{definition.usageSummary}</p>
+            </div>
+          </div>
+          <Field label="URL">
+            <input value={state.url} onChange={(event) => onUrlChange(event.currentTarget.value)} disabled={disabled} placeholder="https://..." />
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={`secondary-button inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
+              Upload image
+              <input className="sr-only" type="file" accept={definition.acceptedMimeTypes.join(",")} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
+            </label>
+            <span className="text-sm text-slate-400">{state.fileName ?? "No upload selected"}</span>
+            {previewUrl ? (
+              <button className="secondary-button" type="button" onClick={onRemove} disabled={disabled}>
+                Remove media
+              </button>
+            ) : null}
+          </div>
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        </div>
       </div>
-      <label className="field mt-3 block">
-        <span>URL</span>
-        <input className="mt-2 w-full" value={state.url} onChange={(event) => onUrlChange(event.currentTarget.value)} disabled={disabled} placeholder="https://..." />
-      </label>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <label className={`secondary-button inline-flex cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
-          Upload image
-          <input className="sr-only" type="file" accept={accept} disabled={disabled} onChange={(event) => onFileChange(event.currentTarget.files?.[0] ?? null)} />
-        </label>
-        <span className="text-sm text-slate-400">{state.fileName ?? "No upload selected"}</span>
-        {previewUrl ? (
-          <button className="secondary-button" type="button" onClick={onRemove} disabled={disabled}>
-            Remove media
-          </button>
-        ) : null}
-      </div>
-      <p className="mt-2 text-xs text-slate-400">{guidance}</p>
-      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-    </section>
+    </article>
   );
 }
 
@@ -1062,6 +1261,9 @@ function StudioPreviewModal({ studio, onClose }: { studio: StudioDraft; onClose:
   const bannerPreview = getStudioMediaPreview(studio.banner);
   const avatarPreview = getStudioMediaPreview(studio.avatar);
   const logoPreview = getStudioMediaPreview(studio.logo);
+  const identityPreviewDefinition = avatarPreview
+    ? fallbackCatalogMediaTypeDefinitionByKey["studio_avatar"]
+    : fallbackCatalogMediaTypeDefinitionByKey["studio_logo"];
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="studio-preview-title" onClick={onClose}>
@@ -1072,11 +1274,16 @@ function StudioPreviewModal({ studio, onClose }: { studio: StudioDraft; onClose:
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <div className="flex items-end gap-4">
               {avatarPreview || logoPreview ? (
-                <img
-                  className="h-20 w-20 rounded-[1.25rem] border border-white/10 object-cover"
-                  src={avatarPreview || logoPreview}
-                  alt={`${studio.displayName || "Studio"} avatar`}
-                />
+                <div
+                  className="w-20 overflow-hidden rounded-[1.25rem] border border-white/10 md:w-24"
+                  style={{ aspectRatio: buildAspectRatioValue(identityPreviewDefinition.recommendedWidth, identityPreviewDefinition.recommendedHeight) }}
+                >
+                  <img
+                    className="h-full w-full object-cover"
+                    src={avatarPreview || logoPreview}
+                    alt={`${studio.displayName || "Studio"} avatar`}
+                  />
+                </div>
               ) : null}
               <div>
                 <h2 id="studio-preview-title" className="text-3xl font-semibold text-white">
@@ -1288,12 +1495,12 @@ export function DevelopWorkspacePage() {
   const [studios, setStudios] = useState<DeveloperStudioSummary[]>([]);
   const [genreCatalog, setGenreCatalog] = useState<GenreDefinition[]>([]);
   const [ageRatingAuthorityCatalog, setAgeRatingAuthorityCatalog] = useState<AgeRatingAuthorityDefinition[]>([]);
+  const [catalogMediaTypeCatalog, setCatalogMediaTypeCatalog] = useState<CatalogMediaTypeDefinition[]>(fallbackCatalogMediaTypes);
   const [links, setLinks] = useState<StudioLink[]>([]);
   const [linksStudioId, setLinksStudioId] = useState<string | null>(null);
   const [titles, setTitles] = useState<CatalogTitleSummary[]>([]);
   const [developerTitle, setDeveloperTitle] = useState<DeveloperTitle | null>(null);
   const [metadataVersions, setMetadataVersions] = useState<TitleMetadataVersion[]>([]);
-  const [mediaAssets, setMediaAssets] = useState<TitleMediaAsset[]>([]);
   const [showcaseMediaDrafts, setShowcaseMediaDrafts] = useState<TitleShowcaseMediaDraft[]>([]);
   const [reports, setReports] = useState<TitleReportSummary[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(persistedState?.selectedReportId ?? null);
@@ -1312,11 +1519,15 @@ export function DevelopWorkspacePage() {
   const [titleCreateTouched, setTitleCreateTouched] = useState<Record<string, boolean>>(persistedState?.titleCreate?.touched ?? {});
   const [titleCreateContextStudioId, setTitleCreateContextStudioId] = useState<string | null>(persistedState?.titleCreate?.studioId ?? null);
   const [titleCreateMediaErrors, setTitleCreateMediaErrors] = useState<TitleMediaErrors>(() => createEmptyTitleMediaErrors());
+  const [titleCreateMediaList, setTitleCreateMediaList] = useState<TitleSingleMediaTypeKey[]>(() => deriveActiveTitleMediaTypeKeys(persistedState?.titleCreate ? fromPersistedTitleDraft(persistedState.titleCreate.draft) : createTitleDraft()));
+  const [titleCreateNextMediaType, setTitleCreateNextMediaType] = useState<TitleSingleMediaTypeKey>("title_avatar");
   const [metadataDraft, setMetadataDraft] = useState<TitleDraft>(persistedState?.titleMetadata ? fromPersistedTitleDraft(persistedState.titleMetadata.draft) : createTitleDraft());
   const [metadataTouched, setMetadataTouched] = useState<Record<string, boolean>>(persistedState?.titleMetadata?.touched ?? {});
   const [metadataEditing, setMetadataEditing] = useState(persistedState?.titleMetadata?.editing ?? false);
   const [metadataContextId, setMetadataContextId] = useState<string | null>(persistedState?.titleMetadata?.titleId ?? null);
   const [metadataMediaErrors, setMetadataMediaErrors] = useState<TitleMediaErrors>(() => createEmptyTitleMediaErrors());
+  const [metadataMediaList, setMetadataMediaList] = useState<TitleSingleMediaTypeKey[]>(() => deriveActiveTitleMediaTypeKeys(persistedState?.titleMetadata ? fromPersistedTitleDraft(persistedState.titleMetadata.draft) : createTitleDraft()));
+  const [metadataNextMediaType, setMetadataNextMediaType] = useState<TitleSingleMediaTypeKey>("title_avatar");
   const [showcaseMediaError, setShowcaseMediaError] = useState<string | null>(null);
   const [releaseCreateDraft, setReleaseCreateDraft] = useState<ReleaseDraft>(fromPersistedReleaseDraft(persistedState?.releaseCreate?.draft));
   const [releaseCreateTouched, setReleaseCreateTouched] = useState<Record<string, boolean>>(persistedState?.releaseCreate?.touched ?? {});
@@ -1351,6 +1562,60 @@ export function DevelopWorkspacePage() {
     () => ageRatingAuthorityCatalog.map((authority) => ({ value: authority.code, label: authority.displayName })),
     [ageRatingAuthorityCatalog],
   );
+  const studioMediaDefinitionByDraftKey = useMemo<Record<StudioMediaDraftKey, CatalogMediaTypeDefinition>>(
+    () => ({
+      avatar: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "studio_avatar"),
+      logo: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "studio_logo"),
+      banner: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "studio_banner"),
+    }),
+    [catalogMediaTypeCatalog],
+  );
+  const titleMediaDefinitionByDraftKey = useMemo<Record<TitleMediaDraftKey, CatalogMediaTypeDefinition>>(
+    () => ({
+      avatar: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "title_avatar"),
+      card: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "title_card"),
+      quickViewBanner: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "title_quick_view_banner"),
+      logo: getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "title_logo"),
+    }),
+    [catalogMediaTypeCatalog],
+  );
+  const titleMediaDefinitionByTypeKey = useMemo<Record<TitleSingleMediaTypeKey, CatalogMediaTypeDefinition>>(
+    () => ({
+      title_avatar: titleMediaDefinitionByDraftKey.avatar,
+      title_card: titleMediaDefinitionByDraftKey.card,
+      title_quick_view_banner: titleMediaDefinitionByDraftKey.quickViewBanner,
+      title_logo: titleMediaDefinitionByDraftKey.logo,
+    }),
+    [titleMediaDefinitionByDraftKey],
+  );
+  const showcaseMediaDefinition = useMemo(() => getCatalogMediaTypeDefinition(catalogMediaTypeCatalog, "title_showcase"), [catalogMediaTypeCatalog]);
+  const studioMediaUploadPolicies = useMemo<Record<StudioMediaDraftKey, MigrationMediaUploadPolicy>>(
+    () => ({
+      avatar: buildUploadPolicy(studioMediaDefinitionByDraftKey.avatar),
+      logo: buildUploadPolicy(studioMediaDefinitionByDraftKey.logo),
+      banner: buildUploadPolicy(studioMediaDefinitionByDraftKey.banner),
+    }),
+    [studioMediaDefinitionByDraftKey],
+  );
+  const titleMediaUploadPolicies = useMemo<Record<TitleMediaDraftKey | "showcase", MigrationMediaUploadPolicy>>(
+    () => ({
+      avatar: buildUploadPolicy(titleMediaDefinitionByDraftKey.avatar),
+      card: buildUploadPolicy(titleMediaDefinitionByDraftKey.card),
+      quickViewBanner: buildUploadPolicy(titleMediaDefinitionByDraftKey.quickViewBanner),
+      logo: buildUploadPolicy(titleMediaDefinitionByDraftKey.logo),
+      showcase: buildUploadPolicy(showcaseMediaDefinition),
+    }),
+    [showcaseMediaDefinition, titleMediaDefinitionByDraftKey],
+  );
+  const titleMediaTypeLabelByKey = useMemo<Record<TitleSingleMediaTypeKey, string>>(
+    () => ({
+      title_avatar: titleMediaDefinitionByTypeKey.title_avatar.displayName,
+      title_card: titleMediaDefinitionByTypeKey.title_card.displayName,
+      title_quick_view_banner: titleMediaDefinitionByTypeKey.title_quick_view_banner.displayName,
+      title_logo: titleMediaDefinitionByTypeKey.title_logo.displayName,
+    }),
+    [titleMediaDefinitionByTypeKey],
+  );
 
   const studioCreateValidation = useMemo(() => validateStudioInput(studioCreateDraft, { existingSlugs: studios.map((studio) => studio.slug) }), [studioCreateDraft, studios]);
   const studioOverviewValidation = useMemo(() => validateStudioInput(studioOverviewDraft, { existingSlugs: studios.map((studio) => studio.slug), currentSlug: activeStudio?.slug ?? null }), [activeStudio?.slug, studioOverviewDraft, studios]);
@@ -1359,6 +1624,26 @@ export function DevelopWorkspacePage() {
   const releaseCreateValidation = useMemo(() => validateReleaseInput(releaseCreateDraft), [releaseCreateDraft]);
   const releaseValidation = useMemo(() => validateReleaseInput(releaseDraft), [releaseDraft]);
   const minimumReleaseExpirationInput = useMemo(() => formatDateTimeLocalInput(getMinimumReleaseExpirationDate()), []);
+  const missingTitleCreateMediaTypes = useMemo(() => titleSingleMediaTypeKeys.filter((mediaTypeKey) => !titleCreateMediaList.includes(mediaTypeKey)), [titleCreateMediaList]);
+  const missingMetadataMediaTypes = useMemo(() => titleSingleMediaTypeKeys.filter((mediaTypeKey) => !metadataMediaList.includes(mediaTypeKey)), [metadataMediaList]);
+
+  useEffect(() => {
+    if (missingTitleCreateMediaTypes.length === 0) {
+      return;
+    }
+    if (!missingTitleCreateMediaTypes.includes(titleCreateNextMediaType)) {
+      setTitleCreateNextMediaType(missingTitleCreateMediaTypes[0]);
+    }
+  }, [missingTitleCreateMediaTypes, titleCreateNextMediaType]);
+
+  useEffect(() => {
+    if (missingMetadataMediaTypes.length === 0) {
+      return;
+    }
+    if (!missingMetadataMediaTypes.includes(metadataNextMediaType)) {
+      setMetadataNextMediaType(missingMetadataMediaTypes[0]);
+    }
+  }, [metadataNextMediaType, missingMetadataMediaTypes]);
 
   useEffect(() => {
     const nextSearchParams = new URLSearchParams();
@@ -1380,11 +1665,14 @@ export function DevelopWorkspacePage() {
       studioCreateDraft: toPersistedStudioDraft(studioCreateDraft),
       studioCreateTouched,
       studioOverview:
-        activeStudio && studioOverviewContextId === activeStudio.id
+        activeStudio && studioOverviewContextId === activeStudio.id && studioOverviewEditing
           ? { studioId: activeStudio.id, draft: toPersistedStudioDraft(studioOverviewDraft), touched: studioOverviewTouched, editing: studioOverviewEditing }
           : undefined,
       titleCreate: workspace.studioId && titleCreateContextStudioId === workspace.studioId ? { studioId: workspace.studioId, draft: toPersistedTitleDraft(titleCreateDraft), touched: titleCreateTouched } : undefined,
-      titleMetadata: activeTitle && metadataContextId === activeTitle.id ? { titleId: activeTitle.id, draft: toPersistedTitleDraft(metadataDraft), touched: metadataTouched, editing: metadataEditing } : undefined,
+      titleMetadata:
+        activeTitle && metadataContextId === activeTitle.id && metadataEditing
+          ? { titleId: activeTitle.id, draft: toPersistedTitleDraft(metadataDraft), touched: metadataTouched, editing: metadataEditing }
+          : undefined,
       releaseCreate: workspace.titleId && releaseCreateContextTitleId === workspace.titleId ? { titleId: workspace.titleId, draft: releaseCreateDraft, touched: releaseCreateTouched } : undefined,
       releaseOverview: activeRelease && releaseContextId === activeRelease.id ? { releaseId: activeRelease.id, draft: releaseDraft, touched: releaseTouched, editing: releaseEditing } : undefined,
       selectedReportId,
@@ -1454,6 +1742,31 @@ export function DevelopWorkspacePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!accessToken || !developerAccessEnabled) {
+      setCatalogMediaTypeCatalog(fallbackCatalogMediaTypes);
+      return;
+    }
+
+    let cancelled = false;
+
+    void listCatalogMediaTypes(appConfig.apiBaseUrl, accessToken)
+      .then((response) => {
+        if (!cancelled) {
+          setCatalogMediaTypeCatalog(response.mediaTypes.length > 0 ? response.mediaTypes : fallbackCatalogMediaTypes);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCatalogMediaTypeCatalog(fallbackCatalogMediaTypes);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, developerAccessEnabled]);
 
   useEffect(() => {
     if (genreOptions.length === 0) {
@@ -1594,7 +1907,6 @@ export function DevelopWorkspacePage() {
     if (!workspace.titleId || !developerAccessEnabled) {
       setDeveloperTitle(null);
       setMetadataVersions([]);
-      setMediaAssets([]);
       setShowcaseMediaDrafts([]);
       setReports([]);
       setReleases([]);
@@ -1608,10 +1920,9 @@ export function DevelopWorkspacePage() {
     async function loadTitleScope(): Promise<void> {
       setWorkspaceLoading(true);
       try {
-        const [titleResponse, metadataResponse, mediaResponse, showcaseResponse, reportResponse, releaseResponse] = await Promise.all([
+        const [titleResponse, metadataResponse, showcaseResponse, reportResponse, releaseResponse] = await Promise.all([
           getDeveloperTitle(appConfig.apiBaseUrl, accessToken, workspace.titleId),
           getTitleMetadataVersions(appConfig.apiBaseUrl, accessToken, workspace.titleId),
-          getTitleMediaAssets(appConfig.apiBaseUrl, accessToken, workspace.titleId),
           getTitleShowcaseMedia(appConfig.apiBaseUrl, accessToken, workspace.titleId),
           getDeveloperTitleReports(appConfig.apiBaseUrl, accessToken, workspace.titleId),
           getTitleReleases(appConfig.apiBaseUrl, accessToken, workspace.titleId),
@@ -1623,8 +1934,7 @@ export function DevelopWorkspacePage() {
         const orderedReleases = [...releaseResponse.releases].sort((left, right) => (right.publishedAt ?? right.createdAt).localeCompare(left.publishedAt ?? left.createdAt));
         setDeveloperTitle(titleResponse.title);
         setMetadataVersions(metadataResponse.metadataVersions);
-        setMediaAssets(mediaResponse.mediaAssets);
-        setShowcaseMediaDrafts(showcaseResponse.showcaseMedia.map((item, index) => createTitleShowcaseMediaDraft(item, index)));
+        setShowcaseMediaDrafts(showcaseResponse.showcaseMedia.map((item) => createTitleShowcaseMediaDraft(item)));
         setReports(reportResponse.reports);
         setReleases(orderedReleases);
         setSelectedReportId((current) => reportResponse.reports.find((report) => report.id === current)?.id ?? reportResponse.reports[0]?.id ?? null);
@@ -1703,7 +2013,9 @@ export function DevelopWorkspacePage() {
 
   useEffect(() => {
     if (!activeTitle) {
-      setMetadataDraft(createTitleDraft());
+      const nextDraft = createTitleDraft();
+      setMetadataDraft(nextDraft);
+      setMetadataMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
       setMetadataTouched({});
       setMetadataEditing(false);
       setMetadataContextId(null);
@@ -1712,14 +2024,17 @@ export function DevelopWorkspacePage() {
     }
 
     if (metadataContextId !== activeTitle.id) {
-      const persistedMetadata = persistedState?.titleMetadata?.titleId === activeTitle.id ? persistedState.titleMetadata : null;
-      setMetadataDraft(persistedMetadata ? fromPersistedTitleDraft(persistedMetadata.draft) : createTitleDraft(activeTitle, mediaAssets));
+      const persistedMetadata =
+        persistedState?.titleMetadata?.titleId === activeTitle.id && persistedState.titleMetadata.editing ? persistedState.titleMetadata : null;
+      const nextDraft = persistedMetadata ? fromPersistedTitleDraft(persistedMetadata.draft) : createTitleDraft(activeTitle);
+      setMetadataDraft(nextDraft);
+      setMetadataMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
       setMetadataTouched(persistedMetadata?.touched ?? {});
       setMetadataEditing(persistedMetadata?.editing ?? false);
       setMetadataMediaErrors(createEmptyTitleMediaErrors());
       setMetadataContextId(activeTitle.id);
     }
-  }, [activeTitle, mediaAssets, metadataContextId, persistedState]);
+  }, [activeTitle, metadataContextId, persistedState]);
 
   useEffect(() => {
     if (!activeRelease) {
@@ -1819,7 +2134,7 @@ export function DevelopWorkspacePage() {
     }
   }
 
-  function setTitleMediaError(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", value: string | null): void {
+  function setTitleMediaError(target: "create" | "metadata", mediaRole: TitleMediaDraftKey, value: string | null): void {
     const updater = (current: TitleMediaErrors): TitleMediaErrors => ({
       ...current,
       [mediaRole]: value,
@@ -1832,7 +2147,7 @@ export function DevelopWorkspacePage() {
     setMetadataMediaErrors(updater);
   }
 
-  async function handleTitleMediaUpload(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", file: File | null): Promise<void> {
+  async function handleTitleMediaUpload(target: "create" | "metadata", mediaRole: TitleMediaDraftKey, file: File | null): Promise<void> {
     if (!file) {
       return;
     }
@@ -1940,7 +2255,7 @@ export function DevelopWorkspacePage() {
     setMetadataDraft((current) => ({ ...current, minAgeYears: nextAge }));
   }
 
-  function updateTitleMedia(target: "create" | "metadata", mediaRole: "card" | "hero" | "logo", patch: Partial<TitleMediaDraft>): void {
+  function updateTitleMedia(target: "create" | "metadata", mediaRole: TitleMediaDraftKey, patch: Partial<TitleMediaDraft>): void {
     const apply = (current: TitleDraft): TitleDraft => ({
       ...current,
       media: {
@@ -1960,26 +2275,93 @@ export function DevelopWorkspacePage() {
     setMetadataDraft(apply);
   }
 
+  function updateMaxPlayersOrMore(target: "create" | "metadata", checked: boolean): void {
+    const apply = (current: TitleDraft): TitleDraft => ({ ...current, maxPlayersOrMore: checked });
+
+    if (target === "create") {
+      setTitleCreateDraft(apply);
+      return;
+    }
+
+    setMetadataDraft(apply);
+  }
+
+  function updateTitleMediaList(target: "create" | "metadata", updater: (current: TitleSingleMediaTypeKey[]) => TitleSingleMediaTypeKey[]): void {
+    if (target === "create") {
+      setTitleCreateMediaList(updater);
+      return;
+    }
+
+    setMetadataMediaList(updater);
+  }
+
+  function addTitleMediaListItem(target: "create" | "metadata", mediaTypeKey: TitleSingleMediaTypeKey): void {
+    updateTitleMediaList(target, (current) => (current.includes(mediaTypeKey) ? current : [...current, mediaTypeKey]));
+  }
+
+  function removeTitleMediaListItem(target: "create" | "metadata", mediaTypeKey: TitleSingleMediaTypeKey): void {
+    const draftKey = titleMediaDraftKeyByTypeKey[mediaTypeKey];
+    updateTitleMedia(target, draftKey, { url: "", previewUrl: "", altText: "", file: null, fileName: null });
+    setTitleMediaError(target, draftKey, null);
+    updateTitleMediaList(target, (current) => current.filter((candidate) => candidate !== mediaTypeKey));
+  }
+
+  function changeTitleMediaListItemType(target: "create" | "metadata", previousTypeKey: TitleSingleMediaTypeKey, nextTypeKey: TitleSingleMediaTypeKey): void {
+    if (previousTypeKey === nextTypeKey) {
+      return;
+    }
+
+    const previousDraftKey = titleMediaDraftKeyByTypeKey[previousTypeKey];
+    const nextDraftKey = titleMediaDraftKeyByTypeKey[nextTypeKey];
+    const sourceDraft = (target === "create" ? titleCreateDraft : metadataDraft).media[previousDraftKey];
+    const sourceError = (target === "create" ? titleCreateMediaErrors : metadataMediaErrors)[previousDraftKey];
+
+    updateTitleMedia(target, nextDraftKey, {
+      url: sourceDraft.url,
+      previewUrl: sourceDraft.previewUrl,
+      altText: sourceDraft.altText,
+      file: sourceDraft.file,
+      fileName: sourceDraft.fileName,
+    });
+    updateTitleMedia(target, previousDraftKey, { url: "", previewUrl: "", altText: "", file: null, fileName: null });
+    setTitleMediaError(target, previousDraftKey, null);
+    setTitleMediaError(target, nextDraftKey, sourceError ?? null);
+    updateTitleMediaList(target, (current) => current.map((candidate) => (candidate === previousTypeKey ? nextTypeKey : candidate)));
+  }
+
   function updateShowcaseMediaDraft(index: number, patch: Partial<TitleShowcaseMediaDraft>): void {
     setShowcaseMediaDrafts((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
 
   function addShowcaseMediaDraft(kind: TitleShowcaseMediaDraft["kind"]): void {
-    setShowcaseMediaDrafts((current) => [...current, { ...createTitleShowcaseMediaDraft(null, current.length), kind }]);
+    setShowcaseMediaDrafts((current) => [...current, { ...createTitleShowcaseMediaDraft(null), kind }]);
   }
 
   function removeShowcaseMediaDraft(index: number): void {
-    setShowcaseMediaDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, displayOrder: itemIndex })));
+    setShowcaseMediaDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function moveShowcaseMediaDraft(index: number, direction: "up" | "down"): void {
+    setShowcaseMediaDrafts((current) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
   }
 
   async function handleShowcaseMediaUpload(index: number, file: File | null): Promise<void> {
     if (!file) {
-      updateShowcaseMediaDraft(index, { file: null, fileName: null, previewUrl: "", imageUrl: "" });
+      updateShowcaseMediaDraft(index, { file: null, fileName: null, previewUrl: "" });
       return;
     }
 
     try {
-      const upload = await normalizeImageUpload(file, titleMediaUploadPolicies.hero, {
+      const upload = await normalizeImageUpload(file, titleMediaUploadPolicies.showcase, {
         label: "showcase image",
         readErrorMessage: "Showcase media upload could not be read.",
       });
@@ -1987,7 +2369,6 @@ export function DevelopWorkspacePage() {
         file: upload.file,
         fileName: upload.fileName,
         previewUrl: upload.dataUrl,
-        imageUrl: "",
       });
       setShowcaseMediaError(null);
     } catch (nextError) {
@@ -1995,16 +2376,17 @@ export function DevelopWorkspacePage() {
     }
   }
 
-  async function refreshStudios(preferredStudioId?: string): Promise<void> {
+  async function refreshStudios(preferredStudioId?: string): Promise<DeveloperStudioSummary[]> {
     const response = await listManagedStudios(appConfig.apiBaseUrl, accessToken);
     setStudios(response.studios);
     const resolvedStudioId = response.studios.find((studio) => studio.id === preferredStudioId)?.id ?? response.studios.find((studio) => studio.id === workspace.studioId)?.id ?? response.studios[0]?.id ?? "";
     setWorkspaceState({ studioId: resolvedStudioId, titleId: resolvedStudioId ? workspace.titleId : "", releaseId: resolvedStudioId ? workspace.releaseId : "" });
+    return response.studios;
   }
 
-  async function refreshStudioScope(preferredTitleId?: string): Promise<void> {
+  async function refreshStudioScope(preferredTitleId?: string): Promise<StudioLink[]> {
     if (!workspace.studioId) {
-      return;
+      return [];
     }
 
     const requestedStudioId = workspace.studioId;
@@ -2017,18 +2399,18 @@ export function DevelopWorkspacePage() {
     setTitles(titleResponse.titles);
     const resolvedTitleId = titleResponse.titles.find((title) => title.id === preferredTitleId)?.id ?? titleResponse.titles.find((title) => title.id === workspace.titleId)?.id ?? titleResponse.titles[0]?.id ?? "";
     setWorkspaceState({ titleId: resolvedTitleId, releaseId: resolvedTitleId ? workspace.releaseId : "" });
+    return linkResponse.links;
   }
 
-  async function refreshTitleWorkspace(preferredTitleId?: string, preferredReleaseId?: string): Promise<void> {
+  async function refreshTitleWorkspace(preferredTitleId?: string, preferredReleaseId?: string): Promise<DeveloperTitle | null> {
     const titleId = preferredTitleId ?? workspace.titleId;
     if (!titleId) {
-      return;
+      return null;
     }
 
-    const [titleResponse, metadataResponse, mediaResponse, showcaseResponse, reportResponse, releaseResponse] = await Promise.all([
+    const [titleResponse, metadataResponse, showcaseResponse, reportResponse, releaseResponse] = await Promise.all([
       getDeveloperTitle(appConfig.apiBaseUrl, accessToken, titleId),
       getTitleMetadataVersions(appConfig.apiBaseUrl, accessToken, titleId),
-      getTitleMediaAssets(appConfig.apiBaseUrl, accessToken, titleId),
       getTitleShowcaseMedia(appConfig.apiBaseUrl, accessToken, titleId),
       getDeveloperTitleReports(appConfig.apiBaseUrl, accessToken, titleId),
       getTitleReleases(appConfig.apiBaseUrl, accessToken, titleId),
@@ -2036,8 +2418,7 @@ export function DevelopWorkspacePage() {
     const orderedReleases = [...releaseResponse.releases].sort((left, right) => (right.publishedAt ?? right.createdAt).localeCompare(left.publishedAt ?? left.createdAt));
     setDeveloperTitle(titleResponse.title);
     setMetadataVersions(metadataResponse.metadataVersions);
-    setMediaAssets(mediaResponse.mediaAssets);
-    setShowcaseMediaDrafts(showcaseResponse.showcaseMedia.map((item, index) => createTitleShowcaseMediaDraft(item, index)));
+    setShowcaseMediaDrafts(showcaseResponse.showcaseMedia.map((item) => createTitleShowcaseMediaDraft(item)));
     setReports(reportResponse.reports);
     setReleases(orderedReleases);
     setSelectedReportId((current) => reportResponse.reports.find((report) => report.id === current)?.id ?? reportResponse.reports[0]?.id ?? null);
@@ -2045,38 +2426,158 @@ export function DevelopWorkspacePage() {
       titleId,
       releaseId: orderedReleases.find((release) => release.id === preferredReleaseId)?.id ?? orderedReleases.find((release) => release.id === workspace.releaseId)?.id ?? orderedReleases[0]?.id ?? "",
     });
+    return titleResponse.title;
   }
 
   async function applyTitleMedia(titleId: string, draft: TitleDraft): Promise<void> {
-    for (const mediaRole of ["card", "hero", "logo"] as const) {
+    const existingTitle = developerTitle?.id === titleId ? developerTitle : null;
+    const existingEntries = new Map(
+      (existingTitle?.catalogMediaEntries ?? [])
+        .filter((entry): entry is CatalogMediaEntry => titleSingleMediaTypeKeys.includes(entry.mediaTypeKey as TitleSingleMediaTypeKey))
+        .map((entry) => [entry.mediaTypeKey, entry]),
+    );
+
+    for (const mediaRole of Object.keys(titleMediaTypeKeyByDraftKey) as TitleMediaDraftKey[]) {
       const media = draft.media[mediaRole];
+      const mediaTypeKey = titleMediaTypeKeyByDraftKey[mediaRole];
+      const existingEntry = existingEntries.get(mediaTypeKey) ?? null;
+
       if (media.file) {
-        await uploadTitleMediaAsset(appConfig.apiBaseUrl, accessToken, titleId, mediaRole, media.file, media.altText || null);
+        const ensuredEntry =
+          existingEntry ??
+          (
+            await createTitleCatalogMedia(appConfig.apiBaseUrl, accessToken, titleId, {
+              mediaTypeKey,
+              kind: "image",
+              sourceUrl: buildPendingCatalogMediaUrl(mediaTypeKey),
+              altText: media.altText.trim() || null,
+              mimeType: media.file.type,
+              width: null,
+              height: null,
+              displayOrder: 0,
+            })
+          ).mediaEntry;
+
+        await uploadTitleCatalogMediaImage(appConfig.apiBaseUrl, accessToken, titleId, ensuredEntry.id, media.file, media.altText.trim() || null);
         continue;
       }
 
       if (media.url.trim()) {
-        await upsertTitleMediaAsset(appConfig.apiBaseUrl, accessToken, titleId, mediaRole, {
-          sourceUrl: media.url.trim(),
-          altText: media.altText.trim() || null,
-          mimeType: null,
-          width: null,
-          height: null,
-        });
+        if (existingEntry) {
+          await updateTitleCatalogMedia(appConfig.apiBaseUrl, accessToken, titleId, existingEntry.id, {
+            sourceUrl: media.url.trim(),
+            altText: media.altText.trim() || null,
+            mimeType: null,
+            width: null,
+            height: null,
+            displayOrder: 0,
+          });
+        } else {
+          await createTitleCatalogMedia(appConfig.apiBaseUrl, accessToken, titleId, {
+            mediaTypeKey,
+            kind: "image",
+            sourceUrl: media.url.trim(),
+            altText: media.altText.trim() || null,
+            mimeType: null,
+            width: null,
+            height: null,
+            displayOrder: 0,
+          });
+        }
         continue;
       }
 
-      if (mediaAssets.some((asset) => asset.mediaRole === mediaRole)) {
-        await deleteTitleMediaAsset(appConfig.apiBaseUrl, accessToken, titleId, mediaRole);
+      if (existingEntry) {
+        await deleteTitleCatalogMedia(appConfig.apiBaseUrl, accessToken, titleId, existingEntry.id);
       }
     }
   }
 
   async function applyStudioMedia(studioId: string, draft: StudioDraft): Promise<void> {
-    for (const mediaRole of ["avatar", "logo", "banner"] as const) {
+    const existingEntries = new Map(
+      (activeStudio?.catalogMediaEntries ?? [])
+        .filter((entry): entry is CatalogMediaEntry => entry.kind === "image")
+        .map((entry) => [entry.mediaTypeKey, entry]),
+    );
+    const legacyFallbackUrlByMediaTypeKey: Record<CatalogMediaTypeKey, string | null> = {
+      studio_avatar: activeStudio?.avatarUrl ?? null,
+      studio_logo: activeStudio?.logoUrl ?? null,
+      studio_banner: activeStudio?.bannerUrl ?? null,
+      title_avatar: null,
+      title_card: null,
+      title_logo: null,
+      title_quick_view_banner: null,
+      title_showcase: null,
+    };
+
+    for (const mediaRole of Object.keys(studioMediaTypeKeyByDraftKey) as StudioMediaDraftKey[]) {
       const media = draft[mediaRole];
+      const mediaTypeKey = studioMediaTypeKeyByDraftKey[mediaRole];
+      const existingEntry = existingEntries.get(mediaTypeKey) ?? null;
+      const legacyFallbackUrl = legacyFallbackUrlByMediaTypeKey[mediaTypeKey];
+
       if (media.file) {
-        await uploadStudioMedia(appConfig.apiBaseUrl, accessToken, studioId, mediaRole, media.file);
+        const ensuredEntry =
+          existingEntry ??
+          (
+            await createStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, {
+              mediaTypeKey,
+              kind: "image",
+              sourceUrl: buildPendingCatalogMediaUrl(mediaTypeKey),
+              altText: null,
+              mimeType: media.file.type,
+              width: null,
+              height: null,
+              displayOrder: 0,
+            })
+          ).mediaEntry;
+
+        await uploadStudioCatalogMediaImage(appConfig.apiBaseUrl, accessToken, studioId, ensuredEntry.id, media.file);
+        continue;
+      }
+
+      if (media.url.trim()) {
+        if (existingEntry) {
+          await updateStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, existingEntry.id, {
+            sourceUrl: media.url.trim(),
+            altText: null,
+            mimeType: null,
+            width: null,
+            height: null,
+            displayOrder: 0,
+          });
+        } else {
+          await createStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, {
+            mediaTypeKey,
+            kind: "image",
+            sourceUrl: media.url.trim(),
+            altText: null,
+            mimeType: null,
+            width: null,
+            height: null,
+            displayOrder: 0,
+          });
+        }
+        continue;
+      }
+
+      if (existingEntry) {
+        await deleteStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, existingEntry.id);
+        continue;
+      }
+
+      if (legacyFallbackUrl) {
+        const mirroredEntry = await createStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, {
+          mediaTypeKey,
+          kind: "image",
+          sourceUrl: legacyFallbackUrl,
+          altText: null,
+          mimeType: null,
+          width: null,
+          height: null,
+          displayOrder: 0,
+        });
+        await deleteStudioCatalogMedia(appConfig.apiBaseUrl, accessToken, studioId, mirroredEntry.mediaEntry.id);
       }
     }
   }
@@ -2096,9 +2597,12 @@ export function DevelopWorkspacePage() {
     setTitleCreateContextStudioId(workspace.studioId);
     if (titleCreateContextStudioId !== workspace.studioId) {
       const persistedDraft = persistedState?.titleCreate?.studioId === workspace.studioId ? persistedState.titleCreate : null;
-      setTitleCreateDraft(persistedDraft ? fromPersistedTitleDraft(persistedDraft.draft) : createTitleDraft());
+      const nextDraft = persistedDraft ? fromPersistedTitleDraft(persistedDraft.draft) : createTitleDraft();
+      setTitleCreateDraft(nextDraft);
+      setTitleCreateMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
       setTitleCreateTouched(persistedDraft?.touched ?? {});
     }
+    setShowcaseMediaDrafts([]);
     setTitleCreateMediaErrors(createEmptyTitleMediaErrors());
     setWorkspaceState({ domain: "titles", workflow: "titles-create", titleId: "", releaseId: "" });
   }
@@ -2115,24 +2619,36 @@ export function DevelopWorkspacePage() {
   }
 
   async function applyTitleShowcaseMedia(titleId: string): Promise<void> {
-    const existingById = new Map((developerTitle?.showcaseMedia ?? []).map((item) => [item.id, item]));
+    const existingTitle = developerTitle?.id === titleId ? developerTitle : null;
+    const existingById = new Map((existingTitle?.showcaseMedia ?? []).map((item) => [item.id, item]));
     const remainingIds = new Set(showcaseMediaDrafts.map((item) => item.id).filter((value): value is string => Boolean(value)));
 
-    for (const existingItem of developerTitle?.showcaseMedia ?? []) {
+    for (const existingItem of existingTitle?.showcaseMedia ?? []) {
       if (!remainingIds.has(existingItem.id)) {
         await deleteTitleShowcaseMedia(appConfig.apiBaseUrl, accessToken, titleId, existingItem.id);
       }
     }
 
     for (const [index, item] of showcaseMediaDrafts.entries()) {
-      if (!item.id && !item.file) {
-        throw new Error("Each new showcase item needs an uploaded preview image before you save.");
+      if (
+        !item.id &&
+        (
+          (item.kind === "image" && !item.file && !item.imageUrl.trim())
+          || (item.kind === "external_video" && !item.file)
+        )
+      ) {
+        throw new Error(
+          item.kind === "image"
+            ? "Each new screenshot needs either an image URL or an uploaded preview image before you save."
+            : "Each new video preview needs an uploaded preview image before you save."
+        );
       }
 
       const payload = {
+        imageUrl: item.kind === "image" && !item.file ? item.imageUrl.trim() || null : null,
         videoUrl: item.kind === "external_video" ? item.videoUrl.trim() || null : null,
         altText: item.altText.trim() || null,
-        displayOrder: Number.isFinite(item.displayOrder) ? item.displayOrder : index,
+        displayOrder: index,
       };
 
       if (item.id && existingById.has(item.id)) {
@@ -2182,9 +2698,6 @@ export function DevelopWorkspacePage() {
         slug: studioCreateDraft.slug,
         displayName: studioCreateDraft.displayName.trim(),
         description: studioCreateDraft.description.trim(),
-        avatarUrl: studioCreateDraft.avatar.file ? null : studioCreateDraft.avatar.url.trim() || null,
-        logoUrl: studioCreateDraft.logo.file ? null : studioCreateDraft.logo.url.trim() || null,
-        bannerUrl: studioCreateDraft.banner.file ? null : studioCreateDraft.banner.url.trim() || null,
       });
       await applyStudioMedia(response.studio.id, studioCreateDraft);
       for (const link of studioCreateDraft.links.filter((candidate) => candidate.label.trim() && candidate.url.trim())) {
@@ -2225,9 +2738,6 @@ export function DevelopWorkspacePage() {
         slug: studioOverviewDraft.slug,
         displayName: studioOverviewDraft.displayName.trim(),
         description: studioOverviewDraft.description.trim(),
-        avatarUrl: studioOverviewDraft.avatar.file ? null : studioOverviewDraft.avatar.url.trim() || null,
-        logoUrl: studioOverviewDraft.logo.file ? null : studioOverviewDraft.logo.url.trim() || null,
-        bannerUrl: studioOverviewDraft.banner.file ? null : studioOverviewDraft.banner.url.trim() || null,
       });
       await applyStudioMedia(activeStudio.id, studioOverviewDraft);
       for (const link of studioOverviewDraft.links.filter((candidate) => candidate.label.trim() && candidate.url.trim())) {
@@ -2242,8 +2752,12 @@ export function DevelopWorkspacePage() {
           await deleteStudioLink(appConfig.apiBaseUrl, accessToken, activeStudio.id, link.id);
         }
       }
-      await refreshStudios(activeStudio.id);
-      await refreshStudioScope();
+      const refreshedStudios = await refreshStudios(activeStudio.id);
+      const refreshedLinks = await refreshStudioScope();
+      const refreshedStudio = refreshedStudios.find((studio) => studio.id === activeStudio.id) ?? activeStudio;
+      setStudioOverviewDraft(createStudioDraft(refreshedStudio, refreshedLinks));
+      setStudioOverviewTouched({});
+      setStudioOverviewMediaErrors(createEmptyStudioMediaErrors());
       setStudioOverviewEditing(false);
       setMessage("Studio saved.");
       setError(null);
@@ -2299,19 +2813,24 @@ export function DevelopWorkspacePage() {
           displayName: titleCreateDraft.displayName.trim(),
           shortDescription: titleCreateDraft.shortDescription.trim(),
           description: titleCreateDraft.description.trim(),
-          genreSlugs: titleCreateDraft.genres,
-          minPlayers: titleCreateDraft.minPlayers,
-          maxPlayers: titleCreateDraft.maxPlayers,
-          ageRatingAuthority: titleCreateDraft.ageRatingAuthority.trim() || null,
+            genreSlugs: titleCreateDraft.genres,
+            minPlayers: titleCreateDraft.minPlayers,
+            maxPlayers: titleCreateDraft.maxPlayers,
+            maxPlayersOrMore: titleCreateDraft.maxPlayersOrMore,
+            ageRatingAuthority: titleCreateDraft.ageRatingAuthority.trim() || null,
           ageRatingValue: titleCreateDraft.ageRatingValue.trim() || null,
           minAgeYears: titleCreateDraft.minAgeYears,
         },
       });
       await applyTitleMedia(response.title.id, titleCreateDraft);
+      await applyTitleShowcaseMedia(response.title.id);
       await refreshStudioScope(response.title.id);
       await refreshTitleWorkspace(response.title.id);
-      setTitleCreateDraft(createTitleDraft());
+      const nextDraft = createTitleDraft();
+      setTitleCreateDraft(nextDraft);
+      setTitleCreateMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
       setTitleCreateTouched({});
+      setShowcaseMediaDrafts([]);
       setWorkspaceState({ domain: "titles", workflow: "titles-overview", titleId: response.title.id });
       setMessage("Title created.");
       setError(null);
@@ -2379,17 +2898,22 @@ export function DevelopWorkspacePage() {
         displayName: metadataDraft.displayName.trim(),
         shortDescription: metadataDraft.shortDescription.trim(),
         description: metadataDraft.description.trim(),
-        genreSlugs: metadataDraft.genres,
-        minPlayers: metadataDraft.minPlayers,
-        maxPlayers: metadataDraft.maxPlayers,
-        ageRatingAuthority: metadataDraft.ageRatingAuthority.trim() || null,
+          genreSlugs: metadataDraft.genres,
+          minPlayers: metadataDraft.minPlayers,
+          maxPlayers: metadataDraft.maxPlayers,
+          maxPlayersOrMore: metadataDraft.maxPlayersOrMore,
+          ageRatingAuthority: metadataDraft.ageRatingAuthority.trim() || null,
         ageRatingValue: metadataDraft.ageRatingValue.trim() || null,
         minAgeYears: metadataDraft.minAgeYears,
       });
       await applyTitleMedia(activeTitle.id, metadataDraft);
       await applyTitleShowcaseMedia(activeTitle.id);
       await refreshStudioScope(activeTitle.id);
-      await refreshTitleWorkspace(activeTitle.id);
+      const refreshedTitle = await refreshTitleWorkspace(activeTitle.id);
+      const nextDraft = createTitleDraft(refreshedTitle ?? activeTitle);
+      setMetadataDraft(nextDraft);
+      setMetadataMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
+      setMetadataTouched({});
       setMetadataEditing(false);
       setMessage("Metadata saved.");
       setError(null);
@@ -2687,6 +3211,54 @@ export function DevelopWorkspacePage() {
     );
   }
 
+  function renderStudioMediaSummary(draft: StudioDraft): ReactNode {
+    const mediaItems = studioMediaDraftKeys.map((mediaRole) => {
+      const media = draft[mediaRole];
+      const definition = studioMediaDefinitionByDraftKey[mediaRole];
+      const thumbnailUrl = getStudioMediaPreview(media);
+      return {
+        mediaRole,
+        media,
+        definition,
+        thumbnailUrl,
+      };
+    });
+
+    return (
+      <section className="surface-panel-strong rounded-[1rem] p-4">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Studio media</h3>
+        </div>
+        <div className="mt-4 space-y-3">
+          {mediaItems.map(({ mediaRole, definition, thumbnailUrl }) => (
+            <article key={mediaRole} className="rounded-[1rem] border border-white/10 bg-slate-950/35 p-3" data-studio-media-summary={mediaRole}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div
+                  className="h-20 max-w-full shrink-0 self-start overflow-hidden rounded-[0.9rem] border border-white/12 bg-slate-950/55"
+                  data-studio-media-summary-preview={mediaRole}
+                  style={{ aspectRatio: buildAspectRatioValue(definition.recommendedWidth, definition.recommendedHeight) }}
+                >
+                  {thumbnailUrl ? (
+                    <img className="h-full w-full object-cover" src={thumbnailUrl} alt={`${studioMediaLabelByDraftKey[mediaRole]} preview`} />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-[11px] uppercase tracking-[0.18em] text-slate-500">No image</div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75">{definition.displayName}</p>
+                  <p className="mt-2 text-sm text-slate-300">{definition.usageSummary}</p>
+                  <p className="mt-2 break-all text-sm text-slate-300">
+                    Source: <span className={thumbnailUrl ? "text-slate-100" : "text-slate-500"}>{thumbnailUrl ?? "Not added"}</span>
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   function renderTitleGenresSummary(genres: string[]): ReactNode {
     return genres.length > 0 ? (
       <div className="flex flex-wrap gap-2">
@@ -2702,35 +3274,118 @@ export function DevelopWorkspacePage() {
   }
 
   function renderTitleMediaSummary(draft: TitleDraft): ReactNode {
+    const configuredMedia = (["avatar", "card", "quickViewBanner", "logo"] as const)
+      .map((mediaRole) => {
+        const media = draft.media[mediaRole];
+        const definition = titleMediaDefinitionByDraftKey[mediaRole];
+        const thumbnailUrl = previewMediaUrl(media);
+        return hasConfiguredTitleMedia(media) || media.altText.trim()
+          ? {
+              mediaRole,
+              media,
+              definition,
+              thumbnailUrl,
+            }
+          : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
     return (
       <section className="surface-panel-strong rounded-[1rem] p-4">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Media</h3>
-          <span className="text-xs text-slate-400">Card, hero, and logo</span>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Title media</h3>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          {(["card", "hero", "logo"] as const).map((mediaRole) => {
-            const media = draft.media[mediaRole];
-            const policy = titleMediaUploadPolicies[mediaRole];
-            return (
-              <article key={mediaRole} className="rounded-[1rem] border border-white/10 bg-slate-950/40 p-3">
-                <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{mediaRole}</div>
-                <div
-                  className="mt-3 overflow-hidden rounded-[0.9rem] border border-white/10 bg-slate-950/50"
-                  style={{ aspectRatio: buildAspectRatioValue(policy.recommendedWidth, policy.recommendedHeight) }}
-                >
-                  {media.url ? <img className="h-full w-full object-cover" src={media.url} alt={media.altText || `${mediaRole} media`} /> : <div className="grid h-full w-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image added</div>}
+        {configuredMedia.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No title media added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {configuredMedia.map(({ mediaRole, media, definition, thumbnailUrl }) => (
+              <article key={mediaRole} className="rounded-[1rem] border border-white/10 bg-slate-950/35 p-3" data-title-media-summary={definition.key}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <div
+                    className="h-20 max-w-full shrink-0 self-start overflow-hidden rounded-[0.9rem] border border-white/12 bg-slate-950/55"
+                    data-title-media-summary-preview={definition.key}
+                    style={{ aspectRatio: buildAspectRatioValue(definition.recommendedWidth, definition.recommendedHeight) }}
+                  >
+                    {thumbnailUrl ? (
+                      <img className="h-full w-full object-cover" src={thumbnailUrl} alt={media.altText || `${definition.displayName} thumbnail`} />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-[11px] uppercase tracking-[0.18em] text-slate-500">No image</div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75">{definition.displayName}</p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      Alt text: <span className={media.altText.trim() ? "text-slate-100" : "text-slate-500"}>{media.altText.trim() || "Not added"}</span>
+                    </p>
+                  </div>
                 </div>
-                {media.altText ? <p className="mt-3 text-sm text-slate-300">{media.altText}</p> : <p className="mt-3 text-sm text-slate-500">Alt text not added</p>}
               </article>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderShowcaseMediaSummary(): ReactNode {
+    const showcaseItems = (activeTitle?.showcaseMedia?.length ? activeTitle.showcaseMedia : showcaseMediaDrafts)
+      .map((item, index) => ({
+        id: "id" in item && item.id ? item.id : `showcase-summary-${index}`,
+        kind: item.kind,
+        imageUrl: item.imageUrl ?? "",
+        videoUrl: item.videoUrl ?? "",
+        altText: item.altText ?? "",
+        displayOrder: "displayOrder" in item ? item.displayOrder : index,
+      }))
+      .sort((left, right) => left.displayOrder - right.displayOrder);
+
+    return (
+      <section className="surface-panel-strong rounded-[1rem] p-4">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Showcase media</h3>
         </div>
+        {showcaseItems.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No showcase media added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {showcaseItems.map((item, index) => (
+              <article key={item.id || `showcase-${index}`} className="rounded-[1rem] border border-white/10 bg-slate-950/35 p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <div className="h-20 w-full shrink-0 overflow-hidden rounded-[0.9rem] border border-white/12 bg-slate-950/55 sm:w-28">
+                    {item.imageUrl ? (
+                      <img className="h-full w-full object-cover" src={item.imageUrl} alt={item.altText || `Showcase media ${index + 1}`} />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-[11px] uppercase tracking-[0.18em] text-slate-500">No preview</div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75">Gallery item {index + 1}</p>
+                      <span className="rounded-full border border-white/12 bg-white/6 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        {item.kind === "external_video" ? "Video preview" : "Screenshot"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-300">
+                      Alt text: <span className={item.altText.trim() ? "text-slate-100" : "text-slate-500"}>{item.altText.trim() || "Not added"}</span>
+                    </p>
+                    {item.kind === "external_video" ? (
+                      <p className="mt-2 break-all text-sm text-slate-300">
+                        Video URL: <span className={item.videoUrl.trim() ? "text-slate-100" : "text-slate-500"}>{item.videoUrl.trim() || "Not added"}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     );
   }
 
   function renderMetadataSummary(draft: TitleDraft): ReactNode {
+    const summarySlug = activeTitle?.slug ?? draft.slug;
     return (
       <section className="panel inset-panel space-y-5">
         <div className="grid gap-4 xl:grid-cols-2">
@@ -2739,7 +3394,7 @@ export function DevelopWorkspacePage() {
             value={draft.displayName}
             helper={
               <>
-                Slug: <span className="lowercase">{draft.slug}</span>
+                Slug: <span className="lowercase">{summarySlug}</span>
               </>
             }
           />
@@ -2751,12 +3406,232 @@ export function DevelopWorkspacePage() {
             helper={`Minimum age: ${formatMinimumAge(draft.minAgeYears)}`}
           />
           <ReadOnlyField label="Short description" value={<p className="max-w-3xl text-base leading-8 text-slate-200">{draft.shortDescription || "No short description added yet."}</p>} />
-          <ReadOnlyField label="Player count" value={`${draft.minPlayers}-${draft.maxPlayers} players`} />
+          <ReadOnlyField label="Player count" value={formatPlayerCount(draft)} />
         </div>
 
         <ReadOnlyField label="Description" value={<p className="max-w-4xl whitespace-pre-wrap text-base leading-8 text-slate-200">{draft.description || "No description added yet."}</p>} />
 
         {renderTitleMediaSummary(draft)}
+
+        {renderShowcaseMediaSummary()}
+      </section>
+    );
+  }
+
+  function renderTitleMediaListEditor(mode: "create" | "metadata", draft: TitleDraft, editable: boolean): ReactNode {
+    const mediaList = mode === "create" ? titleCreateMediaList : metadataMediaList;
+    const missingMediaTypes = mode === "create" ? missingTitleCreateMediaTypes : missingMetadataMediaTypes;
+    const nextMediaType = mode === "create" ? titleCreateNextMediaType : metadataNextMediaType;
+    const addMediaSelectId = `add-title-media-type-${mode}`;
+
+    return (
+      <section className="surface-panel-strong rounded-[1rem] p-4">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Title media</h3>
+          <p className="mt-2 text-sm text-slate-400">Add the specific title image types you want players to see across browse, quick view, and detail pages.</p>
+        </div>
+
+        {mediaList.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No title image items added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {mediaList.map((mediaTypeKey) => {
+              const draftKey = titleMediaDraftKeyByTypeKey[mediaTypeKey];
+              const availableTypeKeys = titleSingleMediaTypeKeys.filter((candidate) => candidate === mediaTypeKey || !mediaList.includes(candidate));
+              return (
+                <TitleMediaListItem
+                  key={mediaTypeKey}
+                  mediaTypeKey={mediaTypeKey}
+                  definition={titleMediaDefinitionByTypeKey[mediaTypeKey]}
+                  availableTypeLabels={titleMediaTypeLabelByKey}
+                  availableTypeKeys={availableTypeKeys}
+                  state={draft.media[draftKey]}
+                  error={(mode === "create" ? titleCreateMediaErrors : metadataMediaErrors)[draftKey]}
+                  disabled={!editable}
+                  onTypeChange={(nextTypeKey) => changeTitleMediaListItemType(mode, mediaTypeKey, nextTypeKey)}
+                  onUrlChange={(value) => {
+                    updateTitleMedia(mode, draftKey, { url: value, previewUrl: value, file: null, fileName: null });
+                    setTitleMediaError(mode, draftKey, null);
+                  }}
+                  onAltTextChange={(value) => updateTitleMedia(mode, draftKey, { altText: value })}
+                  onFileChange={(file) => void handleTitleMediaUpload(mode, draftKey, file)}
+                  onRemove={() => removeTitleMediaListItem(mode, mediaTypeKey)}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <Field label="Add media item" asLabel={false} inputId={addMediaSelectId}>
+            <select id={addMediaSelectId} value={nextMediaType} onChange={(event) => (mode === "create" ? setTitleCreateNextMediaType(event.currentTarget.value as TitleSingleMediaTypeKey) : setMetadataNextMediaType(event.currentTarget.value as TitleSingleMediaTypeKey))} disabled={!editable || missingMediaTypes.length === 0}>
+              {missingMediaTypes.length === 0 ? (
+                <option value={nextMediaType}>All title image types added</option>
+              ) : (
+                missingMediaTypes.map((mediaTypeKey) => (
+                  <option key={mediaTypeKey} value={mediaTypeKey}>
+                    {titleMediaTypeLabelByKey[mediaTypeKey]}
+                  </option>
+                ))
+              )}
+            </select>
+          </Field>
+          <button className="secondary-button" type="button" onClick={() => addTitleMediaListItem(mode, nextMediaType)} disabled={!editable || missingMediaTypes.length === 0}>
+            Add media item
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  function renderShowcaseMediaEditor(editable: boolean): ReactNode {
+    return (
+      <section className="surface-panel-strong rounded-[1rem] p-4">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Showcase media</h3>
+          <p className="mt-2 text-sm text-slate-400">Add screenshots and video previews for the public gallery. The first screenshot also doubles as the default title detail image, and it can fall back into quick view if no quick view banner is uploaded.</p>
+        </div>
+
+        {showcaseMediaDrafts.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No gallery media added yet.</p>
+        ) : (
+          <div className="mt-4 space-y-6">
+            {showcaseMediaDrafts.map((item, index) => (
+              <article
+                key={item.id ?? `showcase-${index}`}
+                className="surface-panel-soft overflow-hidden rounded-[1.1rem] p-0"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 bg-[linear-gradient(90deg,rgba(96,255,164,0.1),rgba(96,255,164,0.03)_22%,rgba(17,16,24,0.22)_60%,rgba(17,16,24,0.12))] px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-50">Gallery item {index + 1}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyan-100/70">
+                      {item.kind === "external_video" ? "Video preview" : "Screenshot"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-50">
+                      Position {index + 1} of {showcaseMediaDrafts.length}
+                    </span>
+                    <button className="secondary-button !min-w-0 !px-4" type="button" aria-label="Move item up" onClick={() => moveShowcaseMediaDraft(index, "up")} disabled={!editable || index === 0}>
+                      ↑
+                    </button>
+                    <button className="secondary-button !min-w-0 !px-4" type="button" aria-label="Move item down" onClick={() => moveShowcaseMediaDraft(index, "down")} disabled={!editable || index === showcaseMediaDrafts.length - 1}>
+                      ↓
+                    </button>
+                  </div>
+                </div>
+                <div className="grid gap-4 p-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
+                  <div className="surface-panel-strong space-y-3 rounded-[1rem] p-3">
+                    <div className="overflow-hidden rounded-[0.95rem] border border-white/12 bg-slate-950/45 p-2">
+                      <div
+                        className="overflow-hidden rounded-[0.8rem] border border-white/10 bg-slate-950/70"
+                        style={{ aspectRatio: buildAspectRatioValue(showcaseMediaDefinition.recommendedWidth, showcaseMediaDefinition.recommendedHeight) }}
+                      >
+                        {item.previewUrl || item.imageUrl ? (
+                          <img className="h-full w-full object-cover" src={item.previewUrl || item.imageUrl} alt={item.altText || "Showcase preview"} />
+                        ) : (
+                          <div className="grid h-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-[0.95rem] border border-white/8 bg-black/20 p-3">
+                      <CatalogMediaSpecSummary definition={showcaseMediaDefinition} />
+                    </div>
+                  </div>
+                  <div className="rounded-[1rem] border border-white/12 bg-[linear-gradient(180deg,rgba(8,8,12,0.28),rgba(8,8,12,0.18))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="space-y-4">
+                      <section className="rounded-[0.95rem] border border-white/10 bg-black/18 p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Media details</p>
+                        <div className="mt-3">
+                          <Field label="Type">
+                            <select value={item.kind} onChange={(event) => updateShowcaseMediaDraft(index, { kind: event.currentTarget.value as TitleShowcaseMediaDraft["kind"] })} disabled={!editable || Boolean(item.id)}>
+                              <option value="image">Screenshot</option>
+                              <option value="external_video">External video</option>
+                            </select>
+                          </Field>
+                        </div>
+                      </section>
+
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(15rem,0.8fr)]">
+                        <section className="rounded-[0.95rem] border border-white/10 bg-black/18 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Accessibility</p>
+                          <div className="mt-3">
+                            <Field label="Alt text">
+                              <input value={item.altText} onChange={(event) => updateShowcaseMediaDraft(index, { altText: event.currentTarget.value })} disabled={!editable} />
+                            </Field>
+                          </div>
+                        </section>
+
+                        {item.kind === "external_video" ? (
+                          <section className="rounded-[0.95rem] border border-white/10 bg-black/18 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Source</p>
+                            <div className="mt-3">
+                              <Field label="Video URL">
+                                <input value={item.videoUrl} onChange={(event) => updateShowcaseMediaDraft(index, { videoUrl: event.currentTarget.value })} disabled={!editable} placeholder="https://..." />
+                              </Field>
+                            </div>
+                          </section>
+                        ) : !item.file ? (
+                          <section className="rounded-[0.95rem] border border-white/10 bg-black/18 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Source</p>
+                            <div className="mt-3">
+                              <Field label="Image URL">
+                                <input
+                                  value={item.imageUrl}
+                                  onChange={(event) => updateShowcaseMediaDraft(index, { imageUrl: event.currentTarget.value, previewUrl: event.currentTarget.value })}
+                                  disabled={!editable}
+                                  placeholder="https://..."
+                                />
+                              </Field>
+                            </div>
+                          </section>
+                        ) : (
+                          <section className="rounded-[0.95rem] border border-white/10 bg-black/18 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Source</p>
+                            <div className="mt-3 rounded-[0.85rem] border border-white/12 bg-slate-950/50 px-4 py-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Uploaded image</p>
+                              <p className="mt-2 break-all text-sm text-slate-200">{item.fileName ?? "Current upload selected"}</p>
+                              <p className="mt-2 text-xs leading-6 text-slate-400">Remove the upload to switch back to an image URL.</p>
+                            </div>
+                          </section>
+                        )}
+                      </div>
+
+                      <section className="rounded-[0.95rem] border border-white/10 bg-black/22 p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300">Actions</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <label className={`secondary-button inline-flex cursor-pointer ${!editable ? "pointer-events-none opacity-50" : ""}`}>
+                            Upload image
+                            <input className="sr-only" type="file" accept={showcaseMediaDefinition.acceptedMimeTypes.join(",")} disabled={!editable} onChange={(event) => void handleShowcaseMediaUpload(index, event.currentTarget.files?.[0] ?? null)} />
+                          </label>
+                          {item.file ? (
+                            <button className="secondary-button" type="button" onClick={() => void handleShowcaseMediaUpload(index, null)} disabled={!editable}>
+                              Remove upload
+                            </button>
+                          ) : null}
+                          <button className="danger-button" type="button" onClick={() => removeShowcaseMediaDraft(index)} disabled={!editable}>
+                            Remove item
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button className="secondary-button" type="button" onClick={() => addShowcaseMediaDraft("image")} disabled={!editable}>
+            Add screenshot
+          </button>
+          <button className="secondary-button" type="button" onClick={() => addShowcaseMediaDraft("external_video")} disabled={!editable}>
+            Add video preview
+          </button>
+        </div>
+
+        {showcaseMediaError ? <p className="error-text mt-4">{showcaseMediaError}</p> : null}
       </section>
     );
   }
@@ -2821,9 +3696,7 @@ export function DevelopWorkspacePage() {
     const touched = mode === "create" ? studioCreateTouched : studioOverviewTouched;
     const validation = mode === "create" ? studioCreateValidation : studioOverviewValidation;
     const editing = mode === "create" ? true : studioOverviewEditing;
-    const avatarPreview = getStudioMediaPreview(draft.avatar);
-    const logoPreview = getStudioMediaPreview(draft.logo);
-    const bannerPreview = getStudioMediaPreview(draft.banner);
+    const summarySlug = activeStudio?.slug ?? draft.slug;
 
     if (mode === "overview" && !editing) {
       return (
@@ -2834,33 +3707,14 @@ export function DevelopWorkspacePage() {
               value={draft.displayName}
               helper={
                 <>
-                  Slug: <span className="lowercase">{draft.slug}</span>
+                  Slug: <span className="lowercase">{summarySlug}</span>
                 </>
               }
             />
             <ReadOnlyField label="Description" value={<p className="max-w-4xl text-base leading-8 text-slate-200">{draft.description || "No description added yet."}</p>} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <section className="surface-panel-strong rounded-[1rem] p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Avatar</div>
-              <div className="mt-3 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/40">
-                {avatarPreview ? <img className="h-40 w-full object-cover" src={avatarPreview} alt={`${draft.displayName || "Studio"} avatar`} /> : <div className="grid h-40 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No avatar</div>}
-              </div>
-            </section>
-            <section className="surface-panel-strong rounded-[1rem] p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Logo</div>
-              <div className="mt-3 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/40">
-                {logoPreview ? <img className="h-40 w-full object-cover" src={logoPreview} alt={`${draft.displayName || "Studio"} logo`} /> : <div className="grid h-40 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No logo</div>}
-              </div>
-            </section>
-            <section className="surface-panel-strong rounded-[1rem] p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Banner</div>
-              <div className="mt-3 overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/40">
-                {bannerPreview ? <img className="h-40 w-full object-cover" src={bannerPreview} alt="" aria-hidden="true" /> : <div className="grid h-40 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No banner</div>}
-              </div>
-            </section>
-          </div>
+          {renderStudioMediaSummary(draft)}
 
           {renderStudioLinksSummary(draft)}
 
@@ -2925,59 +3779,34 @@ export function DevelopWorkspacePage() {
           />
         </Field>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <StudioImageField
-            label="Avatar"
-            state={draft.avatar}
-            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.avatar, { optional: true })}
-            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).avatar}
-            accept={studioMediaUploadPolicies.avatar.acceptedMimeTypes.join(",")}
-            disabled={!editing}
-            onUrlChange={(value) => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", { url: value, previewUrl: value, file: null, fileName: null });
-              setStudioMediaError(mode === "create" ? "create" : "overview", "avatar", null);
-            }}
-            onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "avatar", file)}
-            onRemove={() => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "avatar", createStudioMediaDraft(""));
-              setStudioMediaError(mode === "create" ? "create" : "overview", "avatar", null);
-            }}
-          />
-          <StudioImageField
-            label="Logo"
-            state={draft.logo}
-            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.logo, { optional: true })}
-            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).logo}
-            accept={studioMediaUploadPolicies.logo.acceptedMimeTypes.join(",")}
-            disabled={!editing}
-            onUrlChange={(value) => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "logo", { url: value, previewUrl: value, file: null, fileName: null });
-              setStudioMediaError(mode === "create" ? "create" : "overview", "logo", null);
-            }}
-            onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "logo", file)}
-            onRemove={() => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "logo", createStudioMediaDraft(""));
-              setStudioMediaError(mode === "create" ? "create" : "overview", "logo", null);
-            }}
-          />
-          <StudioImageField
-            label="Banner"
-            state={draft.banner}
-            guidance={formatMediaUploadGuidance(studioMediaUploadPolicies.banner, { optional: true })}
-            error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors).banner}
-            accept={studioMediaUploadPolicies.banner.acceptedMimeTypes.join(",")}
-            disabled={!editing}
-            onUrlChange={(value) => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "banner", { url: value, previewUrl: value, file: null, fileName: null });
-              setStudioMediaError(mode === "create" ? "create" : "overview", "banner", null);
-            }}
-            onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", "banner", file)}
-            onRemove={() => {
-              updateStudioMedia(mode === "create" ? "create" : "overview", "banner", createStudioMediaDraft(""));
-              setStudioMediaError(mode === "create" ? "create" : "overview", "banner", null);
-            }}
-          />
-        </div>
+        <section className="surface-panel-strong rounded-[1rem] p-4">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Studio media</h3>
+            <p className="mt-2 text-sm text-slate-400">Add the studio image types you want players to see across studio cards, headers, and identity surfaces.</p>
+          </div>
+          <div className="mt-4 space-y-4">
+            {studioMediaDraftKeys.map((mediaRole) => (
+              <StudioMediaListItem
+                key={mediaRole}
+                mediaRole={mediaRole}
+                label={studioMediaLabelByDraftKey[mediaRole]}
+                state={draft[mediaRole]}
+                definition={studioMediaDefinitionByDraftKey[mediaRole]}
+                error={(mode === "create" ? studioCreateMediaErrors : studioOverviewMediaErrors)[mediaRole]}
+                disabled={!editing}
+                onUrlChange={(value) => {
+                  updateStudioMedia(mode === "create" ? "create" : "overview", mediaRole, { url: value, previewUrl: value, file: null, fileName: null });
+                  setStudioMediaError(mode === "create" ? "create" : "overview", mediaRole, null);
+                }}
+                onFileChange={(file) => void handleStudioMediaUpload(mode === "create" ? "create" : "overview", mediaRole, file)}
+                onRemove={() => {
+                  updateStudioMedia(mode === "create" ? "create" : "overview", mediaRole, createStudioMediaDraft(""));
+                  setStudioMediaError(mode === "create" ? "create" : "overview", mediaRole, null);
+                }}
+              />
+            ))}
+          </div>
+        </section>
 
         {renderStudioLinkEditor(mode, draft, !editing)}
 
@@ -3085,7 +3914,7 @@ export function DevelopWorkspacePage() {
                   if (mode === "create") {
                     setTitleCreateDraft((current) => ({ ...current, displayName, slug }));
                   } else {
-                    setMetadataDraft((current) => ({ ...current, displayName }));
+                    setMetadataDraft((current) => ({ ...current, displayName, slug }));
                   }
                 }}
                 onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "displayName")}
@@ -3222,112 +4051,28 @@ export function DevelopWorkspacePage() {
             <input type="number" min={1} value={draft.minPlayers} onChange={(event) => updateTitlePlayers(mode === "create" ? "create" : "metadata", "minPlayers", event.currentTarget.value)} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "minPlayers")} disabled={!editable} />
           </Field>
           <Field label="Max players" error={touched.maxPlayers ? validation.errors.maxPlayers : undefined}>
-            <input type="number" min={1} value={draft.maxPlayers} onChange={(event) => updateTitlePlayers(mode === "create" ? "create" : "metadata", "maxPlayers", event.currentTarget.value)} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "maxPlayers")} disabled={!editable} />
+            <div className="space-y-3">
+              <input type="number" min={1} value={draft.maxPlayers} onChange={(event) => updateTitlePlayers(mode === "create" ? "create" : "metadata", "maxPlayers", event.currentTarget.value)} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "maxPlayers")} disabled={!editable} />
+              <label className="inline-flex items-center gap-3 text-sm text-slate-300">
+                <input
+                  className="h-4 w-4 accent-emerald-400"
+                  type="checkbox"
+                  checked={draft.maxPlayersOrMore}
+                  onChange={(event) => updateMaxPlayersOrMore(mode === "create" ? "create" : "metadata", event.currentTarget.checked)}
+                  disabled={!editable}
+                />
+                <span>Or more</span>
+              </label>
+            </div>
           </Field>
           <Field label="Minimum age" error={touched.minAgeYears ? validation.errors.minAgeYears : undefined}>
             <input value={formatMinimumAge(draft.minAgeYears)} onChange={(event) => updateTitleMinimumAge(mode === "create" ? "create" : "metadata", event.currentTarget.value)} onBlur={() => touchField(mode === "create" ? setTitleCreateTouched : setMetadataTouched, "minAgeYears")} disabled={!editable} />
           </Field>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          {(["card", "hero", "logo"] as const).map((mediaRole) => (
-            <ImageField
-              key={mediaRole}
-              label={mediaRole}
-              state={draft.media[mediaRole]}
-              previewUrl={previewMediaUrl(draft.media[mediaRole])}
-              guidance={formatMediaUploadGuidance(titleMediaUploadPolicies[mediaRole], { optional: true })}
-              previewAspectRatio={buildAspectRatioValue(titleMediaUploadPolicies[mediaRole].recommendedWidth, titleMediaUploadPolicies[mediaRole].recommendedHeight)}
-              error={(mode === "create" ? titleCreateMediaErrors : metadataMediaErrors)[mediaRole]}
-              accept={titleMediaUploadPolicies[mediaRole].acceptedMimeTypes.join(",")}
-              disabled={!editable}
-              onUrlChange={(value) => {
-                updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: value, previewUrl: value, file: null, fileName: null });
-                setTitleMediaError(mode === "create" ? "create" : "metadata", mediaRole, null);
-              }}
-              onAltTextChange={(value) => updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { altText: value })}
-              onFileChange={(file) => void handleTitleMediaUpload(mode === "create" ? "create" : "metadata", mediaRole, file)}
-              onRemove={() => {
-                updateTitleMedia(mode === "create" ? "create" : "metadata", mediaRole, { url: "", previewUrl: "", altText: "", file: null, fileName: null });
-                setTitleMediaError(mode === "create" ? "create" : "metadata", mediaRole, null);
-              }}
-            />
-          ))}
-        </div>
+        {renderTitleMediaListEditor(mode, draft, editable)}
 
-        {mode === "metadata" ? (
-          <section className="surface-panel-strong rounded-[1rem] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100/70">Showcase media</h3>
-                <p className="mt-2 text-sm text-slate-400">Add screenshots and video previews for the public title gallery.</p>
-              </div>
-              {metadataEditing ? (
-                <div className="flex flex-wrap gap-2">
-                  <button className="secondary-button" type="button" onClick={() => addShowcaseMediaDraft("image")}>
-                    Add screenshot
-                  </button>
-                  <button className="secondary-button" type="button" onClick={() => addShowcaseMediaDraft("external_video")}>
-                    Add video preview
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            {showcaseMediaDrafts.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-400">No gallery media added yet.</p>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {showcaseMediaDrafts.map((item, index) => (
-                    <article key={item.id ?? `showcase-${index}`} className="rounded-[1rem] border border-white/10 bg-slate-950/40 p-4">
-                      <div className="grid gap-4 xl:grid-cols-[12rem_minmax(0,1fr)]">
-                        <div className="overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/50">
-                          {item.previewUrl || item.imageUrl ? (
-                            <img className="h-36 w-full object-cover" src={item.previewUrl || item.imageUrl} alt={item.altText || "Showcase preview"} />
-                          ) : (
-                            <div className="grid h-36 place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image</div>
-                          )}
-                        </div>
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          <Field label="Type">
-                            <select value={item.kind} onChange={(event) => updateShowcaseMediaDraft(index, { kind: event.currentTarget.value as TitleShowcaseMediaDraft["kind"] })} disabled={!metadataEditing || Boolean(item.id)}>
-                              <option value="image">Screenshot</option>
-                              <option value="external_video">External video</option>
-                            </select>
-                          </Field>
-                          <Field label="Display order">
-                            <input type="number" min={0} value={item.displayOrder} onChange={(event) => updateShowcaseMediaDraft(index, { displayOrder: Number(event.currentTarget.value) || 0 })} disabled={!metadataEditing} />
-                          </Field>
-                          <Field label="Alt text">
-                            <input value={item.altText} onChange={(event) => updateShowcaseMediaDraft(index, { altText: event.currentTarget.value })} disabled={!metadataEditing} />
-                          </Field>
-                          {item.kind === "external_video" ? (
-                            <Field label="Video URL">
-                              <input value={item.videoUrl} onChange={(event) => updateShowcaseMediaDraft(index, { videoUrl: event.currentTarget.value })} disabled={!metadataEditing} placeholder="https://..." />
-                            </Field>
-                          ) : null}
-                          {metadataEditing ? (
-                            <Field label="Preview image">
-                              <input type="file" accept={titleMediaUploadPolicies.hero.acceptedMimeTypes.join(",")} onChange={(event) => void handleShowcaseMediaUpload(index, event.currentTarget.files?.[0] ?? null)} />
-                            </Field>
-                          ) : null}
-                          {metadataEditing ? (
-                            <div className="flex items-end">
-                              <button className="danger-button" type="button" onClick={() => removeShowcaseMediaDraft(index)}>
-                                Remove item
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-              </div>
-            )}
-
-            {showcaseMediaError ? <p className="error-text mt-4">{showcaseMediaError}</p> : null}
-          </section>
-        ) : null}
+        {renderShowcaseMediaEditor(editable)}
 
         <div className="flex flex-wrap gap-3">
           {mode === "create" ? (
@@ -3345,8 +4090,10 @@ export function DevelopWorkspacePage() {
                   type="button"
                   onClick={() => {
                     setMetadataEditing(false);
-                    setMetadataDraft(createTitleDraft(activeTitle, mediaAssets));
-                    setShowcaseMediaDrafts((activeTitle?.showcaseMedia ?? []).map((item, itemIndex) => createTitleShowcaseMediaDraft(item, itemIndex)));
+                    const nextDraft = createTitleDraft(activeTitle);
+                    setMetadataDraft(nextDraft);
+                    setMetadataMediaList(deriveActiveTitleMediaTypeKeys(nextDraft));
+                    setShowcaseMediaDrafts((activeTitle?.showcaseMedia ?? []).map((item) => createTitleShowcaseMediaDraft(item)));
                     setMetadataTouched({});
                     setShowcaseMediaError(null);
                   }}

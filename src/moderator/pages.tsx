@@ -17,6 +17,7 @@ import {
   EmptyState,
   ErrorPanel,
   Field,
+  getWorkspaceWorkflowButtonClass,
   LoadingPanel,
   ModerationReportList,
   TitleReportConversation,
@@ -259,10 +260,10 @@ export function ModeratePage() {
           <aside className="app-panel p-4">
             <div className="text-xs uppercase tracking-[0.2em] text-cyan-100/70">Workflow</div>
             <nav className="mt-3 space-y-2">
-              <button className={activeWorkflow === "developers-verify" ? "w-full rounded-[0.9rem] border border-cyan-300/45 bg-cyan-300/15 px-3 py-2 text-left text-sm text-cyan-50" : "surface-panel-strong w-full rounded-[0.9rem] px-3 py-2 text-left text-sm text-slate-200 transition hover:border-cyan-300/45 hover:text-cyan-100"} type="button" onClick={() => setActiveWorkflow("developers-verify")}>
+              <button className={getWorkspaceWorkflowButtonClass(activeWorkflow === "developers-verify")} type="button" onClick={() => setActiveWorkflow("developers-verify")}>
                 Verify Developers
               </button>
-              <button className={activeWorkflow === "reports-review" ? "w-full rounded-[0.9rem] border border-cyan-300/45 bg-cyan-300/15 px-3 py-2 text-left text-sm text-cyan-50" : "surface-panel-strong w-full rounded-[0.9rem] px-3 py-2 text-left text-sm text-slate-200 transition hover:border-cyan-300/45 hover:text-cyan-100"} type="button" onClick={() => setActiveWorkflow("reports-review")}>
+              <button className={getWorkspaceWorkflowButtonClass(activeWorkflow === "reports-review")} type="button" onClick={() => setActiveWorkflow("reports-review")}>
                 Reported Titles
               </button>
             </nav>
@@ -376,5 +377,4 @@ export function ModeratePage() {
     </section>
   );
 }
-
 

@@ -3,9 +3,13 @@ import type {
   AddTitleReportMessageRequest,
   AgeRatingAuthorityListResponse,
   BoardProfileResponse,
+  CatalogMediaEntryListResponse,
+  CatalogMediaEntryResponse,
+  CatalogMediaTypeListResponse,
   CatalogTitleListQuery,
   CatalogTitleListResponse,
   CatalogTitleResponse,
+  CreateCatalogMediaEntryRequest,
   CreateDeveloperTitleRequest,
   DeleteDeveloperTitleRequest,
   CreatePlayerTitleReportRequest,
@@ -32,6 +36,7 @@ import type {
   StudioListResponse,
   StudioResponse,
   UpdateUserProfileRequest,
+  UpdateCatalogMediaEntryRequest,
   UpsertBoardProfileRequest,
   UserNotificationListResponse,
   UserNotificationResponse,
@@ -82,9 +87,6 @@ export interface StudioMutationRequest {
   slug: string;
   displayName: string;
   description?: string | null;
-  avatarUrl?: string | null;
-  logoUrl?: string | null;
-  bannerUrl?: string | null;
 }
 
 export interface StudioLinkMutationRequest {
@@ -264,8 +266,8 @@ export function listCatalogTitles(apiBaseUrl: string, query: CatalogTitleListQue
   return apiFetch<CatalogTitleListResponse>(apiBaseUrl, `/catalog?${searchParams.toString()}`);
 }
 
-export function getCatalogTitle(apiBaseUrl: string, studioSlug: string, titleSlug: string, accessToken?: string | null): Promise<CatalogTitleResponse> {
-  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioSlug}/${titleSlug}`, {}, accessToken ?? undefined);
+export function getCatalogTitle(apiBaseUrl: string, studioIdentifier: string, titleIdentifier: string, accessToken?: string | null): Promise<CatalogTitleResponse> {
+  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioIdentifier}/${titleIdentifier}`, {}, accessToken ?? undefined);
 }
 
 export function getHomeSpotlights(apiBaseUrl: string): Promise<HomeSpotlightResponse> {
@@ -296,8 +298,8 @@ export function listPublicStudios(apiBaseUrl: string): Promise<StudioListRespons
   return apiFetch<StudioListResponse>(apiBaseUrl, "/studios");
 }
 
-export function getPublicStudio(apiBaseUrl: string, studioSlug: string): Promise<StudioResponse> {
-  return apiFetch<StudioResponse>(apiBaseUrl, `/studios/${studioSlug}`);
+export function getPublicStudio(apiBaseUrl: string, studioIdentifier: string): Promise<StudioResponse> {
+  return apiFetch<StudioResponse>(apiBaseUrl, `/studios/${studioIdentifier}`);
 }
 
 export function getCurrentUser(apiBaseUrl: string, accessToken: string): Promise<CurrentUserResponse> {
@@ -422,6 +424,10 @@ export function listManagedStudios(apiBaseUrl: string, accessToken: string): Pro
   return apiFetch<DeveloperStudioListResponse>(apiBaseUrl, "/developer/studios", {}, accessToken);
 }
 
+export function listCatalogMediaTypes(apiBaseUrl: string, accessToken: string): Promise<CatalogMediaTypeListResponse> {
+  return apiFetch<CatalogMediaTypeListResponse>(apiBaseUrl, "/developer/media-types", {}, accessToken);
+}
+
 export function createStudio(apiBaseUrl: string, accessToken: string, request: StudioMutationRequest): Promise<StudioResponse> {
   return apiFetch<StudioResponse>(
     apiBaseUrl,
@@ -508,6 +514,74 @@ export function uploadStudioMedia(
     {
       method: "POST",
       body: formData
+    },
+    accessToken
+  );
+}
+
+export function listStudioCatalogMedia(apiBaseUrl: string, accessToken: string, studioId: string): Promise<CatalogMediaEntryListResponse> {
+  return apiFetch<CatalogMediaEntryListResponse>(apiBaseUrl, `/developer/studios/${studioId}/catalog-media`, {}, accessToken);
+}
+
+export function createStudioCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  studioId: string,
+  request: CreateCatalogMediaEntryRequest
+): Promise<CatalogMediaEntryResponse> {
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/studios/${studioId}/catalog-media`,
+    {
+      method: "POST",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function updateStudioCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  studioId: string,
+  mediaEntryId: string,
+  request: UpdateCatalogMediaEntryRequest
+): Promise<CatalogMediaEntryResponse> {
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/studios/${studioId}/catalog-media/${mediaEntryId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function deleteStudioCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  studioId: string,
+  mediaEntryId: string
+): Promise<void> {
+  return apiFetch<void>(apiBaseUrl, `/developer/studios/${studioId}/catalog-media/${mediaEntryId}`, { method: "DELETE" }, accessToken);
+}
+
+export function uploadStudioCatalogMediaImage(
+  apiBaseUrl: string,
+  accessToken: string,
+  studioId: string,
+  mediaEntryId: string,
+  file: File
+): Promise<CatalogMediaEntryResponse> {
+  const formData = new FormData();
+  formData.set("media", file);
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/studios/${studioId}/catalog-media/${mediaEntryId}/upload`,
+    {
+      method: "POST",
+      body: formData,
     },
     accessToken
   );
@@ -612,6 +686,79 @@ export function activateTitleMetadataVersion(apiBaseUrl: string, accessToken: st
 
 export function getTitleMediaAssets(apiBaseUrl: string, accessToken: string, titleId: string): Promise<TitleMediaAssetListResponse> {
   return apiFetch<TitleMediaAssetListResponse>(apiBaseUrl, `/developer/titles/${titleId}/media`, {}, accessToken);
+}
+
+export function listTitleCatalogMedia(apiBaseUrl: string, accessToken: string, titleId: string): Promise<CatalogMediaEntryListResponse> {
+  return apiFetch<CatalogMediaEntryListResponse>(apiBaseUrl, `/developer/titles/${titleId}/catalog-media`, {}, accessToken);
+}
+
+export function createTitleCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  request: CreateCatalogMediaEntryRequest
+): Promise<CatalogMediaEntryResponse> {
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/catalog-media`,
+    {
+      method: "POST",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function updateTitleCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  mediaEntryId: string,
+  request: UpdateCatalogMediaEntryRequest
+): Promise<CatalogMediaEntryResponse> {
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/catalog-media/${mediaEntryId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request)
+    },
+    accessToken
+  );
+}
+
+export function deleteTitleCatalogMedia(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  mediaEntryId: string
+): Promise<void> {
+  return apiFetch<void>(apiBaseUrl, `/developer/titles/${titleId}/catalog-media/${mediaEntryId}`, { method: "DELETE" }, accessToken);
+}
+
+export function uploadTitleCatalogMediaImage(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  mediaEntryId: string,
+  file: File,
+  altText?: string | null
+): Promise<CatalogMediaEntryResponse> {
+  const formData = new FormData();
+  formData.set("media", file);
+  if (altText) {
+    formData.set("altText", altText);
+  }
+
+  return apiFetch<CatalogMediaEntryResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/catalog-media/${mediaEntryId}/upload`,
+    {
+      method: "POST",
+      body: formData,
+    },
+    accessToken
+  );
 }
 
 export function upsertTitleMediaAsset(

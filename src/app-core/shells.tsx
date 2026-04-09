@@ -181,7 +181,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   Play
                 </NavLink>
                 <NavLink to="/developer" className={({ isActive }) => navLinkClass(isActive)}>
-                  Developer
+                  Develop
                 </NavLink>
                 {showModerateSection ? (
                   <NavLink to="/moderate" className={({ isActive }) => navLinkClass(isActive)}>
@@ -359,7 +359,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Play
               </NavLink>
               <NavLink to="/developer" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
-                Developer
+                Develop
               </NavLink>
               {showModerateSection ? (
                 <NavLink to="/moderate" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>

@@ -1,4 +1,4 @@
-import type { BoardProfile, CatalogTitleSummary, CurrentUserResponse, PlayerTitleReportSummary, StudioSummary, TitleReportDetail, UserNotification, UserProfile } from "@board-enthusiasts/migration-contract";
+import type { BoardProfile, CatalogMediaTypeDefinition, CatalogTitleSummary, CurrentUserResponse, PlayerTitleReportSummary, StudioSummary, TitleReportDetail, UserNotification, UserProfile } from "@board-enthusiasts/migration-contract";
 import { useDeferredValue, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, Navigate, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -13,6 +13,7 @@ import {
   getPlayerTitleReports,
   getPlayerWishlist,
   getUserProfile,
+  listCatalogMediaTypes,
   listManagedStudios,
   markCurrentUserNotificationRead,
   removeStudioFromPlayerFollows,
@@ -35,8 +36,12 @@ import {
   EmptyState,
   ErrorPanel,
   Field,
-  getFallbackGradient,
-  formatMembershipRole,
+  fallbackCatalogMediaTypes,
+  getCatalogMediaAspectRatioValue,
+  getFallbackArtworkUrl,
+  getFirstCatalogImageByType,
+  getStudioLogoImageUrl,
+  getWorkspaceWorkflowButtonClass,
   formatNotificationCategory,
   formatNotificationTimestamp,
   formatReportStatus,
@@ -49,6 +54,7 @@ import {
   getPasswordPolicyErrors,
   getSocialAuthProviderLabel,
   isApiErrorStatus,
+  isKnownStudioLink,
   isSocialAuthProvider,
   LoadingPanel,
   PasswordField,
@@ -66,6 +72,7 @@ import {
   SIGN_IN_OAUTH_RETURN_TO_STORAGE_KEY,
   SIGN_IN_PAGE_DRAFT_STORAGE_KEY,
   SocialAuthProviderIcon,
+  StudioLinkIcon,
   CaptchaWidget,
   TitleReportConversation,
   UnderlineActionLink,
@@ -78,6 +85,27 @@ import {
   type PlayerPageDraftState,
   type SignInPageDraftState,
 } from "../app-core";
+
+function ArrowOutwardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">
+      <path d="m256-240-56-56 384-384H240v-80h480v480h-80v-344L256-240Z" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true">
+      <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" />
+    </svg>
+  );
+}
+
+const panelIconButtonClassName =
+  "app-icon-button border-white/12 bg-slate-950/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_24px_rgba(0,0,0,0.22)] hover:bg-slate-950/95";
+const dangerPanelIconButtonClassName =
+  "app-icon-button border-rose-300/35 bg-rose-950/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_24px_rgba(42,8,16,0.28)] hover:bg-rose-900/90";
 
 export function SignInPage() {
   const {
@@ -106,6 +134,7 @@ export function SignInPage() {
       password: storedDraft?.password ?? "",
       showSignInPassword: storedDraft?.showSignInPassword ?? false,
       mfaChallengeOpen: storedDraft?.mfaChallengeOpen ?? false,
+      mfaChallengePurpose: storedDraft?.mfaChallengePurpose === "recovery" ? "recovery" : "sign-in",
       mfaCode: storedDraft?.mfaCode ?? "",
       mfaFactorId: typeof storedDraft?.mfaFactorId === "string" ? storedDraft.mfaFactorId : null,
       mfaFactorLabel: storedDraft?.mfaFactorLabel ?? "Authenticator app",
@@ -128,6 +157,7 @@ export function SignInPage() {
   const [password, setPassword] = useState(signInDraft.password);
   const [showSignInPassword, setShowSignInPassword] = useState(signInDraft.showSignInPassword);
   const [mfaChallengeOpen, setMfaChallengeOpen] = useState(signInDraft.mfaChallengeOpen);
+  const [mfaChallengePurpose, setMfaChallengePurpose] = useState<"sign-in" | "recovery">(signInDraft.mfaChallengePurpose);
   const [mfaCode, setMfaCode] = useState(signInDraft.mfaCode);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(signInDraft.mfaFactorId);
   const [mfaFactorLabel, setMfaFactorLabel] = useState(signInDraft.mfaFactorLabel);
@@ -234,6 +264,7 @@ export function SignInPage() {
       password,
       showSignInPassword,
       mfaChallengeOpen,
+      mfaChallengePurpose,
       mfaCode,
       mfaFactorId,
       mfaFactorLabel,
@@ -255,6 +286,7 @@ export function SignInPage() {
     mfaFactorId,
     mfaFactorLabel,
     mfaChallengeOpen,
+    mfaChallengePurpose,
     mfaCode,
     password,
     recoveryCode,
@@ -362,6 +394,56 @@ export function SignInPage() {
     setRecoveryStatusMessage("If that email matches an account, a recovery link and code have been sent.");
   }
 
+  async function beginMfaChallengeIfRequired(purpose: "sign-in" | "recovery"): Promise<boolean> {
+    const assuranceResponse = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceResponse.error) {
+      throw new Error(assuranceResponse.error.message);
+    }
+
+    if (assuranceResponse.data.nextLevel !== "aal2" || assuranceResponse.data.currentLevel === "aal2") {
+      return false;
+    }
+
+    const factorsResponse = await client.auth.mfa.listFactors();
+    if (factorsResponse.error) {
+      throw new Error(factorsResponse.error.message);
+    }
+
+    const totpFactor = factorsResponse.data.totp[0] ?? factorsResponse.data.all.find((factor) => factor.factor_type === "totp" && factor.status === "verified");
+    if (!totpFactor) {
+      throw new Error("Multi-factor authentication is required, but no verified authenticator app is available.");
+    }
+
+    setMfaFactorId(totpFactor.id);
+    setMfaFactorLabel(totpFactor.friendly_name?.trim() || "Authenticator app");
+    setMfaChallengePurpose(purpose);
+    setMfaChallengeOpen(true);
+    setMfaCode("");
+    setMfaError(null);
+    if (purpose === "recovery") {
+      setRecoveryStatusMessage(null);
+      setPasswordRecoveryError(null);
+    } else {
+      setPageMessage("Enter the code from your authenticator app to finish signing in.");
+    }
+    return true;
+  }
+
+  async function finishPasswordRecovery(): Promise<void> {
+    await updatePassword(recoveryPassword);
+    try {
+      await signOut({ tolerateNetworkFailure: true });
+    } catch {
+      // Password recovery is complete once the password change succeeds.
+      // If session revocation cannot be confirmed, continue back to sign-in.
+    }
+    setRecoveryModalOpen(false);
+    resetRecoveryState();
+    setPageMessage("Password updated. Sign in with your new password.");
+    removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+    navigate("/auth/signin", { replace: true });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setSubmitting(true);
@@ -376,28 +458,7 @@ export function SignInPage() {
       }
 
       await signIn(email.trim(), password);
-      const assuranceResponse = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (assuranceResponse.error) {
-        throw new Error(assuranceResponse.error.message);
-      }
-
-      if (assuranceResponse.data.nextLevel === "aal2" && assuranceResponse.data.currentLevel !== "aal2") {
-        const factorsResponse = await client.auth.mfa.listFactors();
-        if (factorsResponse.error) {
-          throw new Error(factorsResponse.error.message);
-        }
-
-        const totpFactor = factorsResponse.data.totp[0] ?? factorsResponse.data.all.find((factor) => factor.factor_type === "totp" && factor.status === "verified");
-        if (!totpFactor) {
-          throw new Error("Multi-factor authentication is required, but no verified authenticator app is available.");
-        }
-
-        setMfaFactorId(totpFactor.id);
-        setMfaFactorLabel(totpFactor.friendly_name?.trim() || "Authenticator app");
-        setMfaChallengeOpen(true);
-        setMfaCode("");
-        setMfaError(null);
-        setPageMessage("Enter the code from your authenticator app to finish signing in.");
+      if (await beginMfaChallengeIfRequired("sign-in")) {
         return;
       }
 
@@ -431,12 +492,22 @@ export function SignInPage() {
         throw new Error(response.error.message);
       }
 
+      const challengePurpose = mfaChallengePurpose;
       setMfaChallengeOpen(false);
       setMfaCode("");
       setMfaFactorId(null);
-      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
-      clearPendingOAuthReturnTo();
-      navigate(returnTo, { replace: true });
+      setMfaChallengePurpose("sign-in");
+      if (challengePurpose === "recovery") {
+        try {
+          await finishPasswordRecovery();
+        } catch (nextError) {
+          setPasswordRecoveryError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      } else {
+        removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
+        clearPendingOAuthReturnTo();
+        navigate(returnTo, { replace: true });
+      }
     } catch (nextError) {
       setMfaError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -454,6 +525,7 @@ export function SignInPage() {
     setMfaChallengeOpen(false);
     setMfaCode("");
     setMfaFactorId(null);
+    setMfaChallengePurpose("sign-in");
     setMfaError(null);
   }
 
@@ -568,18 +640,11 @@ export function SignInPage() {
         throw new Error("Password confirmation must match.");
       }
 
-      await updatePassword(recoveryPassword);
-      try {
-        await signOut({ tolerateNetworkFailure: true });
-      } catch {
-        // Password recovery is complete once the password change succeeds.
-        // If session revocation cannot be confirmed, continue back to sign-in.
+      if (await beginMfaChallengeIfRequired("recovery")) {
+        return;
       }
-      setRecoveryModalOpen(false);
-      resetRecoveryState();
-      setPageMessage("Password updated. Sign in with your new password.");
-      removeSessionStorageJson(SIGN_IN_PAGE_DRAFT_STORAGE_KEY);
-      navigate("/auth/signin", { replace: true });
+
+      await finishPasswordRecovery();
     } catch (nextError) {
       setPasswordRecoveryError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -906,9 +971,13 @@ export function SignInPage() {
             <section className="app-panel space-y-6 p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="mfa-modal-title">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 id="mfa-modal-title" className="text-2xl font-semibold text-white">Complete sign-in</h2>
+                  <h2 id="mfa-modal-title" className="text-2xl font-semibold text-white">
+                    {mfaChallengePurpose === "recovery" ? "Verify authenticator" : "Complete sign-in"}
+                  </h2>
                   <p className="mt-2 text-sm leading-7 text-slate-300">
-                    Enter the current code from {mfaFactorLabel.toLowerCase()} to finish signing in.
+                    {mfaChallengePurpose === "recovery"
+                      ? `Enter the current code from ${mfaFactorLabel.toLowerCase()} to finish resetting your password.`
+                      : `Enter the current code from ${mfaFactorLabel.toLowerCase()} to finish signing in.`}
                   </p>
                 </div>
                 <button className="secondary-button" type="button" onClick={() => void handleCancelMfaChallenge()}>Cancel</button>
@@ -1022,6 +1091,7 @@ export function PlayerPage() {
   const [libraryTitles, setLibraryTitles] = useState<CatalogTitleSummary[]>([]);
   const [wishlistTitles, setWishlistTitles] = useState<CatalogTitleSummary[]>([]);
   const [followedStudios, setFollowedStudios] = useState<StudioSummary[]>([]);
+  const [catalogMediaTypes, setCatalogMediaTypes] = useState<CatalogMediaTypeDefinition[]>(fallbackCatalogMediaTypes);
   const [reports, setReports] = useState<PlayerTitleReportSummary[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(playerDraft.selectedReportId);
   const [selectedReport, setSelectedReport] = useState<TitleReportDetail | null>(null);
@@ -1231,13 +1301,14 @@ export function PlayerPage() {
 
     async function load(): Promise<void> {
       try {
-        const [profileResponse, enrollmentResponse, boardProfileResponse, libraryResponse, wishlistResponse, followedStudiosResponse] = await Promise.all([
+        const [profileResponse, enrollmentResponse, boardProfileResponse, libraryResponse, wishlistResponse, followedStudiosResponse, mediaTypesResponse] = await Promise.all([
           getUserProfile(appConfig.apiBaseUrl, accessToken),
           getDeveloperEnrollment(appConfig.apiBaseUrl, accessToken),
           loadBoardProfileSafe(),
           getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
           getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
           getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken),
+          listCatalogMediaTypes(appConfig.apiBaseUrl, accessToken).catch(() => ({ mediaTypes: fallbackCatalogMediaTypes })),
         ]);
         const reportsResponse = await getPlayerTitleReports(appConfig.apiBaseUrl, accessToken);
         const [mfaState, identities] = await Promise.all([loadMfaState(), loadConnectedAccountIdentities()]);
@@ -1263,6 +1334,7 @@ export function PlayerPage() {
         setLibraryTitles(libraryResponse.titles);
         setWishlistTitles(wishlistResponse.titles);
         setFollowedStudios(followedStudiosResponse.studios);
+        setCatalogMediaTypes(mediaTypesResponse.mediaTypes.length > 0 ? mediaTypesResponse.mediaTypes : fallbackCatalogMediaTypes);
         setReports(reportsResponse.reports);
         setSelectedReportId(
           reportsResponse.reports.find((report) => report.id === requestedReportId)?.id ??
@@ -1782,6 +1854,9 @@ export function PlayerPage() {
   const activeWorkflow = getActiveWorkflow();
   const activeDomain = activeWorkflow.startsWith("account-") ? "account" : "library";
   const hasDeveloperRole = currentUser?.roles.includes("developer") ?? false;
+  const titleShowcaseAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_showcase");
+  const titleAvatarAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_avatar");
+  const studioLogoAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "studio_logo");
 
   useEffect(() => {
     if (activeWorkflow !== "account-settings" || !pendingPasswordSectionFocusRef.current) {
@@ -1870,7 +1945,7 @@ export function PlayerPage() {
                 .map(([key, label]) => (
                   <button
                     key={key}
-                    className={activeWorkflow === key ? "w-full rounded-[0.9rem] border border-cyan-300/45 bg-cyan-300/15 px-3 py-2 text-left text-sm text-cyan-50" : "surface-panel-strong w-full rounded-[0.9rem] px-3 py-2 text-left text-sm text-slate-200 transition hover:border-cyan-300/45 hover:text-cyan-100"}
+                    className={getWorkspaceWorkflowButtonClass(activeWorkflow === key)}
                     type="button"
                     onClick={() => navigateToWorkflow(key)}
                   >
@@ -1923,22 +1998,63 @@ export function PlayerPage() {
                 <p className="mt-3 text-sm leading-7 text-slate-300">Save titles you want to come back to later.</p>
                 {wishlistTitles.length > 0 ? (
                   <div className="mt-6 list-stack">
-                    {wishlistTitles.map((title) => (
-                      <article key={title.id} className="list-item">
-                        <div>
-                          <strong>{title.displayName}</strong>
-                          <p>{title.shortDescription}</p>
-                        </div>
-                        <div className="button-row compact">
-                          <Link className="secondary-button" to={`/browse/${title.studioSlug}/${title.slug}`}>
-                            Open title
-                          </Link>
-                          <button type="button" className="danger-button" disabled={saving} onClick={() => void handleCollectionRemoval("wishlist", title.id)}>
-                            Remove
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                    {wishlistTitles.map((title) => {
+                      const showcaseImage = getFirstCatalogImageByType(title, "title_showcase");
+                      const titleAvatarImage = getFirstCatalogImageByType(title, "title_avatar");
+                      const previewImage = showcaseImage ?? titleAvatarImage;
+                      const previewAspectRatio = showcaseImage ? titleShowcaseAspectRatio : titleAvatarAspectRatio;
+                      const previewWidthClass = showcaseImage ? "max-w-[12rem]" : "max-w-[8rem]";
+                      const previewSource = previewImage?.sourceUrl ?? getFallbackArtworkUrl(title);
+                      const previewAlt =
+                        previewImage?.altText ??
+                        (showcaseImage ? `${title.displayName} showcase preview` : titleAvatarImage ? `${title.displayName} avatar` : `${title.displayName} fallback artwork`);
+
+                      return (
+                        <article key={title.id} className="list-item">
+                          <div className="grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                            <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start">
+                              <div className={`w-full shrink-0 ${previewWidthClass}`}>
+                                <div
+                                  className="overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/70 shadow-[0_12px_28px_rgba(0,0,0,0.24)]"
+                                  data-testid={`wishlist-showcase-${title.id}`}
+                                  style={{ aspectRatio: previewAspectRatio }}
+                                >
+                                  <img
+                                    className="h-full w-full object-cover"
+                                    src={previewSource}
+                                    alt={previewAlt}
+                                  />
+                                </div>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <strong className="block text-lg text-white">{title.displayName}</strong>
+                                <p className="mt-2">{title.shortDescription || "No summary has been added for this title yet."}</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Link
+                                className={panelIconButtonClassName}
+                                to={`/browse/${title.studioSlug}/${title.slug}`}
+                                title="Open title"
+                                aria-label="Open title"
+                              >
+                                <ArrowOutwardIcon className="size-5" />
+                              </Link>
+                              <button
+                                type="button"
+                                className={dangerPanelIconButtonClassName}
+                                title="Remove from wishlist"
+                                aria-label="Remove from wishlist"
+                                disabled={saving}
+                                onClick={() => void handleCollectionRemoval("wishlist", title.id)}
+                              >
+                                <CloseIcon className="size-5" />
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-6 space-y-4">
@@ -1958,52 +2074,84 @@ export function PlayerPage() {
                 <h2 className="text-2xl font-semibold text-white">Studios You Follow</h2>
                 <p className="mt-3 text-sm leading-7 text-slate-300">The studios you follow show up here for quick access.</p>
                 {followedStudios.length > 0 ? (
-                  <div className="mt-6 grid gap-5 xl:grid-cols-2">
-                    {followedStudios.map((studio) => (
-                      <article key={studio.id} className="app-panel overflow-hidden p-0">
-                        <div
-                          className="min-h-[12rem] bg-cover bg-center"
-                          style={studio.bannerUrl ? { backgroundImage: `url('${studio.bannerUrl}')` } : { backgroundImage: getFallbackGradient(studio.description) }}
+                  <div className="mt-6 list-stack">
+                    {followedStudios.map((studio) => {
+                      const studioLogoUrl = getStudioLogoImageUrl(studio);
+                      const prominentStudioLinks = studio.links.filter((link) => isKnownStudioLink(link.url));
+                      const studioBackgroundStyle = studio.bannerUrl
+                        ? { backgroundImage: `url('${studio.bannerUrl}')`, backgroundSize: "cover", backgroundPosition: "center" }
+                        : undefined;
+
+                      return (
+                        <article
+                          key={studio.id}
+                          className="list-item relative overflow-hidden p-0"
+                          data-testid={`followed-studio-item-${studio.id}`}
+                          style={studioBackgroundStyle}
                         >
-                          <div className="h-full bg-[linear-gradient(135deg,rgba(7,12,22,0.88),rgba(7,12,22,0.48),rgba(7,12,22,0.9))] p-5">
-                            <div className="flex min-w-0 items-start gap-4">
-                              {studio.avatarUrl || studio.logoUrl ? (
-                                <img className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-[1.15rem] border border-white/12 object-cover shadow-[0_12px_24px_rgba(0,0,0,0.26)]" src={studio.avatarUrl ?? studio.logoUrl ?? undefined} alt={`${studio.displayName} avatar`} />
-                              ) : (
-                                <div className="grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center rounded-[1.15rem] border border-white/12 bg-slate-950/60 text-xl font-bold text-slate-100 shadow-[0_12px_24px_rgba(0,0,0,0.22)]">
-                                  {studio.displayName.slice(0, 2).toUpperCase()}
+                          <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(8,10,18,0.9),rgba(8,10,18,0.58),rgba(8,10,18,0.88))]" />
+                          <div className="relative z-10 p-4 sm:p-5">
+                            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                              <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(8.5rem,10rem)_minmax(0,1fr)] md:items-start">
+                                <div className="w-full max-w-[10rem] shrink-0">
+                                  <div
+                                    className="flex items-center justify-center overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/50 shadow-[0_12px_28px_rgba(0,0,0,0.24)]"
+                                    data-testid={`followed-studio-logo-${studio.id}`}
+                                    style={{ aspectRatio: studioLogoAspectRatio }}
+                                  >
+                                    {studioLogoUrl ? (
+                                      <img
+                                        className="h-full w-full object-cover"
+                                        src={studioLogoUrl}
+                                        alt={`${studio.displayName} logo`}
+                                      />
+                                    ) : (
+                                      <div className="grid h-full w-full place-items-center text-xl font-bold uppercase tracking-[0.12em] text-slate-100">
+                                        {studio.displayName.slice(0, 2).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <div className="eyebrow">Studio</div>
-                                <h3 className="mt-2 truncate font-display text-2xl font-bold text-white">{studio.displayName}</h3>
-                                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200">
-                                  {studio.description?.trim() || "Followed studios appear here for quick access as their catalog grows."}
-                                </p>
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  <span className="rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="font-display text-2xl font-bold leading-tight text-white sm:text-[2rem]">{studio.displayName}</h3>
+                                  <p className="mt-2 whitespace-nowrap text-sm font-semibold uppercase tracking-[0.16em] text-cyan-100/75">
                                     {studio.followerCount} follower{studio.followerCount === 1 ? "" : "s"}
-                                  </span>
-                                  {studio.links.length > 0 ? (
-                                    <span className="rounded-full border border-white/15 bg-slate-950/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
-                                      {studio.links.length} link{studio.links.length === 1 ? "" : "s"}
-                                    </span>
-                                  ) : null}
+                                  </p>
                                 </div>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {prominentStudioLinks.map((link) => (
+                                  <a
+                                    key={link.id}
+                                    className={panelIconButtonClassName}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={link.label}
+                                    aria-label={link.label}
+                                  >
+                                    <StudioLinkIcon url={link.url} />
+                                  </a>
+                                ))}
+                                <Link className={panelIconButtonClassName} to={`/studios/${studio.slug}`} title="Open studio" aria-label="Open studio">
+                                  <ArrowOutwardIcon className="size-5" />
+                                </Link>
+                                <button
+                                  type="button"
+                                  className={dangerPanelIconButtonClassName}
+                                  title="Unfollow studio"
+                                  aria-label="Unfollow studio"
+                                  disabled={saving}
+                                  onClick={() => void handleFollowedStudioRemoval(studio.id)}
+                                >
+                                  <CloseIcon className="size-5" />
+                                </button>
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col gap-3 border-t border-white/8 bg-slate-950/38 p-5 sm:flex-row sm:items-center sm:justify-end">
-                          <Link className="secondary-button" to={`/studios/${studio.slug}`}>
-                            Open studio
-                          </Link>
-                          <button type="button" className="danger-button" disabled={saving} onClick={() => void handleFollowedStudioRemoval(studio.id)}>
-                            Unfollow
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                        </article>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-6 space-y-4">

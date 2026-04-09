@@ -1,4 +1,7 @@
 import type {
+  CatalogMediaEntry,
+  CatalogMediaTypeDefinition,
+  CatalogMediaTypeKey,
   CatalogTitleResponse,
   CatalogTitleSummary,
   CurrentUserResponse,
@@ -6,7 +9,7 @@ import type {
   TitleMediaAsset,
   UserProfile,
 } from "@board-enthusiasts/migration-contract";
-import { migrationMediaUploadPolicies } from "@board-enthusiasts/migration-contract";
+import { catalogMediaTypeDefinitions, migrationMediaUploadPolicies } from "@board-enthusiasts/migration-contract";
 import type { ChangeEvent } from "react";
 import { ApiError } from "../api";
 import { readAppConfig, type AppConfig } from "../config";
@@ -80,11 +83,99 @@ export function getCaptchaMode(siteKey: string | null): CaptchaMode {
 
   return "disabled";
 }
+
+export function getAbsoluteUrl(path: string): string {
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  return new URL(path, window.location.origin).toString();
+}
+
+export function getTitleDetailPath(studioSlug: string, titleSlug: string): string {
+  return `/browse/${studioSlug}/${titleSlug}`;
+}
+
+export function getTitleDetailPageUrl(studioSlug: string, titleSlug: string): string {
+  return getAbsoluteUrl(getTitleDetailPath(studioSlug, titleSlug));
+}
+
+export function getTitleSharePath(studioId: string, titleId: string): string {
+  return `/browse/${studioId}/${titleId}`;
+}
+
+export function getTitleSharePageUrl(studioId: string, titleId: string): string {
+  return getAbsoluteUrl(getTitleSharePath(studioId, titleId));
+}
+
+export function getStudioDetailPath(studioSlug: string): string {
+  return `/studios/${studioSlug}`;
+}
+
+export function getStudioDetailPageUrl(studioSlug: string): string {
+  return getAbsoluteUrl(getStudioDetailPath(studioSlug));
+}
+
+export async function writeTextToClipboard(value: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard access is unavailable.");
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  textArea.style.pointerEvents = "none";
+  document.body.append(textArea);
+  textArea.focus();
+  textArea.select();
+
+  const copied = typeof document.execCommand === "function" && document.execCommand("copy");
+  textArea.remove();
+
+  if (!copied) {
+    throw new Error("Clipboard access is unavailable.");
+  }
+}
 export const PLAYER_FILTER_MIN = 1;
 export const PLAYER_FILTER_MAX = 8;
 export const avatarUploadPolicy = migrationMediaUploadPolicies.avatars;
 export const AVATAR_UPLOAD_ACCEPT = avatarUploadPolicy.acceptedMimeTypes.join(",");
 export const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const fallbackCatalogMediaTypes = Object.values(catalogMediaTypeDefinitions);
+
+const fallbackCatalogMediaTypeDefinitionByKey = fallbackCatalogMediaTypes.reduce<Record<CatalogMediaTypeKey, CatalogMediaTypeDefinition>>(
+  (accumulator, definition) => {
+    accumulator[definition.key] = definition;
+    return accumulator;
+  },
+  {} as Record<CatalogMediaTypeKey, CatalogMediaTypeDefinition>,
+);
+
+export function buildAspectRatioValue(width: number, height: number): string {
+  return `${width} / ${height}`;
+}
+
+export function getCatalogMediaTypeDefinition(
+  definitions: readonly CatalogMediaTypeDefinition[] | null | undefined,
+  key: CatalogMediaTypeKey,
+): CatalogMediaTypeDefinition {
+  return definitions?.find((definition) => definition.key === key) ?? fallbackCatalogMediaTypeDefinitionByKey[key];
+}
+
+export function getCatalogMediaAspectRatioValue(
+  definitions: readonly CatalogMediaTypeDefinition[] | null | undefined,
+  key: CatalogMediaTypeKey,
+): string {
+  const definition = getCatalogMediaTypeDefinition(definitions, key);
+  return buildAspectRatioValue(definition.recommendedWidth, definition.recommendedHeight);
+}
 
 export function validateEmailInput(value: string): string | null {
   const trimmed = value.trim();
@@ -154,6 +245,7 @@ export interface TitleCreateState {
   description: string;
   minPlayers: number;
   maxPlayers: number;
+  maxPlayersOrMore: boolean;
   ageRatingAuthority: string;
   ageRatingValue: string;
   minAgeYears: number;
@@ -173,6 +265,7 @@ export interface MetadataEditorState {
   genreDisplay: string;
   minPlayers: number;
   maxPlayers: number;
+  maxPlayersOrMore: boolean;
   ageRatingAuthority: string;
   ageRatingValue: string;
   minAgeYears: number;
@@ -234,6 +327,7 @@ export interface SignInPageDraftState {
   password: string;
   showSignInPassword: boolean;
   mfaChallengeOpen: boolean;
+  mfaChallengePurpose: "sign-in" | "recovery";
   mfaCode: string;
   mfaFactorId: string | null;
   mfaFactorLabel: string;
@@ -286,6 +380,10 @@ export const PLAYER_PAGE_DRAFT_STORAGE_KEY = "player-page-draft";
 
 export function slugifyValue(value: string): string {
   return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['’`]/g, "")
+    .replace(/&/g, " and ")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
@@ -708,6 +806,7 @@ export function createInitialTitleState(): TitleCreateState {
     description: "",
     minPlayers: 1,
     maxPlayers: 4,
+    maxPlayersOrMore: false,
     ageRatingAuthority: "",
     ageRatingValue: "",
     minAgeYears: 10,
@@ -731,6 +830,7 @@ export function createMetadataEditorState(title: DeveloperTitle | null): Metadat
     genreDisplay: title?.genreDisplay ?? "",
     minPlayers: title?.minPlayers ?? 1,
     maxPlayers: title?.maxPlayers ?? 1,
+    maxPlayersOrMore: title?.maxPlayersOrMore ?? false,
     ageRatingAuthority: title?.ageRatingAuthority ?? "",
     ageRatingValue: title?.ageRatingValue ?? "",
     minAgeYears: title?.minAgeYears ?? 10,
@@ -800,16 +900,84 @@ export function formatPlayerFilterSummary(minPlayers: number, maxPlayers: number
   return `${minPlayers} to ${formatPlayerFilterValue(maxPlayers)} players`;
 }
 
+export function formatPlayerCountDisplay(minPlayers: number, maxPlayers: number, maxPlayersOrMore: boolean): string {
+  if (maxPlayersOrMore) {
+    return minPlayers === maxPlayers ? `${maxPlayers}+ players` : `${minPlayers}-${maxPlayers}+ players`;
+  }
+
+  return minPlayers === maxPlayers ? `${minPlayers} player${minPlayers === 1 ? "" : "s"}` : `${minPlayers}-${maxPlayers} players`;
+}
+
+export function getCatalogMediaEntriesByType<TMediaOwner extends { catalogMediaEntries?: CatalogMediaEntry[] | null }>(
+  owner: TMediaOwner,
+  mediaTypeKey: CatalogMediaEntry["mediaTypeKey"],
+): CatalogMediaEntry[] {
+  return (owner.catalogMediaEntries ?? [])
+    .filter((entry) => entry.mediaTypeKey === mediaTypeKey)
+    .sort((left, right) => left.displayOrder - right.displayOrder || left.createdAt.localeCompare(right.createdAt));
+}
+
+export function getFirstCatalogImageByType<TMediaOwner extends { catalogMediaEntries?: CatalogMediaEntry[] | null }>(
+  owner: TMediaOwner,
+  mediaTypeKey: CatalogMediaEntry["mediaTypeKey"],
+): CatalogMediaEntry | null {
+  return getCatalogMediaEntriesByType(owner, mediaTypeKey).find((entry) => entry.kind === "image" && entry.sourceUrl) ?? null;
+}
+
 export function getHeroImageUrl(title: CatalogTitleResponse["title"]): string | null {
-  return title.mediaAssets.find((asset) => asset.mediaRole === "hero")?.sourceUrl ?? title.cardImageUrl ?? null;
+  return (
+    getFirstCatalogImageByType(title, "title_quick_view_banner")?.sourceUrl ??
+    getFirstCatalogImageByType(title, "title_showcase")?.sourceUrl ??
+    title.mediaAssets.find((asset) => asset.mediaRole === "hero")?.sourceUrl ??
+    title.cardImageUrl ??
+    null
+  );
+}
+
+export function getPrimaryTitleShowcaseImageUrl(title: CatalogTitleResponse["title"]): string | null {
+  return getFirstCatalogImageByType(title, "title_showcase")?.sourceUrl ?? getHeroImageUrl(title);
+}
+
+type TitleCardImageOwner = Pick<CatalogTitleSummary, "cardImageUrl" | "catalogMediaEntries"> | Pick<DeveloperTitle, "cardImageUrl" | "catalogMediaEntries">;
+export function getTitleCardImageUrl(title: TitleCardImageOwner): string | null {
+  return getFirstCatalogImageByType(title, "title_card")?.sourceUrl ?? title.cardImageUrl ?? null;
+}
+
+export function getTitleAvatarImageUrl(
+  title: TitleCardImageOwner
+): string | null {
+  return getFirstCatalogImageByType(title, "title_avatar")?.sourceUrl ?? null;
 }
 
 export function getTitleLogoAsset(title: CatalogTitleResponse["title"]): TitleMediaAsset | null {
+  const unifiedLogo = getFirstCatalogImageByType(title, "title_logo");
+  if (unifiedLogo?.sourceUrl) {
+    return {
+      id: unifiedLogo.id,
+      mediaRole: "logo",
+      sourceUrl: unifiedLogo.sourceUrl,
+      altText: unifiedLogo.altText,
+      mimeType: unifiedLogo.mimeType,
+      width: unifiedLogo.width,
+      height: unifiedLogo.height,
+      createdAt: unifiedLogo.createdAt,
+      updatedAt: unifiedLogo.updatedAt,
+    };
+  }
+
   return title.mediaAssets.find((asset) => asset.mediaRole === "logo") ?? null;
 }
 
-export function getStudioAvatarImageUrl(studio: { avatarUrl: string | null; logoUrl: string | null }): string | null {
-  return studio.avatarUrl ?? studio.logoUrl ?? null;
+export function getStudioAvatarImageUrl(
+  studio: { avatarUrl: string | null; logoUrl: string | null; catalogMediaEntries?: CatalogMediaEntry[] | null }
+): string | null {
+  return getFirstCatalogImageByType(studio, "studio_avatar")?.sourceUrl ?? studio.avatarUrl ?? studio.logoUrl ?? null;
+}
+
+export function getStudioLogoImageUrl(
+  studio: { avatarUrl: string | null; logoUrl: string | null; catalogMediaEntries?: CatalogMediaEntry[] | null }
+): string | null {
+  return getFirstCatalogImageByType(studio, "studio_logo")?.sourceUrl ?? studio.logoUrl ?? null;
 }
 
 export function createAvatarEditorState(profile: UserProfile | null): AvatarEditorState {

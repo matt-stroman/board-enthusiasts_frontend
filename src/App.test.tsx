@@ -1,7 +1,7 @@
-import type { CurrentUserResponse } from "@board-enthusiasts/migration-contract";
+import { catalogMediaTypeDefinitions, type CurrentUserResponse } from "@board-enthusiasts/migration-contract";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { mockRasterImageProcessing } from "./test/image-processing";
@@ -68,6 +68,7 @@ const apiMocks = vi.hoisted(() => ({
   getCatalogTitle: vi.fn(),
   listGenres: vi.fn(),
   listAgeRatingAuthorities: vi.fn(),
+  listCatalogMediaTypes: vi.fn(),
   getUserNameAvailability: vi.fn(),
   getUserProfile: vi.fn(),
   getDeveloperEnrollment: vi.fn(),
@@ -94,6 +95,11 @@ const apiMocks = vi.hoisted(() => ({
   createStudio: vi.fn(),
   updateStudio: vi.fn(),
   deleteStudio: vi.fn(),
+  listStudioCatalogMedia: vi.fn(),
+  createStudioCatalogMedia: vi.fn(),
+  updateStudioCatalogMedia: vi.fn(),
+  deleteStudioCatalogMedia: vi.fn(),
+  uploadStudioCatalogMediaImage: vi.fn(),
   listStudioLinks: vi.fn(),
   createStudioLink: vi.fn(),
   updateStudioLink: vi.fn(),
@@ -112,6 +118,14 @@ const apiMocks = vi.hoisted(() => ({
   activateTitleMetadataVersion: vi.fn(),
   getTitleMediaAssets: vi.fn(),
   getTitleShowcaseMedia: vi.fn(),
+  createTitleShowcaseMedia: vi.fn(),
+  updateTitleShowcaseMedia: vi.fn(),
+  uploadTitleShowcaseMediaImage: vi.fn(),
+  deleteTitleShowcaseMedia: vi.fn(),
+  createTitleCatalogMedia: vi.fn(),
+  updateTitleCatalogMedia: vi.fn(),
+  deleteTitleCatalogMedia: vi.fn(),
+  uploadTitleCatalogMediaImage: vi.fn(),
   upsertTitleMediaAsset: vi.fn(),
   uploadTitleMediaAsset: vi.fn(),
   deleteTitleMediaAsset: vi.fn(),
@@ -181,6 +195,20 @@ function renderApp(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <App />
+    </MemoryRouter>,
+  );
+}
+
+function LocationDisplay() {
+  const location = useLocation();
+  return <div data-testid="location-display">{location.pathname}{location.search}</div>;
+}
+
+function renderAppWithLocation(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+      <LocationDisplay />
     </MemoryRouter>,
   );
 }
@@ -302,6 +330,12 @@ describe("App", () => {
         { code: "ACB", displayName: "ACB" },
       ],
     });
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) => ({
+        ...definition,
+        acceptedMimeTypes: [...definition.acceptedMimeTypes],
+      })),
+    });
     apiMocks.getBoardProfile.mockResolvedValue({
       boardProfile: {
         boardUserId: "board_emma_torres",
@@ -350,11 +384,180 @@ describe("App", () => {
       },
     });
     apiMocks.listManagedStudios.mockResolvedValue({ studios: [] });
+    apiMocks.listStudioCatalogMedia.mockResolvedValue({ mediaEntries: [] });
+    apiMocks.createStudioCatalogMedia.mockImplementation(async (_baseUrl: string, _token: string, studioId: string, request: { mediaTypeKey: string; sourceUrl?: string | null; displayOrder?: number | null }) => ({
+      mediaEntry: {
+        id: `studio-media-${request.mediaTypeKey}`,
+        ownerKind: "studio",
+        studioId,
+        titleId: null,
+        mediaTypeKey: request.mediaTypeKey,
+        kind: "image",
+        sourceUrl: request.sourceUrl ?? null,
+        storagePath: null,
+        previewImageUrl: null,
+        previewStoragePath: null,
+        videoUrl: null,
+        altText: null,
+        mimeType: null,
+        width: null,
+        height: null,
+        displayOrder: request.displayOrder ?? 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.updateStudioCatalogMedia.mockImplementation(async (_baseUrl: string, _token: string, studioId: string, mediaEntryId: string, request: { sourceUrl?: string | null; displayOrder?: number | null }) => ({
+      mediaEntry: {
+        id: mediaEntryId,
+        ownerKind: "studio",
+        studioId,
+        titleId: null,
+        mediaTypeKey: "studio_avatar",
+        kind: "image",
+        sourceUrl: request.sourceUrl ?? null,
+        storagePath: null,
+        previewImageUrl: null,
+        previewStoragePath: null,
+        videoUrl: null,
+        altText: null,
+        mimeType: null,
+        width: null,
+        height: null,
+        displayOrder: request.displayOrder ?? 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.deleteStudioCatalogMedia.mockResolvedValue(undefined);
+    apiMocks.uploadStudioCatalogMediaImage.mockImplementation(async (_baseUrl: string, _token: string, studioId: string, mediaEntryId: string, _file: File) => ({
+      mediaEntry: {
+        id: mediaEntryId,
+        ownerKind: "studio",
+        studioId,
+        titleId: null,
+        mediaTypeKey: "studio_avatar",
+        kind: "image",
+        sourceUrl: "https://example.com/studio-uploaded.webp",
+        storagePath: `studios/demo/${mediaEntryId}.webp`,
+        previewImageUrl: null,
+        previewStoragePath: null,
+        videoUrl: null,
+        altText: null,
+        mimeType: "image/webp",
+        width: null,
+        height: null,
+        displayOrder: 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
     apiMocks.listStudioLinks.mockResolvedValue({ links: [] });
     apiMocks.listStudioTitles.mockResolvedValue({ titles: [] });
     apiMocks.getTitleMetadataVersions.mockResolvedValue({ metadataVersions: [] });
     apiMocks.getTitleMediaAssets.mockResolvedValue({ mediaAssets: [] });
     apiMocks.getTitleShowcaseMedia.mockResolvedValue({ showcaseMedia: [] });
+    apiMocks.createTitleShowcaseMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, request: { kind: "image" | "external_video"; imageUrl?: string | null; videoUrl?: string | null; altText: string | null; displayOrder: number }) => ({
+      showcaseMedia: {
+        id: `showcase-${request.displayOrder}`,
+        titleId,
+        kind: request.kind,
+        imageUrl: request.imageUrl ?? null,
+        videoUrl: request.videoUrl ?? null,
+        altText: request.altText ?? null,
+        displayOrder: request.displayOrder,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.updateTitleShowcaseMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, showcaseMediaId: string, request: { imageUrl?: string | null; videoUrl?: string | null; altText: string | null; displayOrder: number }) => ({
+      showcaseMedia: {
+        id: showcaseMediaId,
+        titleId,
+        kind: request.videoUrl ? "external_video" : "image",
+        imageUrl: request.imageUrl ?? null,
+        videoUrl: request.videoUrl ?? null,
+        altText: request.altText ?? null,
+        displayOrder: request.displayOrder,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.uploadTitleShowcaseMediaImage.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, showcaseMediaId: string, _file: File) => ({
+      showcaseMedia: {
+        id: showcaseMediaId,
+        titleId,
+        kind: "image",
+        imageUrl: "https://example.com/showcase-upload.webp",
+        videoUrl: null,
+        altText: null,
+        displayOrder: 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.deleteTitleShowcaseMedia.mockResolvedValue(undefined);
+    apiMocks.createTitleCatalogMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, request: { mediaTypeKey: string; sourceUrl?: string | null; altText?: string | null; displayOrder?: number | null }) => ({
+      mediaEntry: {
+        id: `media-${request.mediaTypeKey}`,
+        ownerKind: "title",
+        studioId: null,
+        titleId,
+        mediaTypeKey: request.mediaTypeKey,
+        kind: "image",
+        sourceUrl: request.sourceUrl ?? null,
+        storagePath: null,
+        videoUrl: null,
+        altText: request.altText ?? null,
+        mimeType: null,
+        width: null,
+        height: null,
+        displayOrder: request.displayOrder ?? 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.updateTitleCatalogMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, mediaEntryId: string, request: { sourceUrl?: string | null; altText?: string | null; displayOrder?: number | null }) => ({
+      mediaEntry: {
+        id: mediaEntryId,
+        ownerKind: "title",
+        studioId: null,
+        titleId,
+        mediaTypeKey: "title_card",
+        kind: "image",
+        sourceUrl: request.sourceUrl ?? null,
+        storagePath: null,
+        videoUrl: null,
+        altText: request.altText ?? null,
+        mimeType: null,
+        width: null,
+        height: null,
+        displayOrder: request.displayOrder ?? 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
+    apiMocks.deleteTitleCatalogMedia.mockResolvedValue(undefined);
+    apiMocks.uploadTitleCatalogMediaImage.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, mediaEntryId: string, _file: File, altText?: string | null) => ({
+      mediaEntry: {
+        id: mediaEntryId,
+        ownerKind: "title",
+        studioId: null,
+        titleId,
+        mediaTypeKey: "title_card",
+        kind: "image",
+        sourceUrl: "https://example.com/uploaded.webp",
+        storagePath: `titles/demo/${mediaEntryId}.webp`,
+        videoUrl: null,
+        altText: altText ?? null,
+        mimeType: "image/webp",
+        width: null,
+        height: null,
+        displayOrder: 0,
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    }));
     apiMocks.getDeveloperTitleReports.mockResolvedValue({ reports: [] });
     apiMocks.getTitleReleases.mockResolvedValue({ releases: [] });
     apiMocks.getStudioIntegrationConnections.mockResolvedValue({ integrationConnections: [] });
@@ -1057,6 +1260,14 @@ describe("App", () => {
   });
 
   it("opens title quick view from browse results without leaving the results page", async () => {
+    const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: clipboardWriteText,
+      },
+    });
+
     apiMocks.listCatalogTitles.mockResolvedValue({
       titles: [
         {
@@ -1133,13 +1344,33 @@ describe("App", () => {
     expect(await screen.findByLabelText("Search")).toBeVisible();
     expect(await screen.findByText("Lantern Drift")).toBeVisible();
     expect(apiMocks.listCatalogTitles).toHaveBeenCalledWith("http://127.0.0.1:8787");
+    const card = screen.getByRole("button", { name: /lantern drift/i }).closest("article") as HTMLElement;
+    expect(within(card).getByLabelText("Share title")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
 
-    expect(await screen.findByRole("dialog")).toBeVisible();
+    const quickViewDialog = await screen.findByRole("dialog", { name: "Lantern Drift" });
+    expect(quickViewDialog).toBeVisible();
     expect(screen.getByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByLabelText("Search")).toBeVisible();
-    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null);
+    expect(within(quickViewDialog).getByLabelText("Share title")).toBeVisible();
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null);
+
+    await userEvent.click(within(quickViewDialog).getByLabelText("Share title"));
+
+    const shareDialog = await screen.findByRole("dialog", { name: "Share Lantern Drift" });
+    const expectedShareUrl = new URL("/browse/studio-1/title-1", window.location.origin).toString();
+    expect(within(shareDialog).getByDisplayValue(expectedShareUrl)).toBeVisible();
+
+    await userEvent.click(within(shareDialog).getByRole("button", { name: "Copy" }));
+
+    expect(clipboardWriteText).toHaveBeenCalledWith(expectedShareUrl);
+    expect(await screen.findByText("Link copied to your clipboard.")).toBeVisible();
+
+    fireEvent.click(shareDialog.parentElement as HTMLElement);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Share Lantern Drift" })).not.toBeInTheDocument();
+    });
   });
 
   it("keeps the browse spotlight image inside a fixed cropped frame", async () => {
@@ -1426,6 +1657,61 @@ describe("App", () => {
     expect(screen.getByText("Signal Harbor")).toBeVisible();
     expect(screen.queryByText("Cinderline Workshop")).not.toBeInTheDocument();
     expect(screen.getByText("Showing results 1 - 1 of 1")).toBeVisible();
+  });
+
+  it("canonicalizes id-based studio detail routes back to readable slugs", async () => {
+    apiMocks.getPublicStudio.mockResolvedValue({
+      studio: {
+        id: "studio-1",
+        slug: "harborlight-mechanics",
+        displayName: "Harborlight Mechanics",
+        description: "Restore traveling maker caravans and keep workshop routes running.",
+        avatarUrl: null,
+        logoUrl: null,
+        bannerUrl: null,
+        followerCount: 12,
+        links: [],
+      },
+    });
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "harborlight-mechanics",
+          studioDisplayName: "Harborlight Mechanics",
+          slug: "cinderline-workshop",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "Cinderline Workshop",
+          shortDescription: "Restore traveling maker caravans and rebuild gear trains.",
+          genreDisplay: "Workshop, Puzzle, Crafting",
+          minPlayers: 1,
+          maxPlayers: 2,
+          playerCountDisplay: "1-2 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: "https://example.com/cinderline-workshop",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+
+    renderAppWithLocation("/studios/studio-1");
+
+    expect(await screen.findByRole("heading", { name: "Harborlight Mechanics" })).toBeVisible();
+    expect(apiMocks.getPublicStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1");
+    expect(apiMocks.listCatalogTitles).toHaveBeenCalledWith("http://127.0.0.1:8787", { studioSlug: "harborlight-mechanics" });
+    await waitFor(() => {
+      expect(screen.getByTestId("location-display")).toHaveTextContent("/studios/harborlight-mechanics");
+    });
   });
 
   it("shows the visible browse result range for the current page", async () => {
@@ -1723,6 +2009,7 @@ describe("App", () => {
     const card = screen.getByRole("button", { name: /lantern drift/i }).closest("article") as HTMLElement;
     const cardScope = within(card);
     expect(cardScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(cardScope.getByLabelText("Share title")).toBeVisible();
     expect(cardScope.queryByLabelText("Add to my games")).not.toBeInTheDocument();
     expect(cardScope.queryByLabelText("Report title")).not.toBeInTheDocument();
 
@@ -1732,6 +2019,7 @@ describe("App", () => {
     const dialogScope = within(dialog);
     expect(dialog).toBeVisible();
     expect(dialogScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(dialogScope.getByLabelText("Share title")).toBeVisible();
     expect(dialogScope.queryByLabelText("Add to my games")).not.toBeInTheDocument();
     expect(dialogScope.queryByLabelText("Report title")).not.toBeInTheDocument();
   });
@@ -1796,9 +2084,77 @@ describe("App", () => {
     expect(screen.getByText("Wishlisted by 11")).toBeVisible();
     expect(screen.getByText("In 3 libraries")).toBeVisible();
     expect(screen.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(screen.getByLabelText("Share title")).toBeVisible();
     expect(screen.queryByLabelText("Add to my games")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Report title")).not.toBeInTheDocument();
     expect(screen.getByText("Reporting opens once this title has a release players can access.")).toBeVisible();
+  });
+
+  it("keeps report actions on released title detail pages while also offering share", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 11,
+        libraryCount: 3,
+        acquisitionUrl: "https://example.com/lantern-drift",
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(screen.getByLabelText("Add to my games")).toBeVisible();
+    expect(screen.getByLabelText("Share title")).toBeVisible();
+    expect(screen.getByLabelText("Report title")).toBeVisible();
   });
 
   it("hides zero-value public title interest counts on the title detail page", async () => {
@@ -1842,7 +2198,117 @@ describe("App", () => {
     expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
   });
 
-  it("prefers a title logo on browse cards when one is available", async () => {
+  it("keeps report actions off released browse cards and quick view while leaving share available", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Taylor Marsh",
+        email: "taylor.marsh@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+    apiMocks.getPlayerFollowedStudios.mockResolvedValue({ studios: [] });
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          wishlistCount: 4,
+          libraryCount: 1,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 4,
+        libraryCount: 1,
+        acquisitionUrl: "https://example.com/lantern-drift",
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByLabelText("Search")).toBeVisible();
+    const card = screen.getByRole("button", { name: /lantern drift/i }).closest("article") as HTMLElement;
+    const cardScope = within(card);
+    expect(cardScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(cardScope.getByLabelText("Add to my games")).toBeVisible();
+    expect(cardScope.getByLabelText("Share title")).toBeVisible();
+    expect(cardScope.queryByLabelText("Report title")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Lantern Drift" });
+    const dialogScope = within(dialog);
+    expect(dialogScope.getByLabelText("Add to wishlist")).toBeVisible();
+    expect(dialogScope.getByLabelText("Add to my games")).toBeVisible();
+    expect(dialogScope.getByLabelText("Share title")).toBeVisible();
+    expect(dialogScope.queryByLabelText("Report title")).not.toBeInTheDocument();
+  });
+
+  it("shows the title display name on browse cards when no title avatar is available, even if a logo exists", async () => {
     apiMocks.listCatalogTitles.mockResolvedValue({
       titles: [
         {
@@ -1877,7 +2343,118 @@ describe("App", () => {
     renderApp("/browse");
 
     expect(await screen.findByLabelText("Search")).toBeVisible();
-    expect(screen.getByAltText("Lantern Drift logo")).toBeVisible();
+    expect(screen.getByText("Lantern Drift")).toBeVisible();
+    expect(screen.queryByAltText("Lantern Drift logo")).not.toBeInTheDocument();
+  });
+
+  it("prefers unified title card media on browse cards when legacy card art is absent", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          cardImageUrl: null,
+          logoImageUrl: null,
+          catalogMediaEntries: [
+            {
+              id: "media-title-card-1",
+              mediaTypeKey: "title_card",
+              kind: "image",
+              sourceUrl: "https://example.com/lantern-drift-unified-card.png",
+              altText: "Lantern Drift card art",
+              mimeType: "image/png",
+              width: 1024,
+              height: 1024,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByLabelText("Search")).toBeVisible();
+    const card = screen.getByRole("button", { name: "Lantern Drift" }).closest("article") as HTMLElement;
+    const cardImage = card.querySelector('img[src="https://example.com/lantern-drift-unified-card.png"]');
+    expect(cardImage).not.toBeNull();
+  });
+
+  it("prefers unified title avatar media over title logo in browse card identity panels", async () => {
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          cardImageUrl: null,
+          logoImageUrl: "https://example.com/lantern-drift-logo.png",
+          catalogMediaEntries: [
+            {
+              id: "media-title-avatar-1",
+              mediaTypeKey: "title_avatar",
+              kind: "image",
+              sourceUrl: "https://example.com/lantern-drift-avatar.png",
+              altText: "Lantern Drift avatar",
+              mimeType: "image/png",
+              width: 512,
+              height: 512,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+          acquisitionUrl: "https://example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+
+    renderApp("/browse");
+
+    expect(await screen.findByLabelText("Search")).toBeVisible();
+    expect(screen.getByAltText("Lantern Drift avatar")).toBeVisible();
+    expect(screen.getByText("Lantern Drift")).toBeVisible();
+    expect(screen.queryByAltText("Lantern Drift logo")).not.toBeInTheDocument();
   });
 
   it("allows browse card hover details to expand and wrap metadata chips", async () => {
@@ -2003,6 +2580,52 @@ describe("App", () => {
     expect(screen.queryByText("Lantern Drift")).not.toBeInTheDocument();
     expect(screen.getByText("Orbital Crew")).toBeVisible();
     expect(screen.getByText("1 titles")).toBeVisible();
+  });
+
+  it("canonicalizes id-based title detail routes back to readable slugs", async () => {
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        acquisition: undefined,
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderAppWithLocation("/browse/studio-1/title-1");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null);
+    await waitFor(() => {
+      expect(screen.getByTestId("location-display")).toHaveTextContent("/browse/blue-harbor-games/lantern-drift");
+    });
   });
 
   it("redirects protected routes to sign in when unauthenticated", async () => {
@@ -2141,13 +2764,29 @@ describe("App", () => {
     expect(screen.getByText("42")).toBeVisible();
   });
 
+  it("shows maintained studio media aspect ratios in the studio overview", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=studios&workflow=studios-overview&studioId=studio-1");
+
+    expect(await screen.findByRole("button", { name: "Edit studio" })).toBeVisible();
+    expect(screen.getByText("Studio media")).toBeVisible();
+    const logoPreview = document.querySelector('[data-studio-media-summary-preview="logo"]') as HTMLElement | null;
+    const bannerPreview = document.querySelector('[data-studio-media-summary-preview="banner"]') as HTMLElement | null;
+    expect(logoPreview).not.toBeNull();
+    expect(bannerPreview).not.toBeNull();
+    expect(logoPreview?.style.aspectRatio).toBe("1200 / 400");
+    expect(bannerPreview?.style.aspectRatio).toBe("1680 / 720");
+  });
+
   it("shows title analytics inside the developer console", async () => {
     seedDeveloperWorkspace();
 
     renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Analytics" })).toHaveClass("workflow-active-button");
+    expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("workflow-active-button");
     expect(screen.getByText("Wishlisted count")).toBeVisible();
     expect(screen.getByText("18")).toBeVisible();
     expect(screen.getByText("Added to library count")).toBeVisible();
@@ -2974,6 +3613,103 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Sign In" })).toBeVisible();
   });
 
+  it("requires an authenticator code before saving a recovered password when MFA is enabled", async () => {
+    const requestPasswordReset = vi.fn().mockResolvedValue(undefined);
+    const verifyRecoveryCode = vi.fn().mockImplementation(async () => {
+      authState.value = {
+        ...authState.value,
+        session: { access_token: "recovery-token" },
+        currentUser: {
+          subject: "user-1",
+          displayName: "Test User",
+          email: "new.player@example.com",
+          emailVerified: true,
+          identityProvider: "email",
+          roles: ["player"],
+        },
+      };
+    });
+    const updatePassword = vi.fn().mockResolvedValue(undefined);
+    const signOut = vi.fn().mockImplementation(async () => {
+      authState.value = {
+        ...authState.value,
+        session: null,
+        currentUser: null,
+      };
+    });
+    const challengeAndVerify = vi.fn().mockResolvedValue({ data: {}, error: null });
+
+    authState.value = {
+      session: null,
+      currentUser: null,
+      loading: false,
+      authError: null,
+      client: {
+        auth: {
+          updateUser: vi.fn(),
+          signInWithPassword: vi.fn(),
+          signInWithOAuth: vi.fn(),
+          mfa: {
+            getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue({
+              data: { currentLevel: "aal1", nextLevel: "aal2" },
+              error: null,
+            }),
+            listFactors: vi.fn().mockResolvedValue({
+              data: {
+                all: [{ id: "factor-1", factor_type: "totp", status: "verified", friendly_name: "Authenticator app" }],
+                totp: [{ id: "factor-1", factor_type: "totp", status: "verified", friendly_name: "Authenticator app" }],
+              },
+              error: null,
+            }),
+            challengeAndVerify,
+            enroll: vi.fn(),
+            unenroll: vi.fn(),
+          },
+        },
+      },
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset,
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode,
+      updatePassword,
+      signOut,
+      refreshCurrentUser: vi.fn(),
+    };
+
+    renderApp("/auth/signin");
+
+    await screen.findByRole("heading", { name: "Sign In" });
+    await userEvent.click(screen.getByRole("button", { name: "I forgot my password" }));
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Reset your password" });
+
+    await userEvent.type(within(recoveryDialog).getByLabelText(/Email address/i), "new.player@example.com");
+    await completeLocalAntiSpamCheck(within(recoveryDialog));
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Send link to email" }));
+    await userEvent.type(within(recoveryDialog).getByLabelText("Recovery code"), "123456");
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Confirm code" }));
+    await userEvent.type(within(recoveryDialog).getByLabelText("New password"), "NewPlayer!123");
+    await userEvent.type(within(recoveryDialog).getByLabelText("Confirm password"), "NewPlayer!123");
+    await userEvent.click(within(recoveryDialog).getByRole("button", { name: "Save new password" }));
+
+    expect(updatePassword).not.toHaveBeenCalled();
+    const mfaDialog = await screen.findByRole("dialog", { name: "Verify authenticator" });
+    expect(within(mfaDialog).getByText("Enter the current code from authenticator app to finish resetting your password.")).toBeVisible();
+
+    await userEvent.type(within(mfaDialog).getByLabelText("Authenticator code"), "123456");
+    await userEvent.click(within(mfaDialog).getByRole("button", { name: "Verify code" }));
+
+    await waitFor(() => {
+      expect(challengeAndVerify).toHaveBeenCalledWith({
+        factorId: "factor-1",
+        code: "123456",
+      });
+    });
+    expect(updatePassword).toHaveBeenCalledWith("NewPlayer!123");
+    expect(signOut).toHaveBeenCalledWith({ tolerateNetworkFailure: true });
+    expect(await screen.findByRole("heading", { name: "Sign In" })).toBeVisible();
+  });
+
   it("returns to sign in after password recovery even if sign out hits a transient fetch failure", async () => {
     const requestPasswordReset = vi.fn().mockResolvedValue(undefined);
     const verifyRecoveryCode = vi.fn().mockImplementation(async () => {
@@ -3519,9 +4255,387 @@ describe("App", () => {
     renderApp("/player?workflow=reported-titles&reportId=report-1");
 
     expect(await screen.findByRole("heading", { name: "Reported Titles" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reported Titles" })).toHaveClass("workflow-active-button");
+    expect(screen.getByRole("button", { name: "Wishlist" })).not.toHaveClass("workflow-active-button");
     expect(await screen.findByText("I expected to see the synced clue board mentioned in the listing, but I cannot find it.")).toBeVisible();
     expect(screen.queryByText("Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.")).not.toBeInTheDocument();
     expect(screen.queryByText(/developer only/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the first showcase image in wishlist rows using the catalog media aspect ratio", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) =>
+        definition.key === "title_showcase"
+          ? {
+              ...definition,
+              recommendedWidth: 2048,
+              recommendedHeight: 1152,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            }
+          : {
+              ...definition,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            },
+      ),
+    });
+    apiMocks.getPlayerWishlist.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "pine-lantern-labs",
+          studioDisplayName: "Pine Lantern Labs",
+          slug: "the-shapers-oracle",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "The Shaper's Oracle",
+          shortDescription: "Shape clues and spot patterns together.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          maxPlayersOrMore: false,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 8,
+          ageDisplay: "8+",
+          wishlistCount: 4,
+          libraryCount: 2,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: null,
+          catalogMediaEntries: [
+            {
+              id: "showcase-1",
+              ownerKind: "title",
+              studioId: "studio-1",
+              titleId: "title-1",
+              mediaTypeKey: "title_showcase",
+              kind: "image",
+              sourceUrl: "https://cdn.example.com/titles/the-shapers-oracle/showcase-1.webp",
+              storagePath: null,
+              previewImageUrl: null,
+              previewStoragePath: null,
+              videoUrl: null,
+              altText: "The Shaper's Oracle showcase image",
+              mimeType: "image/webp",
+              width: 2048,
+              height: 1152,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    renderApp("/player/wishlist");
+
+    expect(await screen.findByRole("heading", { name: "Wishlist" })).toBeVisible();
+    expect(screen.getByAltText("The Shaper's Oracle showcase image")).toHaveAttribute("src", "https://cdn.example.com/titles/the-shapers-oracle/showcase-1.webp");
+    expect(screen.getByTestId("wishlist-showcase-title-1")).toHaveStyle({ aspectRatio: "2048 / 1152" });
+    expect(screen.getByRole("link", { name: "Open title" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Remove from wishlist" })).toBeVisible();
+  });
+
+  it("falls back to title avatar and browse-style placeholder art in wishlist rows when showcase media is missing", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) =>
+        definition.key === "title_avatar"
+          ? {
+              ...definition,
+              recommendedWidth: 640,
+              recommendedHeight: 640,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            }
+          : {
+              ...definition,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            },
+      ),
+    });
+    apiMocks.getPlayerWishlist.mockResolvedValue({
+      titles: [
+        {
+          id: "title-avatar-only",
+          studioId: "studio-1",
+          studioSlug: "pine-lantern-labs",
+          studioDisplayName: "Pine Lantern Labs",
+          slug: "lantern-puzzle",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "Lantern Puzzle",
+          shortDescription: "Avatar fallback test.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          maxPlayersOrMore: false,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 8,
+          ageDisplay: "8+",
+          wishlistCount: 1,
+          libraryCount: 0,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: null,
+          catalogMediaEntries: [
+            {
+              id: "avatar-1",
+              ownerKind: "title",
+              studioId: "studio-1",
+              titleId: "title-avatar-only",
+              mediaTypeKey: "title_avatar",
+              kind: "image",
+              sourceUrl: "https://cdn.example.com/titles/lantern-puzzle/avatar.webp",
+              storagePath: null,
+              previewImageUrl: null,
+              previewStoragePath: null,
+              videoUrl: null,
+              altText: "Lantern Puzzle avatar",
+              mimeType: "image/webp",
+              width: 640,
+              height: 640,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+        },
+        {
+          id: "title-placeholder-only",
+          studioId: "studio-1",
+          studioSlug: "pine-lantern-labs",
+          studioDisplayName: "Pine Lantern Labs",
+          slug: "placeholder-only",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 1,
+          displayName: "Placeholder Only",
+          shortDescription: "Placeholder fallback test.",
+          genreDisplay: "Adventure, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          maxPlayersOrMore: false,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 8,
+          ageDisplay: "8+",
+          wishlistCount: 1,
+          libraryCount: 0,
+          cardImageUrl: null,
+          logoImageUrl: null,
+          acquisitionUrl: null,
+          catalogMediaEntries: [],
+        },
+      ],
+    });
+
+    renderApp("/player/wishlist");
+
+    expect(await screen.findByRole("heading", { name: "Wishlist" })).toBeVisible();
+    expect(screen.getByAltText("Lantern Puzzle avatar")).toHaveAttribute("src", "https://cdn.example.com/titles/lantern-puzzle/avatar.webp");
+    expect(screen.getByTestId("wishlist-showcase-title-avatar-only")).toHaveStyle({ aspectRatio: "640 / 640" });
+    const placeholderImage = screen.getByAltText("Placeholder Only fallback artwork");
+    expect(placeholderImage.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+    expect(screen.getByTestId("wishlist-showcase-title-placeholder-only")).toHaveStyle({ aspectRatio: "640 / 640" });
+  });
+
+  it("renders followed studios as compact rows with logo media and prominent link buttons", async () => {
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.getUserProfile.mockResolvedValue({
+      profile: {
+        subject: "user-1",
+        displayName: "Ava Garcia",
+        userName: "ava.garcia",
+        firstName: "Ava",
+        lastName: "Garcia",
+        email: "ava.garcia@boardtpl.local",
+        emailVerified: true,
+        avatarUrl: null,
+        avatarDataUrl: null,
+        initials: "AG",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) =>
+        definition.key === "studio_logo"
+          ? {
+              ...definition,
+              recommendedWidth: 1440,
+              recommendedHeight: 480,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            }
+          : {
+              ...definition,
+              acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            },
+      ),
+    });
+    apiMocks.getPlayerFollowedStudios.mockResolvedValue({
+      studios: [
+        {
+          id: "studio-1",
+          slug: "pine-lantern-labs",
+          displayName: "Pine Lantern Labs",
+          description: "A long studio description that should not show up in the compact followed studios row.",
+          avatarUrl: null,
+          logoUrl: null,
+          bannerUrl: "https://cdn.example.com/studios/pine-lantern-labs/banner.webp",
+          followerCount: 12,
+          links: [
+            { id: "link-1", label: "Discord", url: "https://discord.gg/pinelantern", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" },
+            { id: "link-2", label: "GitHub", url: "https://github.com/pine-lantern-labs", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" },
+            { id: "link-3", label: "Website", url: "https://pine-lantern-labs.example", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" },
+          ],
+          catalogMediaEntries: [
+            {
+              id: "studio-logo-1",
+              ownerKind: "studio",
+              studioId: "studio-1",
+              titleId: null,
+              mediaTypeKey: "studio_logo",
+              kind: "image",
+              sourceUrl: "https://cdn.example.com/studios/pine-lantern-labs/logo.webp",
+              storagePath: null,
+              previewImageUrl: null,
+              previewStoragePath: null,
+              videoUrl: null,
+              altText: "Pine Lantern Labs logo",
+              mimeType: "image/webp",
+              width: 1440,
+              height: 480,
+              displayOrder: 0,
+              createdAt: "2026-03-08T12:00:00Z",
+              updatedAt: "2026-03-08T12:00:00Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    renderApp("/player?workflow=library-followed-studios");
+
+    expect(await screen.findByRole("heading", { name: "Studios You Follow" })).toBeVisible();
+    expect(screen.getByTestId("followed-studio-item-studio-1")).toHaveStyle({ backgroundImage: "url(https://cdn.example.com/studios/pine-lantern-labs/banner.webp)" });
+    expect(screen.getByAltText("Pine Lantern Labs logo")).toHaveAttribute("src", "https://cdn.example.com/studios/pine-lantern-labs/logo.webp");
+    expect(screen.getByTestId("followed-studio-logo-studio-1")).toHaveStyle({ aspectRatio: "1440 / 480" });
+    expect(screen.getByText("12 followers")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Discord" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "GitHub" })).toBeVisible();
+    expect(screen.queryByText("Discord")).not.toBeInTheDocument();
+    expect(screen.queryByText("GitHub")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Website" })).not.toBeInTheDocument();
+    expect(screen.queryByText("A long studio description that should not show up in the compact followed studios row.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open studio" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Unfollow studio" })).toBeVisible();
   });
 
   it("restores an in-progress player profile edit after the page remounts", async () => {
@@ -4544,6 +5658,10 @@ describe("App", () => {
     renderApp("/moderate?workflow=reports-review&reportId=report-1");
 
     expect(await screen.findByRole("heading", { name: "Moderate" })).toBeVisible();
+    const workflowNav = screen.getByText("Workflow").nextElementSibling;
+    expect(workflowNav).not.toBeNull();
+    expect(within(workflowNav as HTMLElement).getByRole("button", { name: "Reported Titles" })).toHaveClass("workflow-active-button");
+    expect(within(workflowNav as HTMLElement).getByRole("button", { name: "Verify Developers" })).not.toHaveClass("workflow-active-button");
     expect(await screen.findByText("Please confirm whether this feature is intentionally hidden in testing or if the listing needs an update.")).toBeVisible();
     expect(screen.getByText(/developer only/i)).toBeVisible();
   });
@@ -4601,6 +5719,114 @@ describe("App", () => {
     });
   });
 
+  it("drops apostrophes out of generated title slugs instead of splitting words apart", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /display name/i }), "The Shaper's Oracle");
+
+    await waitFor(() => {
+      expect(within(createTitleForm as HTMLElement).getByText("the-shapers-oracle")).toBeVisible();
+    });
+  });
+
+  it("uses the saved title slug in metadata and only regenerates the preview when the display name changes", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "the-shapers-oracle",
+        displayName: "The Shaper's Oracle",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreSlugs: ["adventure", "puzzle", "family"],
+        contentKind: "game",
+        lifecycleStatus: "active",
+        visibility: "listed",
+        genreDisplay: "Adventure, Puzzle, Family",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        wishlistCount: 18,
+        libraryCount: 7,
+        currentMetadataRevision: 3,
+        acquisitionUrl: "https://blue-harbor-games.example/titles/the-shapers-oracle",
+        currentReleaseId: "release-1",
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          acquisitionUrl: "https://blue-harbor-games.example/titles/the-shapers-oracle",
+          expiresAt: null,
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        catalogMediaEntries: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByText("the-shapers-oracle")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+
+    const metadataForm = (await screen.findByRole("textbox", { name: /display name/i })).closest("form");
+    expect(metadataForm).not.toBeNull();
+    expect(within(metadataForm as HTMLElement).getByText("the-shapers-oracle")).toBeVisible();
+
+    await userEvent.type(within(metadataForm as HTMLElement).getByRole("textbox", { name: /display name/i }), " Deluxe");
+
+    await waitFor(() => {
+      expect(within(metadataForm as HTMLElement).getByText("the-shapers-oracle-deluxe")).toBeVisible();
+    });
+  });
+
+  it("uses the saved studio slug in the studio overview summary", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.listManagedStudios.mockResolvedValue({
+      studios: [
+        {
+          id: "studio-1",
+          slug: "pine-lantern-labs",
+          displayName: "Pine Lantern Labs",
+          description: "Pine Lantern Labs builds tabletop stories with quiet wonder.",
+          avatarUrl: "/seed-catalog/studios/pine-lantern-labs/avatar.svg",
+          logoUrl: "/seed-catalog/studios/pine-lantern-labs/logo.svg",
+          bannerUrl: "/seed-catalog/studios/pine-lantern-labs/banner.svg",
+          followerCount: 42,
+          role: "owner",
+          links: [{ id: "studio-link-1", label: "Website", url: "https://pine-lantern-labs.example", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" }],
+        },
+      ],
+    });
+    apiMocks.listStudioLinks.mockResolvedValue({
+      links: [{ id: "studio-link-1", label: "Website", url: "https://pine-lantern-labs.example", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" }],
+    });
+
+    renderApp("/developer?domain=studios&workflow=studios-overview&studioId=studio-1");
+
+    expect(await screen.findByText("pine-lantern-labs")).toBeVisible();
+    expect(screen.getAllByText("Pine Lantern Labs").length).toBeGreaterThan(0);
+  });
+
   it("supports studio avatar and media previews from url and upload in the create studio flow", async () => {
     seedDeveloperWorkspace();
     const mockedImageProcessing = mockRasterImageProcessing({ width: 400, height: 400 });
@@ -4618,20 +5844,6 @@ describe("App", () => {
           links: [],
         },
       });
-      apiMocks.uploadStudioMedia.mockResolvedValue({
-        studio: {
-          id: "studio-2",
-          slug: "signal-harbor-studio",
-          displayName: "Signal Harbor Studio",
-          description: "A coastal co-op studio profile.",
-          avatarUrl: "/uploads/avatar.png",
-          logoUrl: "/uploads/logo.png",
-          bannerUrl: null,
-          role: "owner",
-          links: [],
-        },
-      });
-
       renderApp("/developer");
 
       await screen.findByRole("button", { name: "Studios" });
@@ -4640,12 +5852,27 @@ describe("App", () => {
       const createStudioForm = (await screen.findByRole("heading", { name: "Create Studio" })).closest("form");
       expect(createStudioForm).not.toBeNull();
 
-      const avatarPanel = within(createStudioForm as HTMLElement).getByText("Avatar").closest("section");
-      const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+      const avatarPanel = (createStudioForm as HTMLElement).querySelector('[data-studio-media-role="avatar"]');
+      const logoPanel = (createStudioForm as HTMLElement).querySelector('[data-studio-media-role="logo"]');
+      const bannerPanel = (createStudioForm as HTMLElement).querySelector('[data-studio-media-role="banner"]');
       expect(avatarPanel).not.toBeNull();
       expect(logoPanel).not.toBeNull();
-      expect(within(avatarPanel as HTMLElement).getByText("Optional. Recommended 512 x 512 px. Max 256 KB.")).toBeVisible();
-      expect(within(logoPanel as HTMLElement).getByText("Optional. Recommended aspect ratio 3:1. Recommended raster size 1200 x 400 px. SVG also supported. Max 256 KB.")).toBeVisible();
+      expect(bannerPanel).not.toBeNull();
+      expect(within(avatarPanel as HTMLElement).getByText("Expected 1:1 aspect ratio")).toBeVisible();
+      expect(within(avatarPanel as HTMLElement).getByText("Recommended 512 x 512 px")).toBeVisible();
+      expect(within(avatarPanel as HTMLElement).getByText("Max 256 KB")).toBeVisible();
+      expect(within(avatarPanel as HTMLElement).getByText("Accepted PNG, JPG, WEBP")).toBeVisible();
+      expect((avatarPanel as HTMLElement).querySelector('[style*="aspect-ratio: 512 / 512"]')).not.toBeNull();
+      expect(within(logoPanel as HTMLElement).getByText("Expected 3:1 aspect ratio")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).getByText("Recommended 1200 x 400 px")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).getByText("Max 256 KB")).toBeVisible();
+      expect(within(logoPanel as HTMLElement).getByText("Accepted PNG, WEBP, SVG")).toBeVisible();
+      expect((logoPanel as HTMLElement).querySelector('[style*="aspect-ratio: 1200 / 400"]')).not.toBeNull();
+      expect(within(bannerPanel as HTMLElement).getByText("Expected 21:9 aspect ratio")).toBeVisible();
+      expect(within(bannerPanel as HTMLElement).getByText("Recommended 1680 x 720 px")).toBeVisible();
+      expect(within(bannerPanel as HTMLElement).getByText("Max 3 MB")).toBeVisible();
+      expect(within(bannerPanel as HTMLElement).getByText("Accepted PNG, JPG, WEBP, SVG")).toBeVisible();
+      expect((bannerPanel as HTMLElement).querySelector('[style*="aspect-ratio: 1680 / 720"]')).not.toBeNull();
 
       await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /studio display name/i }), "Signal Harbor Studio");
       await userEvent.type(within(createStudioForm as HTMLElement).getByRole("textbox", { name: /description/i }), "A coastal co-op studio profile.");
@@ -4674,9 +5901,41 @@ describe("App", () => {
       await userEvent.click(within(createStudioForm as HTMLElement).getByRole("button", { name: "Create studio" }));
 
       await waitFor(() => {
-        expect(apiMocks.createStudio).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", expect.objectContaining({ avatarUrl: null, logoUrl: null }));
-        expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "avatar", expect.any(File));
-        expect(apiMocks.uploadStudioMedia).toHaveBeenCalledWith("http://127.0.0.1:8787", "developer-token", "studio-2", "logo", expect.any(File));
+        expect(apiMocks.createStudio).toHaveBeenCalledWith(
+          "http://127.0.0.1:8787",
+          "developer-token",
+          expect.objectContaining({
+            slug: "signal-harbor-studio",
+            displayName: "Signal Harbor Studio",
+            description: "A coastal co-op studio profile.",
+          }),
+        );
+        expect(apiMocks.createStudioCatalogMedia).toHaveBeenCalledWith(
+          "http://127.0.0.1:8787",
+          "developer-token",
+          "studio-2",
+          expect.objectContaining({ mediaTypeKey: "studio_avatar" }),
+        );
+        expect(apiMocks.createStudioCatalogMedia).toHaveBeenCalledWith(
+          "http://127.0.0.1:8787",
+          "developer-token",
+          "studio-2",
+          expect.objectContaining({ mediaTypeKey: "studio_logo" }),
+        );
+        expect(apiMocks.uploadStudioCatalogMediaImage).toHaveBeenCalledWith(
+          "http://127.0.0.1:8787",
+          "developer-token",
+          "studio-2",
+          "studio-media-studio_avatar",
+          expect.any(File),
+        );
+        expect(apiMocks.uploadStudioCatalogMediaImage).toHaveBeenCalledWith(
+          "http://127.0.0.1:8787",
+          "developer-token",
+          "studio-2",
+          "studio-media-studio_logo",
+          expect.any(File),
+        );
       });
     } finally {
       mockedImageProcessing.restore();
@@ -4699,7 +5958,7 @@ describe("App", () => {
 
       const [, logoUploadInput] = (createStudioForm as HTMLElement).querySelectorAll('input[type="file"]');
       expect(logoUploadInput).not.toBeUndefined();
-      const logoPanel = within(createStudioForm as HTMLElement).getByText("Logo").closest("section");
+      const logoPanel = (createStudioForm as HTMLElement).querySelector('[data-studio-media-role="logo"]');
       expect(logoPanel).not.toBeNull();
 
       await userEvent.upload(
@@ -4709,14 +5968,14 @@ describe("App", () => {
 
       expect(await within(logoPanel as HTMLElement).findByText("studio-logo.webp")).toBeVisible();
       expect(within(logoPanel as HTMLElement).queryByText("Uploaded studio logo image must be 256 KB or smaller.")).not.toBeInTheDocument();
-      expect(apiMocks.uploadStudioMedia).not.toHaveBeenCalled();
+      expect(apiMocks.uploadStudioCatalogMediaImage).not.toHaveBeenCalled();
     } finally {
       mockedImageProcessing.restore();
     }
   });
 
   it("reduces oversized title card uploads locally before submission", async () => {
-    const mockedImageProcessing = mockRasterImageProcessing({ width: 900, height: 1200, blobSize: 4096, blobType: "image/webp" });
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 1200, height: 1200, blobSize: 4096, blobType: "image/webp" });
 
     try {
       seedDeveloperWorkspace();
@@ -4726,10 +5985,13 @@ describe("App", () => {
       const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
       expect(createTitleForm).not.toBeNull();
 
-      const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
-      expect(cardUploadInput).not.toBeUndefined();
-      const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
+      await userEvent.selectOptions(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), "title_card");
+      await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add media item" }));
+
+      const cardPanel = (createTitleForm as HTMLElement).querySelector('[data-title-media-type="title_card"]');
       expect(cardPanel).not.toBeNull();
+      const cardUploadInput = (cardPanel as HTMLElement).querySelector('input[type="file"]');
+      expect(cardUploadInput).not.toBeNull();
 
       await userEvent.upload(
         cardUploadInput as HTMLInputElement,
@@ -4738,7 +6000,7 @@ describe("App", () => {
 
       expect(await within(cardPanel as HTMLElement).findByText("card.webp")).toBeVisible();
       expect(within(cardPanel as HTMLElement).queryByText("Uploaded card image must be 1536 KB or smaller.")).not.toBeInTheDocument();
-      expect(apiMocks.uploadTitleMediaAsset).not.toHaveBeenCalled();
+      expect(apiMocks.uploadTitleCatalogMediaImage).not.toHaveBeenCalled();
     } finally {
       mockedImageProcessing.restore();
     }
@@ -4752,10 +6014,13 @@ describe("App", () => {
     const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
     expect(createTitleForm).not.toBeNull();
 
-    const [cardUploadInput] = (createTitleForm as HTMLElement).querySelectorAll('input[type="file"]');
-    expect(cardUploadInput).not.toBeUndefined();
-    const cardPanel = within(createTitleForm as HTMLElement).getByText("card").closest("section");
+    await userEvent.selectOptions(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), "title_card");
+    await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add media item" }));
+
+    const cardPanel = (createTitleForm as HTMLElement).querySelector('[data-title-media-type="title_card"]');
     expect(cardPanel).not.toBeNull();
+    const cardUploadInput = (cardPanel as HTMLElement).querySelector('input[type="file"]');
+    expect(cardUploadInput).not.toBeNull();
 
     const cardImage = new File([new Uint8Array([137, 80, 78, 71])], "card.png", { type: "image/png" });
     Object.defineProperty(cardImage, "size", { value: 1024 });
@@ -4773,9 +6038,9 @@ describe("App", () => {
     class MockImage {
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
-      naturalWidth = 900;
+      naturalWidth = 1200;
       naturalHeight = 1200;
-      width = 900;
+      width = 1200;
       height = 1200;
 
       set src(_value: string) {
@@ -4805,13 +6070,605 @@ describe("App", () => {
     try {
       await userEvent.upload(cardUploadInput as HTMLInputElement, cardImage);
 
-      expect(await within(cardPanel as HTMLElement).findByAltText("card media")).toHaveAttribute("src", expect.stringMatching(/^data:image\/webp/));
+      expect(await within(cardPanel as HTMLElement).findByAltText("Title card media")).toHaveAttribute("src", expect.stringMatching(/^data:image\/webp/));
       expect(within(cardPanel as HTMLElement).getByText("card.webp")).toBeVisible();
       expect(within(cardPanel as HTMLElement).queryByText("No media")).not.toBeInTheDocument();
     } finally {
       readAsDataURLSpy.mockRestore();
       createElementSpy.mockRestore();
       globalThis.Image = originalImage;
+    }
+  });
+
+  it("shows media add controls and showcase actions in the title create workflow", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    expect(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" })).toBeVisible();
+    expect(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add screenshot" })).toBeVisible();
+    expect(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add video preview" })).toBeVisible();
+  });
+
+  it("keeps title and showcase add controls below existing media items in create and edit forms", async () => {
+    seedDeveloperWorkspace();
+
+    const createView = renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    const titleAddMediaButton = within(createTitleForm as HTMLElement).getByRole("button", { name: "Add media item" });
+    await userEvent.selectOptions(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), "title_card");
+    await userEvent.click(titleAddMediaButton);
+
+    const titleCardPanel = (createTitleForm as HTMLElement).querySelector('[data-title-media-type="title_card"]');
+    expect(titleCardPanel).not.toBeNull();
+    const createTitleMediaOrder = (titleCardPanel as HTMLElement).compareDocumentPosition(titleAddMediaButton);
+    expect(createTitleMediaOrder & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    const addScreenshotButton = within(createTitleForm as HTMLElement).getByRole("button", { name: "Add screenshot" });
+    await userEvent.click(addScreenshotButton);
+
+    const showcaseSpec = await screen.findByText("Expected 16:9 aspect ratio");
+    const showcaseCard = showcaseSpec.closest("article");
+    expect(showcaseCard).not.toBeNull();
+    const createShowcaseOrder = (showcaseCard as HTMLElement).compareDocumentPosition(addScreenshotButton);
+    expect(createShowcaseOrder & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    createView.unmount();
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit metadata" }));
+
+    const metadataForm = screen.getByRole("textbox", { name: /display name/i }).closest("form");
+    expect(metadataForm).not.toBeNull();
+
+    const metadataAddMediaButton = within(metadataForm as HTMLElement).getByRole("button", { name: "Add media item" });
+    await userEvent.selectOptions(within(metadataForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), "title_card");
+    await userEvent.click(metadataAddMediaButton);
+
+    const metadataTitleCardPanel = (metadataForm as HTMLElement).querySelector('[data-title-media-type="title_card"]');
+    expect(metadataTitleCardPanel).not.toBeNull();
+    const metadataTitleMediaOrder = (metadataTitleCardPanel as HTMLElement).compareDocumentPosition(metadataAddMediaButton);
+    expect(metadataTitleMediaOrder & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    const metadataAddScreenshotButton = within(metadataForm as HTMLElement).getByRole("button", { name: "Add screenshot" });
+    await userEvent.click(metadataAddScreenshotButton);
+
+    const metadataShowcaseSpec = await screen.findAllByText("Expected 16:9 aspect ratio");
+    const metadataShowcaseCard = metadataShowcaseSpec.at(-1)?.closest("article") ?? null;
+    expect(metadataShowcaseCard).not.toBeNull();
+    const metadataShowcaseOrder = (metadataShowcaseCard as HTMLElement).compareDocumentPosition(metadataAddScreenshotButton);
+    expect(metadataShowcaseOrder & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
+  it("reorders showcase media by list position and disables move controls at the ends", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getTitleShowcaseMedia.mockResolvedValue({
+      showcaseMedia: [
+        {
+          id: "showcase-1",
+          kind: "image",
+          imageUrl: "https://example.com/showcase-1.webp",
+          videoUrl: null,
+          altText: "First showcase item",
+          displayOrder: 0,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        {
+          id: "showcase-2",
+          kind: "image",
+          imageUrl: "https://example.com/showcase-2.webp",
+          videoUrl: null,
+          altText: "Second showcase item",
+          displayOrder: 1,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        {
+          id: "showcase-3",
+          kind: "image",
+          imageUrl: "https://example.com/showcase-3.webp",
+          videoUrl: null,
+          altText: "Third showcase item",
+          displayOrder: 2,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+      ],
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit metadata" }));
+
+    const metadataForm = screen.getByRole("textbox", { name: /display name/i }).closest("form");
+    expect(metadataForm).not.toBeNull();
+
+    const showcaseHeading = within(metadataForm as HTMLElement).getByRole("heading", { name: "Showcase media" });
+    const showcaseSection = showcaseHeading.closest("section");
+    expect(showcaseSection).not.toBeNull();
+    expect(within(showcaseSection as HTMLElement).queryByRole("spinbutton", { name: "Display order" })).not.toBeInTheDocument();
+
+    let showcaseCards = Array.from((showcaseSection as HTMLElement).querySelectorAll("article"));
+    expect(within(showcaseCards[0] as HTMLElement).getByText("Gallery item 1")).toBeVisible();
+    expect(within(showcaseCards[1] as HTMLElement).getByText("Gallery item 2")).toBeVisible();
+    expect(within(showcaseCards[2] as HTMLElement).getByText("Gallery item 3")).toBeVisible();
+    expect(within(showcaseCards[0] as HTMLElement).getByDisplayValue("First showcase item")).toBeVisible();
+    expect(within(showcaseCards[1] as HTMLElement).getByDisplayValue("Second showcase item")).toBeVisible();
+    expect(within(showcaseCards[2] as HTMLElement).getByDisplayValue("Third showcase item")).toBeVisible();
+
+    expect(within(showcaseCards[0] as HTMLElement).getByRole("button", { name: "Move item up" })).toBeDisabled();
+    expect(within(showcaseCards[0] as HTMLElement).getByRole("button", { name: "Move item down" })).toBeEnabled();
+    expect(within(showcaseCards[2] as HTMLElement).getByRole("button", { name: "Move item down" })).toBeDisabled();
+    expect(within(showcaseCards[2] as HTMLElement).getByRole("button", { name: "Move item up" })).toBeEnabled();
+
+    await userEvent.click(within(showcaseCards[0] as HTMLElement).getByRole("button", { name: "Move item down" }));
+
+    showcaseCards = Array.from((showcaseSection as HTMLElement).querySelectorAll("article"));
+    expect(within(showcaseCards[0] as HTMLElement).getByDisplayValue("Second showcase item")).toBeVisible();
+    expect(within(showcaseCards[1] as HTMLElement).getByDisplayValue("First showcase item")).toBeVisible();
+
+    await userEvent.click(within(showcaseCards[2] as HTMLElement).getByRole("button", { name: "Move item up" }));
+
+    showcaseCards = Array.from((showcaseSection as HTMLElement).querySelectorAll("article"));
+    expect(within(showcaseCards[1] as HTMLElement).getByDisplayValue("Third showcase item")).toBeVisible();
+    expect(within(showcaseCards[2] as HTMLElement).getByDisplayValue("First showcase item")).toBeVisible();
+  });
+
+  it("renders title media and showcase specs from the catalog media type definitions", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.listCatalogMediaTypes.mockResolvedValue({
+      mediaTypes: Object.values(catalogMediaTypeDefinitions).map((definition) => {
+        if (definition.key === "title_card") {
+          return {
+            ...definition,
+            acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            acceptedFileTypes: ["PNG", "AVIF"],
+            recommendedWidth: 1400,
+            recommendedHeight: 1400,
+            maxUploadBytes: 600 * 1024,
+          };
+        }
+
+        if (definition.key === "title_showcase") {
+          return {
+            ...definition,
+            acceptedMimeTypes: [...definition.acceptedMimeTypes],
+            acceptedFileTypes: ["WEBP", "MP4"],
+            recommendedWidth: 2048,
+            recommendedHeight: 1152,
+            maxUploadBytes: 4 * 1024 * 1024,
+          };
+        }
+
+        return { ...definition, acceptedMimeTypes: [...definition.acceptedMimeTypes] };
+      }),
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    await userEvent.selectOptions(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), "title_card");
+    await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add media item" }));
+
+    const cardPanel = (createTitleForm as HTMLElement).querySelector('[data-title-media-type="title_card"]');
+    expect(cardPanel).not.toBeNull();
+    expect(within(cardPanel as HTMLElement).getByText("Expected 1:1 aspect ratio")).toBeVisible();
+    expect(within(cardPanel as HTMLElement).getByText("Recommended 1400 x 1400 px")).toBeVisible();
+    expect(within(cardPanel as HTMLElement).getByText("Max 600 KB")).toBeVisible();
+    expect(within(cardPanel as HTMLElement).getByText("Accepted PNG, AVIF")).toBeVisible();
+
+    await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add screenshot" }));
+
+    expect(await screen.findByText("Expected 16:9 aspect ratio")).toBeVisible();
+    expect(screen.getByText("Recommended 2048 x 1152 px")).toBeVisible();
+    expect(screen.getByText("Max 4 MB")).toBeVisible();
+    expect(screen.getByText("Accepted WEBP, MP4")).toBeVisible();
+  });
+
+  it("uses a styled upload button for showcase preview images in metadata edit mode", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit metadata" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add screenshot" }));
+
+    expect(screen.getByText("Upload image")).toBeVisible();
+    expect(screen.queryByText(/choose file/i)).not.toBeInTheDocument();
+  });
+
+  it("treats screenshot showcase items as url-or-upload and restores the url option when upload is removed", async () => {
+    seedDeveloperWorkspace();
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 1920, height: 1080 });
+    try {
+      renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+      await userEvent.click(await screen.findByRole("button", { name: "Edit metadata" }));
+      await userEvent.click(screen.getByRole("button", { name: "Add screenshot" }));
+
+      expect(screen.getByRole("textbox", { name: "Image URL" })).toBeVisible();
+
+      const uploadInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+      expect(uploadInput).not.toBeNull();
+
+      await userEvent.upload(uploadInput!, new File(["showcase-bytes"], "showcase.png", { type: "image/png" }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole("textbox", { name: "Image URL" })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Remove upload" })).toBeVisible();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Remove upload" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "Image URL" })).toBeVisible();
+      });
+    } finally {
+      mockedImageProcessing.restore();
+    }
+  });
+
+  it("renders compact title and showcase media summaries in metadata view", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreSlugs: ["adventure", "puzzle", "family"],
+        contentKind: "game",
+        lifecycleStatus: "active",
+        visibility: "listed",
+        genreDisplay: "Adventure, Puzzle, Family",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E10+",
+        wishlistCount: 18,
+        libraryCount: 7,
+        currentMetadataRevision: 3,
+        acquisitionUrl: "https://blue-harbor-games.example/titles/lantern-drift",
+        currentReleaseId: "release-1",
+        catalogMediaEntries: [
+          {
+            id: "avatar-entry",
+            ownerKind: "title",
+            studioId: null,
+            titleId: "title-1",
+            mediaTypeKey: "title_avatar",
+            kind: "image",
+            sourceUrl: "https://example.com/avatar.webp",
+            storagePath: "titles/studio/title/avatar.webp",
+            previewImageUrl: null,
+            previewStoragePath: null,
+            videoUrl: null,
+            altText: "Avatar alt text",
+            mimeType: "image/webp",
+            width: 512,
+            height: 512,
+            displayOrder: 0,
+            createdAt: "2026-03-08T12:00:00Z",
+            updatedAt: "2026-03-08T12:00:00Z",
+          },
+          {
+            id: "card-entry",
+            ownerKind: "title",
+            studioId: null,
+            titleId: "title-1",
+            mediaTypeKey: "title_card",
+            kind: "image",
+            sourceUrl: "https://example.com/card.webp",
+            storagePath: "titles/studio/title/card.webp",
+            previewImageUrl: null,
+            previewStoragePath: null,
+            videoUrl: null,
+            altText: "Card alt text",
+            mimeType: "image/webp",
+            width: 1024,
+            height: 1024,
+            displayOrder: 0,
+            createdAt: "2026-03-08T12:00:00Z",
+            updatedAt: "2026-03-08T12:00:00Z",
+          },
+        ],
+        mediaAssets: [],
+        showcaseMedia: [
+          {
+            id: "showcase-1",
+            kind: "external_video",
+            imageUrl: "https://example.com/showcase-preview.webp",
+            videoUrl: "https://example.com/trailer",
+            altText: "Trailer preview alt text",
+            displayOrder: 0,
+            createdAt: "2026-03-08T12:00:00Z",
+            updatedAt: "2026-03-08T12:00:00Z",
+          },
+        ],
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+        },
+        createdAt: "2026-03-08T12:00:00Z",
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+    apiMocks.getTitleShowcaseMedia.mockResolvedValue({
+      showcaseMedia: [
+        {
+          id: "showcase-1",
+          kind: "external_video",
+          imageUrl: "https://example.com/showcase-preview.webp",
+          videoUrl: "https://example.com/trailer",
+          altText: "Trailer preview alt text",
+          displayOrder: 0,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+      ],
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Metadata" })).toBeVisible();
+    expect(screen.getByText("Title media")).toBeVisible();
+    expect(screen.getByText("Showcase media")).toBeVisible();
+    expect(screen.getByText("Title avatar")).toBeVisible();
+    expect(screen.getByText("Avatar alt text")).toBeVisible();
+    expect(screen.getByText("Card alt text")).toBeVisible();
+    expect(screen.getByText("Gallery item 1")).toBeVisible();
+    expect(screen.getByText("Trailer preview alt text")).toBeVisible();
+    expect(screen.getByText("https://example.com/trailer")).toBeVisible();
+    expect(screen.queryByText("Expected 1:1 aspect ratio")).not.toBeInTheDocument();
+    expect(screen.queryByText("No image added")).not.toBeInTheDocument();
+
+    const avatarSummary = document.querySelector('[data-title-media-summary-preview="title_avatar"]');
+    const cardSummary = document.querySelector('[data-title-media-summary-preview="title_card"]');
+    expect(avatarSummary).toHaveStyle({ aspectRatio: `${catalogMediaTypeDefinitions.titleAvatar.recommendedWidth} / ${catalogMediaTypeDefinitions.titleAvatar.recommendedHeight}` });
+    expect(cardSummary).toHaveStyle({ aspectRatio: `${catalogMediaTypeDefinitions.titleCard.recommendedWidth} / ${catalogMediaTypeDefinitions.titleCard.recommendedHeight}` });
+  });
+
+  it("keeps uploaded title media when moving from create title into metadata", async () => {
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 1920, height: 1080, blobSize: 4096, blobType: "image/webp" });
+
+    try {
+      seedDeveloperWorkspace();
+
+      let created = false;
+      const createdCatalogMediaEntries: Array<Record<string, unknown>> = [];
+      const createdShowcaseMedia: Array<Record<string, unknown>> = [];
+      const createdTitleId = "title-2";
+      const createdTitleSummary = {
+        id: createdTitleId,
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "compass-echo",
+        contentKind: "game",
+        lifecycleStatus: "draft",
+        visibility: "unlisted",
+        isReported: false,
+        currentMetadataRevision: 1,
+        displayName: "Compass Echo",
+        shortDescription: "Plot expedition routes and track secrets.",
+        description: "Plot expedition routes, track secrets, and sync clue boards.",
+        genreDisplay: "Adventure",
+        minPlayers: 1,
+        maxPlayers: 4,
+        ageRatingAuthority: null,
+        ageRatingValue: null,
+        minAgeYears: 10,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: null,
+        cardImageUrl: null,
+        logoImageUrl: null,
+        acquisitionUrl: null,
+        catalogMediaEntries: [],
+      };
+
+      apiMocks.listStudioTitles.mockImplementation(async () => ({ titles: created ? [createdTitleSummary] : [] }));
+      apiMocks.createTitle.mockImplementation(async () => {
+        created = true;
+        return { title: { id: createdTitleId } };
+      });
+      apiMocks.createTitleCatalogMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, request: { mediaTypeKey: string; sourceUrl?: string | null; altText?: string | null; displayOrder?: number | null }) => {
+        const mediaEntry = {
+          id: `media-${request.mediaTypeKey}`,
+          ownerKind: "title",
+          studioId: null,
+          titleId,
+          mediaTypeKey: request.mediaTypeKey,
+          kind: "image",
+          sourceUrl: request.sourceUrl ?? null,
+          storagePath: null,
+          previewImageUrl: null,
+          previewStoragePath: null,
+          videoUrl: null,
+          altText: request.altText ?? null,
+          mimeType: null,
+          width: null,
+          height: null,
+          displayOrder: request.displayOrder ?? 0,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        };
+        createdCatalogMediaEntries.push(mediaEntry);
+        return { mediaEntry };
+      });
+      apiMocks.uploadTitleCatalogMediaImage.mockImplementation(async (_baseUrl: string, _token: string, _titleId: string, mediaEntryId: string, _file: File, altText?: string | null) => {
+        const entry = createdCatalogMediaEntries.find((candidate) => candidate.id === mediaEntryId);
+        if (entry) {
+          entry.sourceUrl = `https://example.com/${mediaEntryId}.webp`;
+          entry.storagePath = `titles/studio/title/${mediaEntryId}.webp`;
+          entry.altText = altText ?? null;
+          entry.mimeType = "image/webp";
+        }
+        return { mediaEntry: entry };
+      });
+      apiMocks.createTitleShowcaseMedia.mockImplementation(async (_baseUrl: string, _token: string, titleId: string, request: { kind: "image" | "external_video"; imageUrl?: string | null; videoUrl?: string | null; altText: string | null; displayOrder: number }) => {
+        const showcaseMedia = {
+          id: `showcase-${request.displayOrder}`,
+          titleId,
+          kind: request.kind,
+          imageUrl: request.imageUrl ?? null,
+          videoUrl: request.videoUrl ?? null,
+          altText: request.altText ?? null,
+          displayOrder: request.displayOrder,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        };
+        createdShowcaseMedia.push(showcaseMedia);
+        return { showcaseMedia };
+      });
+      apiMocks.uploadTitleShowcaseMediaImage.mockImplementation(async (_baseUrl: string, _token: string, _titleId: string, showcaseMediaId: string, _file: File) => {
+        const item = createdShowcaseMedia.find((candidate) => candidate.id === showcaseMediaId);
+        if (item) {
+          item.imageUrl = `https://example.com/${showcaseMediaId}.webp`;
+        }
+        return { showcaseMedia: item };
+      });
+      apiMocks.getDeveloperTitle.mockImplementation(async (_baseUrl: string, _token: string, titleId: string) => ({
+        title: {
+          id: titleId,
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          slug: "compass-echo",
+          displayName: "Compass Echo",
+          shortDescription: "Plot expedition routes and track secrets.",
+          description: "Plot expedition routes, track secrets, and sync clue boards.",
+          genreSlugs: ["adventure"],
+          contentKind: "game",
+          lifecycleStatus: "draft",
+          visibility: "unlisted",
+          genreDisplay: "Adventure",
+          minPlayers: 1,
+          maxPlayers: 4,
+          maxPlayersOrMore: false,
+          ageRatingAuthority: null,
+          ageRatingValue: null,
+          minAgeYears: 10,
+          playerCountDisplay: "1-4 players",
+          ageDisplay: null,
+          wishlistCount: 0,
+          libraryCount: 0,
+          currentMetadataRevision: 1,
+          acquisitionUrl: null,
+          cardImageUrl: null,
+          catalogMediaEntries: createdCatalogMediaEntries as never[],
+          mediaAssets: [],
+          showcaseMedia: createdShowcaseMedia as never[],
+          currentReleaseId: null,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+      }));
+      apiMocks.getTitleShowcaseMedia.mockImplementation(async () => ({ showcaseMedia: createdShowcaseMedia as never[] }));
+      apiMocks.getTitleMetadataVersions.mockImplementation(async () => ({
+        metadataVersions: created
+          ? [
+              {
+                revisionNumber: 1,
+                displayName: "Compass Echo",
+                shortDescription: "Plot expedition routes and track secrets.",
+                description: "Plot expedition routes, track secrets, and sync clue boards.",
+                genreSlugs: ["adventure"],
+                genreDisplay: "Adventure",
+                minPlayers: 1,
+                maxPlayers: 4,
+                maxPlayersOrMore: false,
+                playerCountDisplay: "1-4 players",
+                ageRatingAuthority: null,
+                ageRatingValue: null,
+                minAgeYears: 10,
+                ageDisplay: null,
+                isFrozen: false,
+                isCurrent: true,
+                createdAt: "2026-03-08T12:00:00Z",
+                updatedAt: "2026-03-08T12:00:00Z",
+              },
+            ]
+          : [],
+      }));
+
+      renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+      const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+      expect(createTitleForm).not.toBeNull();
+
+      await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /display name/i }), "Compass Echo");
+      await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Adventure" }));
+      await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /short description/i }), "Plot expedition routes and track secrets.");
+      await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /^description/i }), "Plot expedition routes, track secrets, and sync clue boards.");
+
+      for (const [mediaTypeKey, altText, fileName] of [
+        ["title_avatar", "Avatar alt", "avatar.png"],
+        ["title_card", "Card alt", "card.png"],
+        ["title_quick_view_banner", "Quick view alt", "quick-view.png"],
+        ["title_logo", "Logo alt", "logo.png"],
+      ] as const) {
+        await userEvent.selectOptions(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" }), mediaTypeKey);
+        await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add media item" }));
+        const mediaPanel = (createTitleForm as HTMLElement).querySelector(`[data-title-media-type="${mediaTypeKey}"]`);
+        expect(mediaPanel).not.toBeNull();
+        await userEvent.type(within(mediaPanel as HTMLElement).getByRole("textbox", { name: "Alt text" }), altText);
+        const uploadInput = (mediaPanel as HTMLElement).querySelector('input[type="file"]');
+        expect(uploadInput).not.toBeNull();
+        await userEvent.upload(uploadInput as HTMLInputElement, new File(["image-bytes"], fileName, { type: "image/png" }));
+      }
+
+      const showcaseHeading = within(createTitleForm as HTMLElement).getByRole("heading", { name: "Showcase media" });
+      const showcaseSection = showcaseHeading.closest("section");
+      expect(showcaseSection).not.toBeNull();
+      await userEvent.click(within(showcaseSection as HTMLElement).getByRole("button", { name: "Add screenshot" }));
+      const showcaseCard = (showcaseSection as HTMLElement).querySelector("article");
+      expect(showcaseCard).not.toBeNull();
+      await userEvent.type(within(showcaseCard as HTMLElement).getByRole("textbox", { name: "Alt text" }), "Showcase alt");
+      const showcaseUploadInput = (showcaseCard as HTMLElement).querySelector('input[type="file"]');
+      expect(showcaseUploadInput).not.toBeNull();
+      await userEvent.upload(showcaseUploadInput as HTMLInputElement, new File(["showcase-bytes"], "showcase.png", { type: "image/png" }));
+
+      await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Create title" }));
+
+      await waitFor(() => {
+        expect(apiMocks.uploadTitleCatalogMediaImage).toHaveBeenCalledTimes(4);
+        expect(apiMocks.uploadTitleShowcaseMediaImage).toHaveBeenCalledTimes(1);
+      });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Metadata" }));
+
+      expect(await screen.findByRole("heading", { name: "Metadata" })).toBeVisible();
+      expect(screen.getByText("Avatar alt")).toBeVisible();
+      expect(screen.getByText("Card alt")).toBeVisible();
+      expect(screen.getByText("Quick view alt")).toBeVisible();
+      expect(screen.getByText("Logo alt")).toBeVisible();
+      expect(screen.getByText("Showcase alt")).toBeVisible();
+
+      await userEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+
+      const metadataForm = screen.getByRole("textbox", { name: /display name/i }).closest("form");
+      expect(metadataForm).not.toBeNull();
+      expect((metadataForm as HTMLElement).querySelector('[data-title-media-type="title_avatar"]')).not.toBeNull();
+      expect((metadataForm as HTMLElement).querySelector('[data-title-media-type="title_card"]')).not.toBeNull();
+      expect((metadataForm as HTMLElement).querySelector('[data-title-media-type="title_quick_view_banner"]')).not.toBeNull();
+      expect((metadataForm as HTMLElement).querySelector('[data-title-media-type="title_logo"]')).not.toBeNull();
+    } finally {
+      mockedImageProcessing.restore();
     }
   });
 
@@ -4993,6 +6850,71 @@ describe("App", () => {
     });
   });
 
+  it("stores open-ended player ranges in the create-title draft", async () => {
+    seedDeveloperWorkspace();
+    window.sessionStorage.setItem(
+      "develop-workspace-state",
+      JSON.stringify({
+        workspace: { domain: "titles", workflow: "titles-create", studioId: "studio-1", titleId: "", releaseId: "" },
+        studioCreateDraft: {
+          displayName: "",
+          slug: "",
+          description: "",
+          logo: { url: "", previewUrl: "", fileName: null },
+          banner: { url: "", previewUrl: "", fileName: null },
+          links: [{ label: "", url: "" }],
+        },
+        studioCreateTouched: {},
+        titleCreate: {
+          studioId: "studio-1",
+          touched: {},
+          draft: {
+            displayName: "Compass Echo",
+            slug: "compass-echo",
+            contentKind: "game",
+            lifecycleStatus: "draft",
+            visibility: "unlisted",
+            genres: ["adventure"],
+            genreInput: "",
+            ageRatingAuthorityInput: "",
+            shortDescription: "Plot expedition routes and track secrets.",
+            description: "Plot expedition routes, track secrets, and sync clue boards.",
+            minPlayers: 2,
+            maxPlayers: 4,
+            maxPlayersOrMore: false,
+            ageRatingAuthority: "ESRB",
+            ageRatingValue: "E",
+            minAgeYears: 10,
+            media: {
+              card: { url: "", altText: "" },
+              hero: { url: "", altText: "" },
+              logo: { url: "", altText: "" },
+            },
+          },
+        },
+        selectedReportId: null,
+        reportReply: "",
+      }),
+    );
+
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    const orMoreCheckbox = within(createTitleForm as HTMLElement).getByRole("checkbox", { name: "Or more" });
+    expect(orMoreCheckbox).not.toBeChecked();
+
+    await userEvent.click(orMoreCheckbox);
+
+    expect(orMoreCheckbox).toBeChecked();
+
+    await waitFor(() => {
+      const persistedDraft = JSON.parse(window.sessionStorage.getItem("develop-workspace-state") ?? "{}");
+      expect(persistedDraft.titleCreate?.draft?.maxPlayersOrMore).toBe(true);
+    });
+  });
+
   it("restores legacy cached title-create drafts without crashing when fields change", async () => {
     seedDeveloperWorkspace();
     window.sessionStorage.setItem(
@@ -5109,6 +7031,168 @@ describe("App", () => {
     await userEvent.click(within(metadataForm as HTMLElement).getByRole("button", { name: "PEGI" }));
 
     expect(within(metadataForm as HTMLElement).getByRole("button", { name: "Remove PEGI" })).toBeVisible();
+  });
+
+  it("ignores non-editing cached metadata drafts so saved title data is shown after reload", async () => {
+    seedDeveloperWorkspace();
+    window.sessionStorage.setItem(
+      "develop-workspace-state",
+      JSON.stringify({
+        workspace: { domain: "titles", workflow: "titles-metadata", studioId: "studio-1", titleId: "title-1", releaseId: "" },
+        titleMetadata: {
+          titleId: "title-1",
+          editing: false,
+          touched: {},
+          draft: {
+            displayName: "Ghost Draft",
+            slug: "ghost-draft",
+            contentKind: "game",
+            lifecycleStatus: "active",
+            visibility: "listed",
+            genres: ["puzzle"],
+            genreInput: "",
+            ageRatingAuthorityInput: "",
+            shortDescription: "This preview-only draft should not override saved title data.",
+            description: "This preview-only draft should not override saved title data.",
+            minPlayers: 1,
+            maxPlayers: 4,
+            ageRatingAuthority: "ESRB",
+            ageRatingValue: "E",
+            minAgeYears: 10,
+            media: {
+              avatar: { url: "", previewUrl: "data:image/png;base64,stale-avatar", altText: "Stale avatar", fileName: "avatar.png" },
+              card: { url: "", previewUrl: "data:image/png;base64,stale-card", altText: "Stale card", fileName: "card.png" },
+              quickViewBanner: { url: "", previewUrl: "", altText: "", fileName: null },
+              logo: { url: "", previewUrl: "", altText: "", fileName: null },
+            },
+          },
+        },
+        selectedReportId: null,
+        reportReply: "",
+      }),
+    );
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Metadata" })).toBeVisible();
+    expect(screen.queryByText("Ghost Draft")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Lantern Drift").length).toBeGreaterThan(0);
+    expect(screen.queryByAltText("Stale avatar")).not.toBeInTheDocument();
+  });
+
+  it("ignores non-editing cached studio drafts so saved studio data is shown after reload", async () => {
+    seedDeveloperWorkspace();
+    window.sessionStorage.setItem(
+      "develop-workspace-state",
+      JSON.stringify({
+        workspace: { domain: "studios", workflow: "studios-overview", studioId: "studio-1", titleId: "", releaseId: "" },
+        studioCreateDraft: {
+          displayName: "",
+          slug: "",
+          description: "",
+          avatar: { url: "", previewUrl: "", fileName: null },
+          logo: { url: "", previewUrl: "", fileName: null },
+          banner: { url: "", previewUrl: "", fileName: null },
+          links: [{ label: "", url: "" }],
+        },
+        studioCreateTouched: {},
+        studioOverview: {
+          studioId: "studio-1",
+          editing: false,
+          touched: {},
+          draft: {
+            displayName: "Ghost Draft Studio",
+            slug: "ghost-draft-studio",
+            description: "This preview-only draft should not override saved studio data.",
+            avatar: { url: "", previewUrl: "data:image/png;base64,stale-avatar", fileName: "avatar.png" },
+            logo: { url: "", previewUrl: "", fileName: null },
+            banner: { url: "", previewUrl: "", fileName: null },
+            links: [{ id: "ghost-link", label: "Ghost link", url: "https://ghost.example" }],
+          },
+        },
+        selectedReportId: null,
+        reportReply: "",
+      }),
+    );
+
+    renderApp("/developer?domain=studios&workflow=studios-overview&studioId=studio-1");
+
+    expect(await screen.findByRole("button", { name: "Edit studio" })).toBeVisible();
+    expect(screen.queryByText("Ghost Draft Studio")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Blue Harbor Games").length).toBeGreaterThan(0);
+    expect(screen.getByText("blue-harbor-games")).toBeVisible();
+    expect(screen.queryByAltText(/stale-avatar/i)).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const persistedDraft = JSON.parse(window.sessionStorage.getItem("develop-workspace-state") ?? "{}");
+      expect(persistedDraft.studioOverview).toBeUndefined();
+    });
+  });
+
+  it("shows open-ended player ranges in the metadata summary and editor", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.getDeveloperTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreSlugs: ["adventure", "puzzle", "family"],
+        contentKind: "game",
+        lifecycleStatus: "active",
+        visibility: "listed",
+        genreDisplay: "Adventure, Puzzle, Family",
+        minPlayers: 2,
+        maxPlayers: 4,
+        maxPlayersOrMore: true,
+        ageRatingAuthority: "ESRB",
+        ageRatingValue: "E10+",
+        minAgeYears: 10,
+        playerCountDisplay: "2-4+ players",
+        ageDisplay: "ESRB E10+",
+        wishlistCount: 18,
+        libraryCount: 7,
+        currentMetadataRevision: 3,
+        acquisitionUrl: "https://blue-harbor-games.example/titles/lantern-drift",
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+        },
+      },
+    });
+    apiMocks.getTitleMetadataVersions.mockResolvedValue({
+      metadataVersions: [
+        {
+          revisionNumber: 3,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+          genreSlugs: ["adventure", "puzzle", "family"],
+          genreDisplay: "Adventure, Puzzle, Family",
+          minPlayers: 2,
+          maxPlayers: 4,
+          maxPlayersOrMore: true,
+          playerCountDisplay: "2-4+ players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E10+",
+          minAgeYears: 10,
+          ageDisplay: "ESRB E10+",
+          isFrozen: true,
+          isCurrent: true,
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+      ],
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByText("2-4+ players")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Edit metadata" }));
+    expect(screen.getByRole("checkbox", { name: "Or more" })).toBeChecked();
   });
 
   it("keeps genres usable when the age rating authority catalog request fails", async () => {
@@ -5402,8 +7486,8 @@ describe("App", () => {
     const editStudioForm = (await screen.findByRole("heading", { name: "Edit Studio" })).closest("form");
     expect(editStudioForm).not.toBeNull();
 
-    const editLogoPanel = within(editStudioForm as HTMLElement).getByText("Logo").closest("section");
-    const editBannerPanel = within(editStudioForm as HTMLElement).getByText("Banner").closest("section");
+    const editLogoPanel = (editStudioForm as HTMLElement).querySelector('[data-studio-media-role="logo"]');
+    const editBannerPanel = (editStudioForm as HTMLElement).querySelector('[data-studio-media-role="banner"]');
     expect(editLogoPanel).not.toBeNull();
     expect(editBannerPanel).not.toBeNull();
     expect(within(editLogoPanel as HTMLElement).getByAltText("Logo preview")).toHaveAttribute("src", "/seed-catalog/studios/blue-harbor-games/logo.svg");

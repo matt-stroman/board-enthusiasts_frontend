@@ -9,6 +9,7 @@ import type {
 } from "@board-enthusiasts/migration-contract";
 import { useId, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
+import shareGlyph from "../assets/title-action-icons/share_24dp.svg?raw";
 import { formatMediaUploadGuidance } from "../media-upload";
 import { supportRoute } from "./errors";
 import type { AvatarEditorState } from "./shared";
@@ -18,6 +19,7 @@ import {
   PLAYER_FILTER_MIN,
   avatarUploadPolicy,
   canViewTitleReportMessageAudience,
+  getCatalogMediaAspectRatioValue,
   formatAudienceLabel,
   formatContentKindLabel,
   formatMembershipRole,
@@ -29,6 +31,8 @@ import {
   getFallbackGradient,
   getInitials,
   getStudioAvatarImageUrl,
+  getTitleAvatarImageUrl,
+  getTitleCardImageUrl,
   getTitleLogoAsset,
   parseGenreTags,
 } from "./shared";
@@ -122,6 +126,10 @@ export function EmptyState({ title, detail }: { title: string; detail: string })
       <p>{detail}</p>
     </div>
   );
+}
+
+export function getWorkspaceWorkflowButtonClass(active: boolean): string {
+  return active ? "workflow-active-button" : "workflow-button surface-panel-strong";
 }
 
 export function Field({
@@ -318,6 +326,7 @@ export function TitleNameHeading({
 
 export function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudioSummary }) {
   const avatarUrl = getStudioAvatarImageUrl(studio);
+  const studioAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "studio_avatar");
   return (
     <article className="app-panel overflow-hidden p-0">
       <div
@@ -332,7 +341,9 @@ export function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudio
               <p className="max-w-xl text-sm leading-7 text-slate-300">{studio.description ?? "No studio summary yet."}</p>
             </div>
             {avatarUrl ? (
-              <img className="h-16 w-16 rounded-[1rem] border border-white/10 object-cover" src={avatarUrl} alt={`${studio.displayName} avatar`} />
+              <div className="w-16 shrink-0 overflow-hidden rounded-[1rem] border border-white/10 md:w-24" style={{ aspectRatio: studioAvatarAspectRatio }}>
+                <img className="h-full w-full object-cover" src={avatarUrl} alt={`${studio.displayName} avatar`} />
+              </div>
             ) : null}
           </div>
           <div className="mt-5">
@@ -351,36 +362,44 @@ export function TitlePlayerActionButtons({
   isBusy,
   isWishlisted,
   isOwned,
-  isReported,
-  canReport,
   showOwnedAction = true,
+  isReported = false,
+  canReport = true,
+  showShareAction = true,
   showReportAction = true,
   compact,
   onToggleWishlist,
   onToggleOwned,
   onReport,
+  onShare,
 }: {
   visible: boolean;
   isBusy: boolean;
   isWishlisted: boolean;
   isOwned: boolean;
-  isReported: boolean;
-  canReport: boolean;
+  isReported?: boolean;
+  canReport?: boolean;
   showOwnedAction?: boolean;
+  showShareAction?: boolean;
   showReportAction?: boolean;
   compact?: boolean;
   onToggleWishlist: () => void;
-  onToggleOwned: () => void;
-  onReport: () => void;
+  onToggleOwned?: () => void;
+  onReport?: () => void;
+  onShare?: () => void;
 }) {
-  if (!visible) {
+  if (!visible && !showShareAction) {
     return null;
   }
 
   const sizeClass = compact ? "h-11 w-11" : "h-11 w-11";
   const baseClass = `${sizeClass} inline-flex items-center justify-center rounded-full border text-slate-100 transition disabled:cursor-not-allowed disabled:opacity-50`;
   const getButtonClass = (active: boolean) =>
-    `${baseClass} ${active ? "border-cyan-300/55 bg-cyan-300/18 text-cyan-50" : "border-white/15 bg-slate-950/65 hover:border-cyan-300/55 hover:text-cyan-100"} backdrop-blur-sm`;
+    `${baseClass} ${
+      active
+        ? "border-cyan-200/70 bg-[radial-gradient(circle_at_top,rgba(220,247,234,0.16),transparent_55%),linear-gradient(180deg,rgba(18,42,35,0.96),rgba(10,24,20,0.96))] text-cyan-50 shadow-[0_0_0_1px_rgba(157,226,194,0.15),0_16px_34px_rgba(6,10,17,0.42)]"
+        : "border-white/18 bg-[linear-gradient(180deg,rgba(13,18,29,0.88),rgba(7,10,17,0.9))] text-slate-50 shadow-[0_12px_28px_rgba(6,10,17,0.34)] hover:border-cyan-200/55 hover:text-cyan-100 hover:bg-[linear-gradient(180deg,rgba(17,23,36,0.94),rgba(10,14,24,0.94))]"
+    } backdrop-blur-md`;
 
   function handleAction(event: React.MouseEvent<HTMLButtonElement>, action: () => void): void {
     event.preventDefault();
@@ -390,19 +409,21 @@ export function TitlePlayerActionButtons({
 
   return (
     <div className={compact ? "flex flex-wrap gap-2" : "flex flex-wrap gap-3"}>
-      <button
-        className={getButtonClass(isWishlisted)}
-        type="button"
-        title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-        aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-        onClick={(event) => handleAction(event, onToggleWishlist)}
-        disabled={isBusy}
-      >
-        <svg viewBox="0 0 24 24" className={`h-4 w-4 ${isWishlisted ? "fill-current stroke-[1.6]" : "fill-none stroke-2"} stroke-current`} aria-hidden="true">
-          <path d="M12 21 4.7 13.8a4.9 4.9 0 0 1 6.9-6.9L12 7.3l.4-.4a4.9 4.9 0 0 1 6.9 6.9Z" />
-        </svg>
-      </button>
-      {showOwnedAction ? (
+      {visible ? (
+        <button
+          className={getButtonClass(isWishlisted)}
+          type="button"
+          title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          onClick={(event) => handleAction(event, onToggleWishlist)}
+          disabled={isBusy}
+        >
+          <svg viewBox="0 0 24 24" className={`h-4 w-4 ${isWishlisted ? "fill-current stroke-[1.6]" : "fill-none stroke-2"} stroke-current`} aria-hidden="true">
+            <path d="M12 21 4.7 13.8a4.9 4.9 0 0 1 6.9-6.9L12 7.3l.4-.4a4.9 4.9 0 0 1 6.9 6.9Z" />
+          </svg>
+        </button>
+      ) : null}
+      {visible && showOwnedAction && onToggleOwned ? (
         <button
           className={getButtonClass(isOwned)}
           type="button"
@@ -423,7 +444,7 @@ export function TitlePlayerActionButtons({
           </svg>
         </button>
       ) : null}
-      {showReportAction ? (
+      {visible && showReportAction && onReport ? (
         <button
           className={getButtonClass(isReported)}
           type="button"
@@ -436,6 +457,18 @@ export function TitlePlayerActionButtons({
             <path d="M6 3v18" />
             <path d="M6 4h9l-1.5 3L15 10H6" />
           </svg>
+        </button>
+      ) : null}
+      {showShareAction && onShare ? (
+        <button
+          className={getButtonClass(false)}
+          type="button"
+          title="Share title"
+          aria-label="Share title"
+          onClick={(event) => handleAction(event, onShare)}
+          disabled={isBusy}
+        >
+          <span className="inline-svg-icon h-4 w-4" aria-hidden="true" dangerouslySetInnerHTML={{ __html: shareGlyph }} />
         </button>
       ) : null}
     </div>
@@ -512,19 +545,17 @@ export function TitleCard({
     isBusy: boolean;
     isWishlisted: boolean;
     isOwned: boolean;
-    isReported: boolean;
-    canReport: boolean;
     onToggleWishlist: () => void;
     onToggleOwned: () => void;
-    onReport: () => void;
+    onShare: () => void;
   };
 }) {
   const [cardImageFailed, setCardImageFailed] = useState(false);
-  const [logoImageFailed, setLogoImageFailed] = useState(false);
-  const cardImageUrl = !cardImageFailed && title.cardImageUrl ? title.cardImageUrl : null;
-  const logoImageUrl = !logoImageFailed && title.logoImageUrl ? title.logoImageUrl : null;
+  const cardImageUrl = !cardImageFailed ? getTitleCardImageUrl(title) : null;
+  const titleAvatarUrl = getTitleAvatarImageUrl(title);
+  const titleAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_avatar");
   const genreTags = parseGenreTags(title.genreDisplay);
-  const panelClassName = logoImageUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
+  const panelClassName = titleAvatarUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
   const allowOwnedAndReportActions = availabilityNote !== "Coming soon";
   const fallbackGradient = getFallbackGradient(title.genreDisplay);
@@ -573,13 +604,17 @@ export function TitleCard({
       <div className="relative p-3 md:p-4">
         <div className={panelClassName}>
           <div className="flex min-h-[3.75rem] items-center">
-            {logoImageUrl ? (
-              <img
-                className="max-h-14 w-auto max-w-full object-contain"
-                src={logoImageUrl}
-                alt={`${title.displayName} logo`}
-                onError={() => setLogoImageFailed(true)}
-              />
+            {titleAvatarUrl ? (
+              <div className="flex items-center gap-3">
+                <div className="w-16 shrink-0 overflow-hidden rounded-[1rem] border border-white/10" style={{ aspectRatio: titleAvatarAspectRatio }}>
+                  <img
+                    className="h-full w-full object-cover"
+                    src={titleAvatarUrl}
+                    alt={`${title.displayName} avatar`}
+                  />
+                </div>
+                <div className="min-w-0 text-xl font-bold leading-tight text-white">{title.displayName}</div>
+              </div>
             ) : (
               <div className="text-[1.85rem] font-bold leading-tight text-white">{title.displayName}</div>
             )}
@@ -625,13 +660,11 @@ export function TitleCard({
               isBusy={playerActions.isBusy}
               isWishlisted={playerActions.isWishlisted}
               isOwned={playerActions.isOwned}
-              isReported={playerActions.isReported}
-              canReport={playerActions.canReport}
               showOwnedAction={allowOwnedAndReportActions}
-              showReportAction={allowOwnedAndReportActions}
+              showReportAction={false}
               onToggleWishlist={playerActions.onToggleWishlist}
               onToggleOwned={playerActions.onToggleOwned}
-              onReport={playerActions.onReport}
+              onShare={playerActions.onShare}
             />
           </div>
         </div>

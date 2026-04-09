@@ -1,95 +1,128 @@
-import type { CatalogTitleResponse, PlayerTitleReportSummary } from "@board-enthusiasts/migration-contract";
-import { useEffect, useState, type FormEvent } from "react";
+import type { CatalogTitleResponse } from "@board-enthusiasts/migration-contract";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import copyGlyph from "../assets/title-action-icons/content_copy_24dp.svg?raw";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
-  createPlayerTitleReport,
   getCatalogTitle,
   getPlayerLibrary,
-  getPlayerTitleReports,
   getPlayerWishlist,
-  listManagedStudios,
   removeTitleFromPlayerLibrary,
   removeTitleFromPlayerWishlist,
 } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import {
   appConfig,
+  formatContentKindLabel,
   formatTitleLibraryInterestLabel,
   formatTitleWishlistInterestLabel,
-  formatContentKindLabel,
-  formatMembershipRole,
-  formatReportStatus,
-  formatTimestamp,
   getCatalogTitleAvailabilityNote,
   getFallbackGradient,
   getHeroImageUrl,
+  getTitleDetailPath,
+  getTitleSharePageUrl,
   parseGenreTags,
+  writeTextToClipboard,
 } from "./shared";
 import { trackAnalyticsEvent } from "./analytics";
-import { ErrorPanel, Field, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
+import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
 
-export function ReportTitleModal({
+export function ShareTitleModal({
   titleDisplayName,
-  reportReason,
-  reportErrorMessage,
-  submitting,
-  onReportReasonChange,
+  shareUrl,
   onClose,
-  onSubmit,
 }: {
   titleDisplayName: string;
-  reportReason: string;
-  reportErrorMessage: string | null;
-  submitting: boolean;
-  onReportReasonChange: (value: string) => void;
+  shareUrl: string;
   onClose: () => void;
-  onSubmit: () => void;
 }) {
+  const headingId = "share-title-heading";
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [copyFeedbackTone, setCopyFeedbackTone] = useState<"default" | "error">("default");
+  const [copying, setCopying] = useState(false);
+
+  async function handleCopy(): Promise<void> {
+    setCopying(true);
+
+    try {
+      await writeTextToClipboard(shareUrl);
+      setCopyFeedback("Link copied to your clipboard.");
+      setCopyFeedbackTone("default");
+    } catch {
+      setCopyFeedback("We couldn't copy the link automatically. You can still copy the URL below.");
+      setCopyFeedbackTone("error");
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="app-panel w-full max-w-2xl p-6" onClick={(event) => event.stopPropagation()}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/82 p-4 backdrop-blur-sm" onClick={onClose}>
+      <section
+        className="app-panel w-full max-w-xl p-6 md:p-7"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/75">Report title</div>
-            <h2 className="mt-2 text-2xl font-bold text-white">{titleDisplayName}</h2>
+            <div className="eyebrow">Share</div>
+            <h2 id={headingId} className="mt-2 text-2xl font-bold text-white">
+              Share {titleDisplayName}
+            </h2>
           </div>
-          <button className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100" type="button" onClick={onClose}>
-            Close
+          <button
+            className="inline-flex size-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100"
+            type="button"
+            aria-label="Close share dialog"
+            title="Close"
+            onClick={onClose}
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2" aria-hidden="true">
+              <path d="M6 6 18 18" />
+              <path d="M18 6 6 18" />
+            </svg>
           </button>
         </div>
-        <p className="mt-4 text-sm leading-7 text-slate-300">Tell moderators what looks wrong so they can review it with the developer.</p>
-        <label className="mt-5 block text-sm text-slate-300">
-          Reason
-          <textarea
-            className="mt-2 min-h-36 w-full rounded-[1rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100"
-            value={reportReason}
-            onChange={(event) => onReportReasonChange(event.currentTarget.value)}
-            placeholder="Describe the issue with this title."
-          />
-        </label>
-        {reportErrorMessage ? <div className="mt-4 rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{reportErrorMessage}</div> : null}
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onSubmit} disabled={submitting || reportReason.trim().length === 0}>
-            {submitting ? "Submitting..." : "Submit report"}
-          </button>
-          <button className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100" type="button" onClick={onClose}>
-            Cancel
-          </button>
+
+        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-slate-950/72 p-4">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75" htmlFor="share-title-url">
+            Title link
+          </label>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <input
+              id="share-title-url"
+              className="min-w-0 flex-1 rounded-[1rem] border border-white/10 bg-slate-950/82 px-4 py-3 text-sm text-slate-100"
+              type="text"
+              value={shareUrl}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <button className="primary-button gap-2 px-5" type="button" onClick={() => void handleCopy()} disabled={copying}>
+              <span className="inline-svg-icon h-4 w-4" aria-hidden="true" dangerouslySetInnerHTML={{ __html: copyGlyph }} />
+              {copying ? "Copying..." : "Copy"}
+            </button>
+          </div>
+          {copyFeedback ? (
+            <div className={`mt-3 text-sm ${copyFeedbackTone === "error" ? "text-rose-100" : "text-cyan-50"}`}>
+              {copyFeedback}
+            </div>
+          ) : null}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
 export function TitleQuickViewModal({
-  studioSlug,
-  titleSlug,
+  studioIdentifier,
+  titleIdentifier,
   onClose,
 }: {
-  studioSlug: string;
-  titleSlug: string;
+  studioIdentifier: string;
+  titleIdentifier: string;
   onClose: () => void;
 }) {
   const { session, currentUser } = useAuth();
@@ -101,9 +134,7 @@ export function TitleQuickViewModal({
   const [playerStateError, setPlayerStateError] = useState<string | null>(null);
   const [titleInLibrary, setTitleInLibrary] = useState(false);
   const [titleInWishlist, setTitleInWishlist] = useState(false);
-  const [existingReport, setExistingReport] = useState<PlayerTitleReportSummary | null>(null);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const accessToken = session?.access_token ?? "";
@@ -116,14 +147,12 @@ export function TitleQuickViewModal({
 
     setPlayerStateLoading(true);
     try {
-      const [libraryResponse, wishlistResponse, reportsResponse] = await Promise.all([
+      const [libraryResponse, wishlistResponse] = await Promise.all([
         getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
         getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
-        getPlayerTitleReports(appConfig.apiBaseUrl, accessToken),
       ]);
       setTitleInLibrary(libraryResponse.titles.some((candidate) => candidate.id === nextTitleId));
       setTitleInWishlist(wishlistResponse.titles.some((candidate) => candidate.id === nextTitleId));
-      setExistingReport(reportsResponse.reports.find((candidate) => candidate.titleId === nextTitleId) ?? null);
       setPlayerStateError(null);
     } catch (nextError) {
       setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -137,7 +166,7 @@ export function TitleQuickViewModal({
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioSlug, titleSlug, accessToken || null);
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null);
         if (cancelled) {
           return;
         }
@@ -148,7 +177,6 @@ export function TitleQuickViewModal({
         } else {
           setTitleInLibrary(false);
           setTitleInWishlist(false);
-          setExistingReport(null);
           setPlayerStateError(null);
         }
         setError(null);
@@ -179,7 +207,7 @@ export function TitleQuickViewModal({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [accessToken, onClose, playerAccessEnabled, studioSlug, titleSlug]);
+  }, [accessToken, onClose, playerAccessEnabled, studioIdentifier, titleIdentifier]);
 
   useEffect(() => {
     if (!title) {
@@ -249,34 +277,7 @@ export function TitleQuickViewModal({
     }
   }
 
-  async function submitReport(): Promise<boolean> {
-    if (!title || !accessToken) {
-      return false;
-    }
-
-    setActionLoading(true);
-    try {
-      const response = await createPlayerTitleReport(appConfig.apiBaseUrl, accessToken, {
-        titleId: title.id,
-        reason: reportReason,
-      });
-      setExistingReport(response.report);
-      setReportReason("");
-      await refreshPlayerState(title.id);
-      setActionMessage("Report submitted.");
-      setPlayerStateError(null);
-      return true;
-    } catch (nextError) {
-      setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
-      setActionMessage(null);
-      return false;
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
   const heroImageUrl = title ? getHeroImageUrl(title) : null;
-  const reportedByCurrentUser = title ? Boolean(existingReport && existingReport.titleId === title.id) : false;
   const availabilityNote = title ? getCatalogTitleAvailabilityNote(title) : null;
   const isComingSoon = availabilityNote === "Coming soon";
   const titleWishlistCount = title?.wishlistCount ?? 0;
@@ -285,8 +286,9 @@ export function TitleQuickViewModal({
     titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
     titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
   ].filter((label): label is string => label !== null);
-  const showOwnedAndReportActions = !isComingSoon;
-  const showReportingSurface = !isComingSoon;
+  const showOwnedActions = !isComingSoon;
+  const shareUrl = title ? getTitleSharePageUrl(title.studioId, title.id) : null;
+  const titleDetailPath = title ? getTitleDetailPath(title.studioSlug, title.slug) : getTitleDetailPath(studioIdentifier, titleIdentifier);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>
@@ -319,24 +321,15 @@ export function TitleQuickViewModal({
                   isBusy={actionLoading || playerStateLoading}
                   isWishlisted={titleInWishlist}
                   isOwned={titleInLibrary}
-                  isReported={Boolean(existingReport)}
-                  canReport={!existingReport}
-                  showOwnedAction={showOwnedAndReportActions}
-                  showReportAction={showOwnedAndReportActions}
+                  showOwnedAction={showOwnedActions}
+                  showReportAction={false}
                   onToggleWishlist={() => void handleWishlistToggle(!titleInWishlist)}
                   onToggleOwned={() => void handleLibraryToggle(!titleInLibrary)}
-                  onReport={() => setReportModalOpen(true)}
+                  onShare={() => setShareModalOpen(true)}
                 />
               </div>
               {actionMessage ? <div className="rounded-[1rem] border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">{actionMessage}</div> : null}
               {playerStateError ? <div className="rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{playerStateError}</div> : null}
-              {title.isReported ? (
-                <div className="rounded-[1.5rem] border border-amber-200/35 bg-amber-300/10 px-5 py-4 text-sm leading-7 text-amber-50">
-                  {reportedByCurrentUser
-                    ? "This title has been reported and is under moderator review. You reported this title and will receive follow-up in your player notifications."
-                    : "This title has been reported and is currently under moderator review."}
-                </div>
-              ) : null}
               <div className="relative">
                 <div
                   className="min-h-[20rem] rounded-[1.75rem] bg-cover bg-center"
@@ -377,22 +370,10 @@ export function TitleQuickViewModal({
                   {title.description ? <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">{title.description}</p> : null}
                   {!session ? (
                     <div className="surface-panel-strong rounded-[1rem] p-4">
-                      <p className="text-sm leading-7 text-slate-300">Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>
+                      <p className="text-sm leading-7 text-slate-300">Sign in to manage your library and save titles to your wishlist.</p>
                       <div className="mt-4">
-                        <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(`/browse/${studioSlug}/${titleSlug}`)}`}>
+                        <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(titleDetailPath)}`}>
                           Sign In
-                        </Link>
-                      </div>
-                    </div>
-                  ) : null}
-                  {showReportingSurface && existingReport ? (
-                    <div className="surface-panel-strong rounded-[1rem] p-4">
-                      <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Report status</div>
-                      <div className="mt-2 text-lg font-semibold text-white">{formatReportStatus(existingReport.status)}</div>
-                      <p className="mt-2 text-sm leading-7 text-slate-300">{existingReport.reason}</p>
-                      <div className="mt-4">
-                        <Link className="secondary-button" to="/player?workflow=reported-titles">
-                          Open report thread
                         </Link>
                       </div>
                     </div>
@@ -404,7 +385,7 @@ export function TitleQuickViewModal({
                     <div className="mt-2 text-sm text-slate-300">{title.currentRelease?.version ?? "Not published"}</div>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Link className="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" to={`/browse/${title.studioSlug}/${title.slug}`}>
+                    <Link className="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" to={titleDetailPath}>
                       Details
                     </Link>
                     {title.acquisition?.url ?? title.acquisitionUrl ? (
@@ -439,25 +420,11 @@ export function TitleQuickViewModal({
           ) : null}
         </section>
       </div>
-      {title && showReportingSurface && reportModalOpen ? (
-        <ReportTitleModal
+      {title && shareUrl && shareModalOpen ? (
+        <ShareTitleModal
           titleDisplayName={title.displayName}
-          reportReason={reportReason}
-          reportErrorMessage={playerStateError}
-          submitting={actionLoading}
-          onReportReasonChange={setReportReason}
-          onClose={() => {
-            setReportModalOpen(false);
-            setReportReason("");
-            setPlayerStateError(null);
-          }}
-          onSubmit={() => {
-            void submitReport().then((successful) => {
-              if (successful) {
-                setReportModalOpen(false);
-              }
-            });
-          }}
+          shareUrl={shareUrl}
+          onClose={() => setShareModalOpen(false)}
         />
       ) : null}
     </div>
