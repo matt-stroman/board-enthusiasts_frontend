@@ -108,6 +108,14 @@ export function getTitleSharePageUrl(studioId: string, titleId: string): string 
   return getAbsoluteUrl(getTitleSharePath(studioId, titleId));
 }
 
+export function getTitleShareHelperPath(studioId: string, titleId: string): string {
+  return `${getTitleSharePath(studioId, titleId)}?share=1`;
+}
+
+export function getTitleShareHelperPageUrl(studioId: string, titleId: string): string {
+  return getAbsoluteUrl(getTitleShareHelperPath(studioId, titleId));
+}
+
 export function getStudioDetailPath(studioSlug: string): string {
   return `/studios/${studioSlug}`;
 }

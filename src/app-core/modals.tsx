@@ -1,5 +1,6 @@
 import type { CatalogTitleResponse } from "@board-enthusiasts/migration-contract";
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { Link, useLocation } from "react-router-dom";
 import copyGlyph from "../assets/title-action-icons/content_copy_24dp.svg?raw";
 import {
@@ -21,6 +22,7 @@ import {
   getFallbackGradient,
   getHeroImageUrl,
   getTitleDetailPath,
+  getTitleShareHelperPageUrl,
   getTitleSharePageUrl,
   parseGenreTags,
   writeTextToClipboard,
@@ -31,16 +33,53 @@ import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } 
 export function ShareTitleModal({
   titleDisplayName,
   shareUrl,
+  shareHelperUrl,
   onClose,
 }: {
   titleDisplayName: string;
   shareUrl: string;
+  shareHelperUrl: string;
   onClose: () => void;
 }) {
   const headingId = "share-title-heading";
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [copyFeedbackTone, setCopyFeedbackTone] = useState<"default" | "error">("default");
   const [copying, setCopying] = useState(false);
+  const [sharingFromPhone, setSharingFromPhone] = useState(false);
+  const [qrCodeImageUrl, setQrCodeImageUrl] = useState("");
+  const [qrCodeError, setQrCodeError] = useState<string | null>(null);
+  const canUseNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  useEffect(() => {
+    let cancelled = false;
+
+    void QRCode.toDataURL(shareHelperUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 320,
+      color: {
+        dark: "#111827",
+        light: "#FFFFFF",
+      },
+    }).then((nextImageUrl) => {
+      if (cancelled) {
+        return;
+      }
+
+      setQrCodeImageUrl(nextImageUrl);
+      setQrCodeError(null);
+    }).catch(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setQrCodeImageUrl("");
+      setQrCodeError("We couldn't generate the QR code right now, but the share link below still works.");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shareHelperUrl]);
 
   async function handleCopy(): Promise<void> {
     setCopying(true);
@@ -54,6 +93,32 @@ export function ShareTitleModal({
       setCopyFeedbackTone("error");
     } finally {
       setCopying(false);
+    }
+  }
+
+  async function handleNativeShare(): Promise<void> {
+    if (!canUseNativeShare) {
+      return;
+    }
+
+    setSharingFromPhone(true);
+    try {
+      await navigator.share({
+        title: titleDisplayName,
+        text: `Check out ${titleDisplayName} on Board Enthusiasts.`,
+        url: shareUrl,
+      });
+      setCopyFeedback("Share sheet opened on this device.");
+      setCopyFeedbackTone("default");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      setCopyFeedback("We couldn't open the share sheet on this device. You can still copy the link or scan the QR code.");
+      setCopyFeedbackTone("error");
+    } finally {
+      setSharingFromPhone(false);
     }
   }
 
@@ -111,6 +176,34 @@ export function ShareTitleModal({
             </div>
           ) : null}
         </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/72 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/75">Share from your phone</div>
+            <h3 className="mt-3 text-lg font-semibold text-white">Scan to open this title on mobile.</h3>
+            <p className="mt-2 text-sm leading-7 text-slate-300">
+              Scan this QR code to open a share-friendly version on your phone, then use your device&apos;s native share options.
+            </p>
+            {canUseNativeShare ? (
+              <button className="secondary-button mt-4" type="button" onClick={() => void handleNativeShare()} disabled={sharingFromPhone}>
+                {sharingFromPhone ? "Opening share sheet..." : "Share from this device"}
+              </button>
+            ) : null}
+          </div>
+          <div className="rounded-[1.5rem] border border-white/10 bg-white p-4 text-slate-950">
+            {qrCodeImageUrl ? (
+              <img className="mx-auto aspect-square w-full max-w-[15rem] rounded-[1rem]" src={qrCodeImageUrl} alt="Share QR code" />
+            ) : (
+              <div className="grid aspect-square w-full place-items-center rounded-[1rem] border border-slate-200 bg-slate-50 text-sm text-slate-600">
+                Generating QR code...
+              </div>
+            )}
+            <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Open mobile share helper
+            </p>
+          </div>
+        </div>
+        {qrCodeError ? <div className="mt-3 text-sm text-rose-100">{qrCodeError}</div> : null}
       </section>
     </div>
   );
@@ -296,6 +389,7 @@ export function TitleQuickViewModal({
     : [];
   const showOwnedActions = !isComingSoon;
   const shareUrl = title ? getTitleSharePageUrl(title.studioId, title.id) : null;
+  const shareHelperUrl = title ? getTitleShareHelperPageUrl(title.studioId, title.id) : null;
   const titleDetailPath = title ? getTitleDetailPath(title.studioSlug, title.slug) : getTitleDetailPath(studioIdentifier, titleIdentifier);
 
   return (
@@ -425,10 +519,11 @@ export function TitleQuickViewModal({
           ) : null}
         </section>
       </div>
-      {title && shareUrl && shareModalOpen ? (
+      {title && shareUrl && shareHelperUrl && shareModalOpen ? (
         <ShareTitleModal
           titleDisplayName={title.displayName}
           shareUrl={shareUrl}
+          shareHelperUrl={shareHelperUrl}
           onClose={() => setShareModalOpen(false)}
         />
       ) : null}

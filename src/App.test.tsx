@@ -1136,7 +1136,7 @@ describe("App", () => {
 
     const form = dialog.querySelector("form");
     expect(form).not.toBeNull();
-    expect(form).toHaveStyle({ paddingBottom: "436px" });
+    expect(form).toHaveStyle({ paddingBottom: "468px" });
 
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
@@ -1574,6 +1574,7 @@ describe("App", () => {
     const shareDialog = await screen.findByRole("dialog", { name: "Share Lantern Drift" });
     const expectedShareUrl = new URL("/browse/studio-1/title-1", window.location.origin).toString();
     expect(within(shareDialog).getByDisplayValue(expectedShareUrl)).toBeVisible();
+    expect(await within(shareDialog).findByRole("img", { name: "Share QR code" })).toBeVisible();
 
     await userEvent.click(within(shareDialog).getByRole("button", { name: "Copy" }));
 
@@ -1584,6 +1585,70 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Share Lantern Drift" })).not.toBeInTheDocument();
     });
+  });
+
+  it("opens the share modal from a scanned helper link and can use the native share sheet on supported phones", async () => {
+    const nativeShare = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "share", {
+      configurable: true,
+      value: nativeShare,
+    });
+
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        acquisition: {
+          url: "https://example.com/lantern-drift",
+          label: "Open publisher page",
+          providerDisplayName: "Blue Harbor Games Direct",
+          providerHomepageUrl: "https://example.com",
+        },
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift?share=1");
+
+    const shareDialog = await screen.findByRole("dialog", { name: "Share Lantern Drift" });
+    expect(within(shareDialog).getByRole("button", { name: "Share from this device" })).toBeVisible();
+    expect(await within(shareDialog).findByRole("img", { name: "Share QR code" })).toBeVisible();
+
+    await userEvent.click(within(shareDialog).getByRole("button", { name: "Share from this device" }));
+
+    expect(nativeShare).toHaveBeenCalledWith({
+      title: "Lantern Drift",
+      text: "Check out Lantern Drift on Board Enthusiasts.",
+      url: new URL("/browse/studio-1/title-1", window.location.origin).toString(),
+    });
+    expect(await screen.findByText("Share sheet opened on this device.")).toBeVisible();
   });
 
   it("keeps the browse spotlight image inside a fixed cropped frame", async () => {

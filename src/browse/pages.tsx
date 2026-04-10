@@ -1,6 +1,6 @@
 import type { CatalogTitleResponse, CatalogTitleSummary, DeveloperStudioSummary, HomeSpotlightEntry, PlayerTitleReportSummary, StudioSummary, TitleMediaAsset } from "@board-enthusiasts/migration-contract";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import keyboardArrowLeftGlyph from "../assets/landing-glyphs/keyboard_arrow_left_24dp.svg?raw";
 import keyboardArrowRightGlyph from "../assets/landing-glyphs/keyboard_arrow_right_24dp.svg?raw";
 import {
@@ -38,6 +38,7 @@ import {
   formatTimestamp,
   getStudioDetailPath,
   getTitleDetailPath,
+  getTitleShareHelperPageUrl,
   getTitleSharePageUrl,
   getUserFacingErrorMessage,
   getCatalogTitleAvailabilityNote,
@@ -294,7 +295,7 @@ export function BrowsePage() {
   const [busyTitleIds, setBusyTitleIds] = useState<Set<string>>(new Set());
   const [playerActionErrorMessage, setPlayerActionErrorMessage] = useState<string | null>(null);
   const [playerActionStatusMessage, setPlayerActionStatusMessage] = useState<string | null>(null);
-  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string; shareHelperUrl: string } | null>(null);
   const [quickViewTarget, setQuickViewTarget] = useState<{ studioIdentifier: string; titleIdentifier: string } | null>(null);
   const deferredQuery = useDeferredValue(query);
   const lastTrackedBrowseFilterKeyRef = useRef("");
@@ -768,6 +769,7 @@ export function BrowsePage() {
                         onShare: () => setShareTarget({
                           displayName: title.displayName,
                           shareUrl: getTitleSharePageUrl(title.studioId, title.id),
+                          shareHelperUrl: getTitleShareHelperPageUrl(title.studioId, title.id),
                         }),
                       }}
                     />
@@ -800,6 +802,7 @@ export function BrowsePage() {
             <ShareTitleModal
               titleDisplayName={shareTarget.displayName}
               shareUrl={shareTarget.shareUrl}
+              shareHelperUrl={shareTarget.shareHelperUrl}
               onClose={() => setShareTarget(null)}
             />
           ) : null}
@@ -898,7 +901,7 @@ export function StudioDetailPage() {
   const [busyTitleIds, setBusyTitleIds] = useState<Set<string>>(new Set());
   const [playerActionErrorMessage, setPlayerActionErrorMessage] = useState<string | null>(null);
   const [playerActionStatusMessage, setPlayerActionStatusMessage] = useState<string | null>(null);
-  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string; shareHelperUrl: string } | null>(null);
   const [quickViewTarget, setQuickViewTarget] = useState<{ studioIdentifier: string; titleIdentifier: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"catalog" | "about">("catalog");
   const deferredQuery = useDeferredValue(query);
@@ -1338,6 +1341,7 @@ export function StudioDetailPage() {
                         onShare: () => setShareTarget({
                           displayName: title.displayName,
                           shareUrl: getTitleSharePageUrl(title.studioId, title.id),
+                          shareHelperUrl: getTitleShareHelperPageUrl(title.studioId, title.id),
                         }),
                       }}
                     />
@@ -1389,6 +1393,7 @@ export function StudioDetailPage() {
         <ShareTitleModal
           titleDisplayName={shareTarget.displayName}
           shareUrl={shareTarget.shareUrl}
+          shareHelperUrl={shareTarget.shareHelperUrl}
           onClose={() => setShareTarget(null)}
         />
       ) : null}
@@ -1401,6 +1406,7 @@ export function TitleDetailPage() {
   const { session, currentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const params = useParams<{ studioSlug: string; titleSlug: string }>();
   const studioIdentifier = params.studioSlug ?? "";
   const titleIdentifier = params.titleSlug ?? "";
@@ -1416,6 +1422,7 @@ export function TitleDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const autoOpenedShareRef = useRef(false);
   const [selectedShowcase, setSelectedShowcase] = useState<TitleShowcaseSelection>({ kind: "hero" });
   const [managedStudioIds, setManagedStudioIds] = useState<Set<string>>(new Set());
   const thumbnailRailRef = useRef<HTMLDivElement | null>(null);
@@ -1497,6 +1504,19 @@ export function TitleDetailPage() {
 
     setSelectedShowcase(resolveInitialShowcaseSelection(title));
   }, [title]);
+
+  useEffect(() => {
+    if (!title || searchParams.get("share") !== "1" || autoOpenedShareRef.current) {
+      return;
+    }
+
+    autoOpenedShareRef.current = true;
+    setShareModalOpen(true);
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("share");
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, setSearchParams, title]);
 
   useEffect(() => {
     const rail = thumbnailRailRef.current;
@@ -1689,6 +1709,7 @@ export function TitleDetailPage() {
   const showPrimaryFallbackThumbnail = showcaseMedia.length === 0 && Boolean(heroImageUrl);
   const galleryThumbnailCount = (showPrimaryFallbackThumbnail ? 1 : 0) + spotlightThumbnails.length;
   const shareUrl = getTitleSharePageUrl(title.studioId, title.id);
+  const shareHelperUrl = getTitleShareHelperPageUrl(title.studioId, title.id);
 
   function scrollThumbnailRail(direction: -1 | 1): void {
     const rail = thumbnailRailRef.current;
@@ -2006,6 +2027,7 @@ export function TitleDetailPage() {
         <ShareTitleModal
           titleDisplayName={title.displayName}
           shareUrl={shareUrl}
+          shareHelperUrl={shareHelperUrl}
           onClose={() => setShareModalOpen(false)}
         />
       ) : null}

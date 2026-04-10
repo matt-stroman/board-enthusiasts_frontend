@@ -1254,7 +1254,7 @@ export function SupportPage() {
       if (supportFormRef.current && fieldContainer instanceof HTMLElement) {
         const formRect = supportFormRef.current.getBoundingClientRect();
         const fieldRect = fieldContainer.getBoundingClientRect();
-        const anchorOffset = Math.max(Math.min(supportFormRef.current.clientHeight * 0.18, 96), 24);
+        const anchorOffset = Math.max(Math.min(supportFormRef.current.clientHeight * 0.24, 144), 40);
         const desiredTop = Math.max(
           supportFormRef.current.scrollTop + fieldRect.top - formRect.top - anchorOffset,
           0,
@@ -1291,12 +1291,15 @@ export function SupportPage() {
     window.setTimeout(bringFieldIntoView, 80);
     window.setTimeout(bringFieldIntoView, 280);
     window.setTimeout(bringFieldIntoView, 640);
+    window.setTimeout(bringFieldIntoView, 1000);
   }
 
-  const supportDialogMaxHeight = supportVisibleViewportHeight
-    ? `${Math.max(320, supportVisibleViewportHeight - 32)}px`
+  const supportAvailableHeight =
+    supportVisibleViewportHeight ?? (typeof window === "undefined" ? null : window.innerHeight);
+  const supportDialogMaxHeight = supportAvailableHeight
+    ? `${Math.max(320, Math.min(supportAvailableHeight - 32, 720))}px`
     : undefined;
-  const supportFormBottomPadding = `${supportKeyboardInset > 0 ? supportKeyboardInset + 96 : 160}px`;
+  const supportFormBottomPadding = `${supportKeyboardInset > 0 ? supportKeyboardInset + 128 : 260}px`;
 
   async function handleSupportSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -1399,7 +1402,7 @@ export function SupportPage() {
         <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/82 p-4 pt-6 backdrop-blur-sm" onClick={closeSupportModal}>
           <section
             ref={supportDialogRef}
-            className="app-panel my-4 flex min-h-0 w-full max-w-3xl flex-col overflow-hidden overscroll-contain p-6 md:p-8"
+            className="app-panel my-4 grid min-h-0 w-full max-w-3xl grid-rows-[auto,minmax(0,1fr)] overflow-hidden overscroll-contain p-6 md:p-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="be-home-support-title"
@@ -1432,9 +1435,13 @@ export function SupportPage() {
 
             <form
               ref={supportFormRef}
-              className="mt-2 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-2"
+              className="mt-4 min-h-0 overflow-y-scroll overscroll-contain pr-2"
               onSubmit={(event) => void handleSupportSubmit(event)}
-              style={{ paddingBottom: supportFormBottomPadding }}
+              style={{
+                paddingBottom: supportFormBottomPadding,
+                WebkitOverflowScrolling: "touch",
+                touchAction: "pan-y",
+              }}
             >
               <div className="grid gap-4 md:grid-cols-2">
                 <Field
