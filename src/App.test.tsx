@@ -1087,6 +1087,63 @@ describe("App", () => {
     expect(await screen.findByRole("dialog", { name: "Send a support request" })).toBeVisible();
   });
 
+  it("shrinks the Board support dialog to the visible viewport when the keyboard is open", async () => {
+    const originalVisualViewport = window.visualViewport;
+    window.Unity = { call: vi.fn() };
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Matt Stroman",
+        email: "matt@boardenthusiasts.com",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["developer"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 900,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        height: 560,
+        offsetTop: 0,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    });
+
+    renderApp("/support");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Email Support" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Send a support request" });
+    expect(dialog).toHaveStyle({ maxHeight: "528px" });
+
+    const form = dialog.querySelector("form");
+    expect(form).not.toBeNull();
+    expect(form).toHaveStyle({ paddingBottom: "436px" });
+
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: originalVisualViewport,
+    });
+  });
+
   it("shows a friendly browse error message and points users to contact us when the site cannot be reached", async () => {
     apiMocks.listPublicStudios.mockRejectedValue(
       new Error("Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct."),

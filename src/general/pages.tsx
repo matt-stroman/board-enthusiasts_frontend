@@ -1164,6 +1164,8 @@ export function SupportPage() {
   const supportFormRef = useRef<HTMLFormElement | null>(null);
   const autoOpenedSupportRef = useRef(false);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [supportVisibleViewportHeight, setSupportVisibleViewportHeight] = useState<number | null>(null);
+  const [supportKeyboardInset, setSupportKeyboardInset] = useState(0);
   const [supportStatusMessage, setSupportStatusMessage] = useState<string | null>(null);
   const [supportRequestError, setSupportRequestError] = useState<string | null>(null);
   const [submittingSupportRequest, setSubmittingSupportRequest] = useState(false);
@@ -1194,6 +1196,37 @@ export function SupportPage() {
     setSearchParams(nextSearchParams, { replace: true });
   }, [autoOpenSupportRequest, beHomeSupportEnabled, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (!supportModalOpen) {
+      setSupportVisibleViewportHeight(null);
+      setSupportKeyboardInset(0);
+      return;
+    }
+
+    function updateSupportViewportMetrics(): void {
+      const viewport = window.visualViewport;
+      const fallbackHeight = window.innerHeight;
+      const visibleHeight = viewport
+        ? Math.max(0, Math.floor(viewport.height + viewport.offsetTop))
+        : fallbackHeight;
+      setSupportVisibleViewportHeight(visibleHeight);
+      setSupportKeyboardInset(Math.max(0, Math.floor(window.innerHeight - visibleHeight)));
+    }
+
+    updateSupportViewportMetrics();
+
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", updateSupportViewportMetrics);
+    viewport?.addEventListener("resize", updateSupportViewportMetrics);
+    viewport?.addEventListener("scroll", updateSupportViewportMetrics);
+
+    return () => {
+      window.removeEventListener("resize", updateSupportViewportMetrics);
+      viewport?.removeEventListener("resize", updateSupportViewportMetrics);
+      viewport?.removeEventListener("scroll", updateSupportViewportMetrics);
+    };
+  }, [supportModalOpen]);
+
   function openSupportModal(): void {
     setSupportStatusMessage(null);
     setSupportRequestError(null);
@@ -1216,21 +1249,16 @@ export function SupportPage() {
 
   function handleSupportFieldFocus(event: FocusEvent<HTMLInputElement | HTMLTextAreaElement>): void {
     const target = event.currentTarget;
-    const scrollTarget = supportDialogRef.current;
     const bringFieldIntoView = () => {
-      if (scrollTarget && typeof scrollTarget.scrollIntoView === "function") {
-        try {
-          scrollTarget.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-        } catch {
-          scrollTarget.scrollIntoView();
-        }
-      }
-
       const fieldContainer = target.closest("[data-support-field='true']");
       if (supportFormRef.current && fieldContainer instanceof HTMLElement) {
         const formRect = supportFormRef.current.getBoundingClientRect();
         const fieldRect = fieldContainer.getBoundingClientRect();
-        const desiredTop = Math.max(fieldRect.top - formRect.top - 24, 0);
+        const anchorOffset = Math.max(Math.min(supportFormRef.current.clientHeight * 0.18, 96), 24);
+        const desiredTop = Math.max(
+          supportFormRef.current.scrollTop + fieldRect.top - formRect.top - anchorOffset,
+          0,
+        );
         if (typeof supportFormRef.current.scrollTo === "function") {
           supportFormRef.current.scrollTo({
             top: desiredTop,
@@ -1242,9 +1270,18 @@ export function SupportPage() {
         }
       }
 
+      const scrollTarget = supportDialogRef.current;
+      if (scrollTarget && typeof scrollTarget.scrollIntoView === "function") {
+        try {
+          scrollTarget.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
+        } catch {
+          scrollTarget.scrollIntoView();
+        }
+      }
+
       if (typeof target.scrollIntoView === "function") {
         try {
-          target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+          target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
         } catch {
           target.scrollIntoView();
         }
@@ -1255,6 +1292,11 @@ export function SupportPage() {
     window.setTimeout(bringFieldIntoView, 280);
     window.setTimeout(bringFieldIntoView, 640);
   }
+
+  const supportDialogMaxHeight = supportVisibleViewportHeight
+    ? `${Math.max(320, supportVisibleViewportHeight - 32)}px`
+    : undefined;
+  const supportFormBottomPadding = `${supportKeyboardInset > 0 ? supportKeyboardInset + 96 : 160}px`;
 
   async function handleSupportSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -1357,11 +1399,12 @@ export function SupportPage() {
         <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/82 p-4 pt-6 backdrop-blur-sm" onClick={closeSupportModal}>
           <section
             ref={supportDialogRef}
-            className="app-panel my-4 flex w-full max-w-3xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden overscroll-contain p-6 md:p-8"
+            className="app-panel my-4 flex min-h-0 w-full max-w-3xl flex-col overflow-hidden overscroll-contain p-6 md:p-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="be-home-support-title"
             onClick={(event) => event.stopPropagation()}
+            style={supportDialogMaxHeight ? { maxHeight: supportDialogMaxHeight } : undefined}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1389,8 +1432,9 @@ export function SupportPage() {
 
             <form
               ref={supportFormRef}
-              className="mt-2 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-2 pb-40"
+              className="mt-2 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-2"
               onSubmit={(event) => void handleSupportSubmit(event)}
+              style={{ paddingBottom: supportFormBottomPadding }}
             >
               <div className="grid gap-4 md:grid-cols-2">
                 <Field
