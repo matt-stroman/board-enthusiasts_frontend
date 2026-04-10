@@ -1207,7 +1207,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "BE where the Board community shows up first." })).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Get Updates" }).every((link) => link.getAttribute("href") === "#signup")).toBe(true);
-    expect(screen.getByRole("heading", { name: "BE App Launcher for Board" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "BE Home for Board" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "BE Emulator for Board" })).toBeVisible();
     expect(screen.getByText("For Developers")).toBeVisible();
     expect(screen.getAllByRole("link", { name: "contact@boardenthusiasts.com" }).some((link) => link.getAttribute("href") === "mailto:contact@boardenthusiasts.com")).toBe(true);

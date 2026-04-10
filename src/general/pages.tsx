@@ -401,13 +401,13 @@ export function LandingPage() {
                 </div>
                 <div>
                   <div className="eyebrow">Utility</div>
-                  <h2>BE App Launcher for Board</h2>
+                  <h2>BE Home for Board</h2>
                 </div>
               </div>
               <span className="status-chip">Available now</span>
             </div>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              A Board app that lets users view and open all of their sideloaded titles, so once a title is installed there is no USB cable or terminal required to launch it on Board.
+              A an app for Board that lets users view the BE Indie Game Index and access other BE resources, right from the Board console.
             </p>
             <div className="card-actions mt-5">
               <a className="secondary-button" href="https://discord.gg/wqdcusHUKM" target="_blank" rel="noreferrer">Learn More</a>
@@ -644,9 +644,9 @@ const liveOfferingEntries: OfferingEntry[] = [
     action: { label: "Open GPT", href: landingGptUrl, external: true },
   },
   {
-    title: "BE App Launcher for Board",
+    title: "BE Home for Board",
     eyebrow: "Utility",
-    description: "Launch installed Board titles more easily after setup without relying on a USB cable or terminal each time.",
+    description: "View the BE Indie Game Index, BE YouTube, and other BE resources, right from the Board console!",
     status: "Available now",
     glyph: "toolkit",
     action: { label: "Learn More", href: "https://discord.gg/wqdcusHUKM", external: true },
