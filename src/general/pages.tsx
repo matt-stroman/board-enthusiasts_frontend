@@ -1161,6 +1161,7 @@ export function SupportPage() {
   const signedInDisplayName = currentUser?.displayName?.trim() ?? "";
   const emailLocked = Boolean(session && signedInEmail);
   const supportDialogRef = useRef<HTMLElement | null>(null);
+  const supportFormRef = useRef<HTMLFormElement | null>(null);
   const autoOpenedSupportRef = useRef(false);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
   const [supportStatusMessage, setSupportStatusMessage] = useState<string | null>(null);
@@ -1222,6 +1223,22 @@ export function SupportPage() {
           scrollTarget.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
         } catch {
           scrollTarget.scrollIntoView();
+        }
+      }
+
+      const fieldContainer = target.closest("[data-support-field='true']");
+      if (supportFormRef.current && fieldContainer instanceof HTMLElement) {
+        const formRect = supportFormRef.current.getBoundingClientRect();
+        const fieldRect = fieldContainer.getBoundingClientRect();
+        const desiredTop = Math.max(fieldRect.top - formRect.top - 24, 0);
+        if (typeof supportFormRef.current.scrollTo === "function") {
+          supportFormRef.current.scrollTo({
+            top: desiredTop,
+            behavior: "smooth",
+          });
+        }
+        else {
+          supportFormRef.current.scrollTop = desiredTop;
         }
       }
 
@@ -1340,7 +1357,7 @@ export function SupportPage() {
         <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/82 p-4 pt-6 backdrop-blur-sm" onClick={closeSupportModal}>
           <section
             ref={supportDialogRef}
-            className="app-panel my-4 w-full max-w-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain space-y-6 p-6 md:p-8"
+            className="app-panel my-4 flex w-full max-w-3xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden overscroll-contain p-6 md:p-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="be-home-support-title"
@@ -1370,7 +1387,11 @@ export function SupportPage() {
               </button>
             </div>
 
-            <form className="space-y-4" onSubmit={(event) => void handleSupportSubmit(event)}>
+            <form
+              ref={supportFormRef}
+              className="mt-2 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-2 pb-40"
+              onSubmit={(event) => void handleSupportSubmit(event)}
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <Field
                   label="First name"
@@ -1378,13 +1399,15 @@ export function SupportPage() {
                   hint={showSupportValidation && supportFirstNameError ? supportFirstNameError : undefined}
                   hintTone={showSupportValidation && supportFirstNameError ? "error" : "default"}
                 >
-                  <input
-                    type="text"
-                    value={supportFirstName}
-                    onChange={(event) => setSupportFirstName(event.currentTarget.value)}
-                    autoComplete="given-name"
-                    onFocus={handleSupportFieldFocus}
-                  />
+                  <div data-support-field="true">
+                    <input
+                      type="text"
+                      value={supportFirstName}
+                      onChange={(event) => setSupportFirstName(event.currentTarget.value)}
+                      autoComplete="given-name"
+                      onFocus={handleSupportFieldFocus}
+                    />
+                  </div>
                 </Field>
 
                 <Field
@@ -1398,14 +1421,16 @@ export function SupportPage() {
                   }
                   hintTone={supportEmailError ? "error" : "default"}
                 >
-                  <input
-                    type="email"
-                    value={emailLocked ? signedInEmail : supportEmail}
-                    onChange={(event) => setSupportEmail(event.currentTarget.value)}
-                    autoComplete="email"
-                    disabled={emailLocked}
-                    onFocus={handleSupportFieldFocus}
-                  />
+                  <div data-support-field="true">
+                    <input
+                      type="email"
+                      value={emailLocked ? signedInEmail : supportEmail}
+                      onChange={(event) => setSupportEmail(event.currentTarget.value)}
+                      autoComplete="email"
+                      disabled={emailLocked}
+                      onFocus={handleSupportFieldFocus}
+                    />
+                  </div>
                 </Field>
               </div>
 
@@ -1415,12 +1440,14 @@ export function SupportPage() {
                 hint={showSupportValidation && supportSubjectError ? supportSubjectError : undefined}
                 hintTone={showSupportValidation && supportSubjectError ? "error" : "default"}
               >
-                <input
-                  type="text"
-                  value={supportSubject}
-                  onChange={(event) => setSupportSubject(event.currentTarget.value)}
-                  onFocus={handleSupportFieldFocus}
-                />
+                <div data-support-field="true">
+                  <input
+                    type="text"
+                    value={supportSubject}
+                    onChange={(event) => setSupportSubject(event.currentTarget.value)}
+                    onFocus={handleSupportFieldFocus}
+                  />
+                </div>
               </Field>
 
               <Field
@@ -1430,12 +1457,14 @@ export function SupportPage() {
                 hintTone={showSupportValidation && supportDescriptionError ? "error" : "default"}
                 reserveHintSpace={false}
               >
-                <textarea
-                  rows={6}
-                  value={supportDescription}
-                  onChange={(event) => setSupportDescription(event.currentTarget.value)}
-                  onFocus={handleSupportFieldFocus}
-                />
+                <div data-support-field="true">
+                  <textarea
+                    rows={8}
+                    value={supportDescription}
+                    onChange={(event) => setSupportDescription(event.currentTarget.value)}
+                    onFocus={handleSupportFieldFocus}
+                  />
+                </div>
               </Field>
 
               {showSupportConsent ? (

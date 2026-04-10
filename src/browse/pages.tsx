@@ -1664,6 +1664,7 @@ export function TitleDetailPage() {
   const heroImageUrl = getPrimaryTitleShowcaseImageUrl(title);
   const showcaseThumbnailAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_showcase");
   const canViewMetadata = moderatorAccessEnabled || managedStudioIds.has(title.studioId);
+  const canViewCurrentReleasePanel = managedStudioIds.has(title.studioId);
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
   const isComingSoon = availabilityNote === "Coming soon";
@@ -1893,12 +1894,12 @@ export function TitleDetailPage() {
 
       {playerStateError ? <div className="rounded-[1rem] border border-rose-300/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{playerStateError}</div> : null}
 
-      <section className={title.currentRelease ? "grid gap-6 lg:grid-cols-[1.2fr_0.8fr]" : "grid gap-6"}>
+      <section className={title.currentRelease && canViewCurrentReleasePanel ? "grid gap-6 lg:grid-cols-[1.2fr_0.8fr]" : "grid gap-6"}>
         <section className="app-panel p-6">
           <h2 className="text-xl font-semibold text-white">About</h2>
           <p className="mt-4 whitespace-pre-wrap text-base leading-8 text-slate-300">{title.description}</p>
         </section>
-        {title.currentRelease ? (
+        {title.currentRelease && canViewCurrentReleasePanel ? (
           <section className="app-panel p-6">
             <h2 className="text-xl font-semibold text-white">Current release</h2>
             <dl className="mt-4 grid gap-3 text-sm text-slate-300">

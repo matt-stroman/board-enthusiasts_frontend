@@ -2052,6 +2052,91 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByText("Release", { selector: "dt" })).toBeVisible();
     expect(screen.getAllByText("1.0.0").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Current release" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Configured")).not.toBeInTheDocument();
+  });
+
+  it("shows the current release panel only for the developer who manages the title studio", async () => {
+    authState.value = {
+      session: { access_token: "developer-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Emma Torres",
+        email: "emma.torres@boardtpl.local",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["player", "developer"],
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.listManagedStudios.mockResolvedValue({
+      studios: [
+        {
+          id: "studio-1",
+          slug: "blue-harbor-games",
+          displayName: "Blue Harbor Games",
+          description: "Blue Harbor Games profile.",
+          avatarUrl: null,
+          logoUrl: null,
+          bannerUrl: null,
+          role: "owner",
+          links: [],
+        },
+      ],
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        acquisition: {
+          url: "https://example.com/lantern-drift",
+          label: "Open publisher page",
+          providerDisplayName: "Blue Harbor Games Direct",
+          providerHomepageUrl: "https://example.com",
+        },
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Current release" })).toBeVisible();
     expect(screen.getByText("Configured")).toBeVisible();
   });
