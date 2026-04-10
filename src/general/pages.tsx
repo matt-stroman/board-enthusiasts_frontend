@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FocusEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { createMarketingSignup, createSupportIssueReport, getHomeOfferingSpotlights, type HomeOfferingSpotlightEntry } from "../api";
 import { useAuth } from "../auth";
 import { hasBeHomeBridge } from "../be-home-bridge";
@@ -1152,11 +1153,15 @@ export function SupportPage() {
     canonicalUrl: liveMetadata.supportCanonical,
   });
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, session } = useAuth();
   const beHomeSupportEnabled = hasBeHomeBridge();
+  const autoOpenSupportRequest = searchParams.get("beHomeSupportOpen") === "1";
   const signedInEmail = currentUser?.email?.trim() ?? "";
   const signedInDisplayName = currentUser?.displayName?.trim() ?? "";
   const emailLocked = Boolean(session && signedInEmail);
+  const supportDialogRef = useRef<HTMLElement | null>(null);
+  const autoOpenedSupportRef = useRef(false);
   const [supportModalOpen, setSupportModalOpen] = useState(false);
   const [supportStatusMessage, setSupportStatusMessage] = useState<string | null>(null);
   const [supportRequestError, setSupportRequestError] = useState<string | null>(null);
@@ -1174,6 +1179,19 @@ export function SupportPage() {
   const supportSubjectError = supportSubject.trim() ? null : "Enter a subject.";
   const supportDescriptionError = supportDescription.trim() ? null : "Tell us what happened so we can help.";
   const showSupportConsent = !emailLocked && Boolean(supportEmailValue) && !supportEmailError;
+
+  useEffect(() => {
+    if (!beHomeSupportEnabled || !autoOpenSupportRequest || autoOpenedSupportRef.current) {
+      return;
+    }
+
+    autoOpenedSupportRef.current = true;
+    openSupportModal();
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("beHomeSupportOpen");
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [autoOpenSupportRequest, beHomeSupportEnabled, searchParams, setSearchParams]);
 
   function openSupportModal(): void {
     setSupportStatusMessage(null);
@@ -1193,6 +1211,32 @@ export function SupportPage() {
     }
 
     setSupportModalOpen(false);
+  }
+
+  function handleSupportFieldFocus(event: FocusEvent<HTMLInputElement | HTMLTextAreaElement>): void {
+    const target = event.currentTarget;
+    const scrollTarget = supportDialogRef.current;
+    const bringFieldIntoView = () => {
+      if (scrollTarget && typeof scrollTarget.scrollIntoView === "function") {
+        try {
+          scrollTarget.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+        } catch {
+          scrollTarget.scrollIntoView();
+        }
+      }
+
+      if (typeof target.scrollIntoView === "function") {
+        try {
+          target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+        } catch {
+          target.scrollIntoView();
+        }
+      }
+    };
+
+    window.setTimeout(bringFieldIntoView, 80);
+    window.setTimeout(bringFieldIntoView, 280);
+    window.setTimeout(bringFieldIntoView, 640);
   }
 
   async function handleSupportSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -1293,9 +1337,10 @@ export function SupportPage() {
       </section>
 
       {beHomeSupportEnabled && supportModalOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/82 p-4 backdrop-blur-sm" onClick={closeSupportModal}>
+        <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/82 p-4 pt-6 backdrop-blur-sm" onClick={closeSupportModal}>
           <section
-            className="app-panel w-full max-w-3xl space-y-6 p-6 md:p-8"
+            ref={supportDialogRef}
+            className="app-panel my-4 w-full max-w-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain space-y-6 p-6 md:p-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="be-home-support-title"
@@ -1338,6 +1383,7 @@ export function SupportPage() {
                     value={supportFirstName}
                     onChange={(event) => setSupportFirstName(event.currentTarget.value)}
                     autoComplete="given-name"
+                    onFocus={handleSupportFieldFocus}
                   />
                 </Field>
 
@@ -1358,6 +1404,7 @@ export function SupportPage() {
                     onChange={(event) => setSupportEmail(event.currentTarget.value)}
                     autoComplete="email"
                     disabled={emailLocked}
+                    onFocus={handleSupportFieldFocus}
                   />
                 </Field>
               </div>
@@ -1372,6 +1419,7 @@ export function SupportPage() {
                   type="text"
                   value={supportSubject}
                   onChange={(event) => setSupportSubject(event.currentTarget.value)}
+                  onFocus={handleSupportFieldFocus}
                 />
               </Field>
 
@@ -1386,6 +1434,7 @@ export function SupportPage() {
                   rows={6}
                   value={supportDescription}
                   onChange={(event) => setSupportDescription(event.currentTarget.value)}
+                  onFocus={handleSupportFieldFocus}
                 />
               </Field>
 

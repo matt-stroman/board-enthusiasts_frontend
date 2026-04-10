@@ -1057,6 +1057,36 @@ describe("App", () => {
     expect(await screen.findByText("Your support request is on its way. We'll follow up as soon as we can.")).toBeVisible();
   });
 
+  it("auto-opens the Board support form when BE Home requests it through the support route", async () => {
+    window.Unity = { call: vi.fn() };
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Matt Stroman",
+        email: "matt@boardenthusiasts.com",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["developer"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+
+    renderApp("/support?beHomeSupportOpen=1");
+
+    expect(await screen.findByRole("dialog", { name: "Send a support request" })).toBeVisible();
+  });
+
   it("shows a friendly browse error message and points users to contact us when the site cannot be reached", async () => {
     apiMocks.listPublicStudios.mockRejectedValue(
       new Error("Could not reach the Board Enthusiasts API. Check that the local backend is running and the configured frontend API base URL is correct."),
