@@ -27,6 +27,80 @@ import { passwordRecoveryRedirectStorageKey } from "../auth";
 
 const embeddedBoardShellStorageKey = "be-shell-embedded-surface";
 
+function isDiscordInviteUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, typeof window !== "undefined" ? window.location.href : "https://boardenthusiasts.com");
+    const host = parsed.hostname.toLowerCase();
+
+    if (host === "discord.gg" || host.endsWith(".discord.gg")) {
+      return true;
+    }
+
+    if (!(host === "discord.com" || host.endsWith(".discord.com") || host === "discordapp.com" || host.endsWith(".discordapp.com"))) {
+      return false;
+    }
+
+    return parsed.pathname.startsWith("/invite") || parsed.pathname.startsWith("/invites");
+  } catch {
+    return false;
+  }
+}
+
+function useScrollResponsiveHeader(resetKey: string): boolean {
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let animationFrameId: number | null = null;
+
+    const resetHeaderVisibility = () => {
+      lastScrollY.current = window.scrollY;
+      setHeaderVisible(true);
+    };
+
+    const updateHeaderVisibility = () => {
+      animationFrameId = null;
+
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastScrollY.current;
+
+      if (currentScrollY <= 8) {
+        setHeaderVisible(true);
+      } else if (delta < 0) {
+        setHeaderVisible(true);
+      } else if (delta >= 6) {
+        setHeaderVisible(false);
+      }
+
+      lastScrollY.current = currentScrollY;
+    };
+
+    const handleScroll = () => {
+      if (animationFrameId !== null) {
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(updateHeaderVisibility);
+    };
+
+    resetHeaderVisibility();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [resetKey]);
+
+  return headerVisible;
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
@@ -53,6 +127,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
+  const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -168,11 +243,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [embeddedBoardShellRequested]);
 
   useEffect(() => {
-    if (!hasBeHomeBridge()) {
+    if (typeof document === "undefined" || !hasBeHomeBridge()) {
       return;
     }
 
-    const handleExternalLinkClick = (event: MouseEvent) => {
+    const handleClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) {
         return;
@@ -183,17 +258,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (anchor.target !== "_blank") {
-        return;
-      }
-
-      const href = anchor.href?.trim();
-      if (!href) {
-        return;
-      }
-
-      const protocol = new URL(href, window.location.href).protocol.toLowerCase();
-      if (protocol === "javascript:") {
+      const href = anchor.href;
+      if (!isDiscordInviteUrl(href)) {
         return;
       }
 
@@ -202,9 +268,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       openBeHomeExternalUrl(href);
     };
 
-    document.addEventListener("click", handleExternalLinkClick, true);
+    document.addEventListener("click", handleClick, true);
     return () => {
-      document.removeEventListener("click", handleExternalLinkClick, true);
+      document.removeEventListener("click", handleClick, true);
     };
   }, []);
 
@@ -217,7 +283,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <button className="fixed inset-0 z-40 cursor-default bg-transparent" type="button" aria-label="Close navigation menus" onClick={closeOverlays} />
       ) : null}
       {!embeddedBoardShell ? (
-        <header className="app-header">
+        <header className={`app-header ${headerVisible ? "is-visible" : "is-hidden"}`}>
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
@@ -504,8 +570,7 @@ export function ProtectedRoute({
 export function LandingShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const currentYear = new Date().getFullYear();
-  const [mobileHeaderVisible, setMobileHeaderVisible] = useState(true);
-  const lastMobileScrollY = useRef(0);
+  const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
@@ -524,77 +589,9 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
     });
   }, [location.hash, location.pathname]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
-    let animationFrameId: number | null = null;
-
-    const resetHeaderVisibility = () => {
-      lastMobileScrollY.current = window.scrollY;
-      setMobileHeaderVisible(true);
-    };
-
-    const updateHeaderVisibility = () => {
-      animationFrameId = null;
-
-      if (!mediaQuery.matches) {
-        lastMobileScrollY.current = window.scrollY;
-        setMobileHeaderVisible(true);
-        return;
-      }
-
-      const currentScrollY = window.scrollY;
-      const delta = currentScrollY - lastMobileScrollY.current;
-
-      if (currentScrollY <= 8) {
-        setMobileHeaderVisible(true);
-      } else if (Math.abs(delta) >= 6) {
-        setMobileHeaderVisible(delta < 0);
-      }
-
-      lastMobileScrollY.current = currentScrollY;
-    };
-
-    const handleScroll = () => {
-      if (animationFrameId !== null) {
-        return;
-      }
-
-      animationFrameId = window.requestAnimationFrame(updateHeaderVisibility);
-    };
-
-    const handleViewportChange = () => {
-      resetHeaderVisibility();
-    };
-
-    resetHeaderVisibility();
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleViewportChange);
-    } else {
-      mediaQuery.addListener(handleViewportChange);
-    }
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-      if (typeof mediaQuery.removeEventListener === "function") {
-        mediaQuery.removeEventListener("change", handleViewportChange);
-      } else {
-        mediaQuery.removeListener(handleViewportChange);
-      }
-    };
-  }, []);
-
   return (
     <div className="app-root landing-root">
-      <header className={`app-header landing-header ${mobileHeaderVisible ? "is-visible" : "is-hidden"}`}>
+      <header className={`app-header landing-header ${headerVisible ? "is-visible" : "is-hidden"}`}>
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />

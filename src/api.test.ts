@@ -191,6 +191,66 @@ describe("catalog API helpers", () => {
     );
   });
 
+  it("posts BE Home support requests to the support endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        accepted: true,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createSupportIssueReport("http://127.0.0.1:8787", {
+      category: "be_home_contact",
+      firstName: "Taylor",
+      email: "taylor@example.com",
+      subject: "Need help with BE Home",
+      description: "The support button on Board is not opening the browser the way I expected.",
+      marketingConsentGranted: true,
+      marketingConsentTextVersion: "be-home-support-v1",
+      pageUrl: "https://boardenthusiasts.com/support",
+      apiBaseUrl: "http://127.0.0.1:8787",
+      occurredAt: "2026-04-09T19:15:00Z",
+      technicalDetails: null,
+      userAgent: "Vitest Browser",
+      language: "en-US",
+      timeZone: "America/Chicago",
+      viewportWidth: 1440,
+      viewportHeight: 900,
+      screenWidth: 1440,
+      screenHeight: 900,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/support/issues",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({
+          category: "be_home_contact",
+          firstName: "Taylor",
+          email: "taylor@example.com",
+          subject: "Need help with BE Home",
+          description: "The support button on Board is not opening the browser the way I expected.",
+          marketingConsentGranted: true,
+          marketingConsentTextVersion: "be-home-support-v1",
+          pageUrl: "https://boardenthusiasts.com/support",
+          apiBaseUrl: "http://127.0.0.1:8787",
+          occurredAt: "2026-04-09T19:15:00Z",
+          technicalDetails: null,
+          userAgent: "Vitest Browser",
+          language: "en-US",
+          timeZone: "America/Chicago",
+          viewportWidth: 1440,
+          viewportHeight: 900,
+          screenWidth: 1440,
+          screenHeight: 900,
+        }),
+      }),
+    );
+  });
+
   it("surfaces the first validation error message from API validation payloads", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,

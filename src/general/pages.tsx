@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { createMarketingSignup, createSupportIssueReport, getHomeOfferingSpotlights, type HomeOfferingSpotlightEntry } from "../api";
+import { useAuth } from "../auth";
+import { hasBeHomeBridge } from "../be-home-bridge";
 import {
   appConfig,
   buildLandingSupportIssuePayload,
@@ -33,6 +35,9 @@ import {
   supportEmailAddress,
   supportEmailHref,
 } from "../app-core";
+
+const beHomeSupportAnonymousEmail = "support+be-home@boardenthusiasts.com";
+const beHomeSupportConsentTextVersion = "be-home-support-v1";
 
 export function LandingPage() {
   useDocumentMetadata({
@@ -1147,6 +1152,93 @@ export function SupportPage() {
     canonicalUrl: liveMetadata.supportCanonical,
   });
 
+  const { currentUser, session } = useAuth();
+  const beHomeSupportEnabled = hasBeHomeBridge();
+  const signedInEmail = currentUser?.email?.trim() ?? "";
+  const signedInDisplayName = currentUser?.displayName?.trim() ?? "";
+  const emailLocked = Boolean(session && signedInEmail);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [supportStatusMessage, setSupportStatusMessage] = useState<string | null>(null);
+  const [supportRequestError, setSupportRequestError] = useState<string | null>(null);
+  const [submittingSupportRequest, setSubmittingSupportRequest] = useState(false);
+  const [showSupportValidation, setShowSupportValidation] = useState(false);
+  const [supportFirstName, setSupportFirstName] = useState(signedInDisplayName);
+  const [supportEmail, setSupportEmail] = useState(emailLocked ? signedInEmail : "");
+  const [supportSubject, setSupportSubject] = useState("");
+  const [supportDescription, setSupportDescription] = useState("");
+  const [supportMarketingConsent, setSupportMarketingConsent] = useState(false);
+
+  const supportEmailValue = emailLocked ? signedInEmail : supportEmail.trim();
+  const supportEmailError = supportEmailValue ? validateEmailInput(supportEmailValue) : null;
+  const supportFirstNameError = supportFirstName.trim() ? null : "Enter your first name.";
+  const supportSubjectError = supportSubject.trim() ? null : "Enter a subject.";
+  const supportDescriptionError = supportDescription.trim() ? null : "Tell us what happened so we can help.";
+  const showSupportConsent = !emailLocked && Boolean(supportEmailValue) && !supportEmailError;
+
+  function openSupportModal(): void {
+    setSupportStatusMessage(null);
+    setSupportRequestError(null);
+    setShowSupportValidation(false);
+    setSupportFirstName(signedInDisplayName);
+    setSupportEmail(emailLocked ? signedInEmail : "");
+    setSupportSubject("");
+    setSupportDescription("");
+    setSupportMarketingConsent(false);
+    setSupportModalOpen(true);
+  }
+
+  function closeSupportModal(): void {
+    if (submittingSupportRequest) {
+      return;
+    }
+
+    setSupportModalOpen(false);
+  }
+
+  async function handleSupportSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setShowSupportValidation(true);
+    setSupportStatusMessage(null);
+    setSupportRequestError(null);
+
+    if (submittingSupportRequest || supportFirstNameError || supportSubjectError || supportDescriptionError || supportEmailError) {
+      return;
+    }
+
+    setSubmittingSupportRequest(true);
+    try {
+      const effectiveReplyToEmail = supportEmailValue || beHomeSupportAnonymousEmail;
+      await createSupportIssueReport(appConfig.apiBaseUrl, {
+        category: "be_home_contact",
+        firstName: supportFirstName.trim(),
+        email: effectiveReplyToEmail,
+        subject: supportSubject.trim(),
+        description: supportDescription.trim(),
+        marketingConsentGranted: showSupportConsent && supportMarketingConsent,
+        marketingConsentTextVersion: showSupportConsent && supportMarketingConsent ? beHomeSupportConsentTextVersion : null,
+        pageUrl: window.location.href,
+        apiBaseUrl: appConfig.apiBaseUrl,
+        occurredAt: new Date().toISOString(),
+        errorMessage: null,
+        technicalDetails: null,
+        userAgent: typeof navigator === "undefined" ? null : navigator.userAgent,
+        language: typeof navigator === "undefined" ? null : navigator.language,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+        viewportWidth: typeof window.innerWidth === "number" ? window.innerWidth : null,
+        viewportHeight: typeof window.innerHeight === "number" ? window.innerHeight : null,
+        screenWidth: typeof window.screen?.width === "number" ? window.screen.width : null,
+        screenHeight: typeof window.screen?.height === "number" ? window.screen.height : null,
+      });
+
+      setSupportModalOpen(false);
+      setSupportStatusMessage("Your support request is on its way. We'll follow up as soon as we can.");
+    } catch (error) {
+      setSupportRequestError("We couldn't send your support request right now. Please try again in a moment.");
+    } finally {
+      setSubmittingSupportRequest(false);
+    }
+  }
+
   return (
     <div className="page-grid">
       <section className="space-y-8">
@@ -1163,8 +1255,17 @@ export function SupportPage() {
           <p className="mt-3 text-sm leading-7 text-slate-300">
             Reach us at <a className="text-cyan-100 transition hover:text-white" href={supportEmailHref}>{supportEmailAddress}</a>. We&apos;ll help with sign-in issues, broken pages, account questions, and anything else that seems off in the site.
           </p>
+          {supportStatusMessage ? (
+            <div className="mt-4 rounded-[1.2rem] border border-emerald-300/35 bg-emerald-400/10 px-4 py-3 text-sm text-cyan-50">
+              {supportStatusMessage}
+            </div>
+          ) : null}
           <div className="card-actions mt-5">
-            <a className="primary-button" href={supportEmailHref}>Email Support</a>
+            {beHomeSupportEnabled ? (
+              <button className="primary-button" type="button" onClick={openSupportModal}>Email Support</button>
+            ) : (
+              <a className="primary-button" href={supportEmailHref}>Email Support</a>
+            )}
             <Link className="secondary-button" to="/browse">Browse the Index</Link>
           </div>
         </section>
@@ -1190,6 +1291,139 @@ export function SupportPage() {
           </section>
         </section>
       </section>
+
+      {beHomeSupportEnabled && supportModalOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/82 p-4 backdrop-blur-sm" onClick={closeSupportModal}>
+          <section
+            className="app-panel w-full max-w-3xl space-y-6 p-6 md:p-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="be-home-support-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="eyebrow">BE Home support</div>
+                <h2 id="be-home-support-title" className="mt-2 text-2xl font-bold text-white">
+                  Send a support request
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300">
+                  Tell us what went wrong on your Board and we&apos;ll send it straight to the BE support inbox.
+                </p>
+              </div>
+              <button
+                className="inline-flex size-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-slate-100 transition hover:border-cyan-300/60 hover:text-cyan-100"
+                type="button"
+                aria-label="Close support request dialog"
+                title="Close"
+                onClick={closeSupportModal}
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2" aria-hidden="true">
+                  <path d="M6 6 18 18" />
+                  <path d="M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <form className="space-y-4" onSubmit={(event) => void handleSupportSubmit(event)}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label="First name"
+                  required
+                  hint={showSupportValidation && supportFirstNameError ? supportFirstNameError : undefined}
+                  hintTone={showSupportValidation && supportFirstNameError ? "error" : "default"}
+                >
+                  <input
+                    type="text"
+                    value={supportFirstName}
+                    onChange={(event) => setSupportFirstName(event.currentTarget.value)}
+                    autoComplete="given-name"
+                  />
+                </Field>
+
+                <Field
+                  label="From email"
+                  hint={
+                    emailLocked
+                      ? "Using the email address from your BE account."
+                      : supportEmailError
+                        ? supportEmailError
+                        : "Leave this blank if you'd prefer to stay anonymous on Board."
+                  }
+                  hintTone={supportEmailError ? "error" : "default"}
+                >
+                  <input
+                    type="email"
+                    value={emailLocked ? signedInEmail : supportEmail}
+                    onChange={(event) => setSupportEmail(event.currentTarget.value)}
+                    autoComplete="email"
+                    disabled={emailLocked}
+                  />
+                </Field>
+              </div>
+
+              <Field
+                label="Subject"
+                required
+                hint={showSupportValidation && supportSubjectError ? supportSubjectError : undefined}
+                hintTone={showSupportValidation && supportSubjectError ? "error" : "default"}
+              >
+                <input
+                  type="text"
+                  value={supportSubject}
+                  onChange={(event) => setSupportSubject(event.currentTarget.value)}
+                />
+              </Field>
+
+              <Field
+                label="Description"
+                required
+                hint={showSupportValidation && supportDescriptionError ? supportDescriptionError : undefined}
+                hintTone={showSupportValidation && supportDescriptionError ? "error" : "default"}
+                reserveHintSpace={false}
+              >
+                <textarea
+                  rows={6}
+                  value={supportDescription}
+                  onChange={(event) => setSupportDescription(event.currentTarget.value)}
+                />
+              </Field>
+
+              {showSupportConsent ? (
+                <label className="field block">
+                  <span className="text-sm text-slate-300">
+                    <input
+                      className="mr-3 align-middle"
+                      type="checkbox"
+                      checked={supportMarketingConsent}
+                      onChange={(event) => setSupportMarketingConsent(event.currentTarget.checked)}
+                    />
+                    I&apos;m okay with occasional Board Enthusiasts email updates about releases, tools, and community news.
+                  </span>
+                  <small className="field-hint-slot">
+                    You can unsubscribe at any time.
+                  </small>
+                </label>
+              ) : null}
+
+              {supportRequestError ? (
+                <div className="rounded-[1rem] border border-rose-300/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                  {supportRequestError}
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button className="secondary-button" type="button" onClick={closeSupportModal} disabled={submittingSupportRequest}>
+                  Cancel
+                </button>
+                <button className="primary-button" type="submit" disabled={submittingSupportRequest}>
+                  {submittingSupportRequest ? "Sending..." : "Send request"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

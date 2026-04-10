@@ -80,6 +80,18 @@
 
   .app-header {
     @apply sticky top-0 z-50 border-b border-white/10 bg-[#17151a]/78 backdrop-blur;
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease;
+    will-change: transform;
+  }
+
+  .app-header.is-visible {
+    transform: translateY(0);
+  }
+
+  .app-header.is-hidden {
+    transform: translateY(calc(-100% - 0.5rem));
   }
 
   .app-header-inner {
@@ -1259,23 +1271,6 @@
   }
 
   @media (max-width: 767px) {
-    .landing-root .landing-header {
-      position: sticky;
-      top: 0;
-      transition:
-        transform 180ms ease,
-        opacity 180ms ease;
-      will-change: transform;
-    }
-
-    .landing-root .landing-header.is-visible {
-      transform: translateY(0);
-    }
-
-    .landing-root .landing-header.is-hidden {
-      transform: translateY(calc(-100% - 0.5rem));
-    }
-
     .app-main {
       @apply px-3 py-6;
     }

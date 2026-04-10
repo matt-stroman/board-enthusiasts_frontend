@@ -854,6 +854,66 @@ describe("App", () => {
     expect(screen.queryByRole("link", { name: "Install Guide" })).not.toBeInTheDocument();
   });
 
+  it("routes Discord invite links through the BE Home bridge when available", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    renderApp("/offerings");
+
+    await userEvent.click((await screen.findAllByRole("link", { name: "Join Discord" }))[0]);
+
+    expect(unityCall).toHaveBeenCalledWith(JSON.stringify({
+      type: "be-home-open-external-url",
+      url: "https://discord.gg/cz2zReWqcA",
+    }));
+  });
+
+  it("hides the shared shell header while scrolling down and reveals it again when scrolling up", async () => {
+    const originalScrollDescriptor = Object.getOwnPropertyDescriptor(window, "scrollY");
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle: number) => {
+      window.clearTimeout(handle);
+    });
+
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    try {
+      renderApp("/browse");
+
+      expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
+      const header = screen.getByRole("banner");
+      expect(header.className).toContain("is-visible");
+      expect(header.className).not.toContain("is-hidden");
+
+      window.scrollY = 140;
+      fireEvent.scroll(window);
+
+      await waitFor(() => {
+        expect(header.className).toContain("is-hidden");
+      });
+
+      window.scrollY = 92;
+      fireEvent.scroll(window);
+
+      await waitFor(() => {
+        expect(header.className).toContain("is-visible");
+      });
+    } finally {
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+
+      if (originalScrollDescriptor) {
+        Object.defineProperty(window, "scrollY", originalScrollDescriptor);
+      }
+    }
+  });
+
   it("keeps Browse highlighted only on browse routes", async () => {
     renderApp("/");
 
@@ -928,21 +988,6 @@ describe("App", () => {
     );
   });
 
-  it("opens target-blank external links through the BE Home bridge when hosted in the Unity web view", async () => {
-    const unityCall = vi.fn();
-    window.Unity = { call: unityCall };
-
-    renderApp("/install-guide");
-
-    await userEvent.click(await screen.findByRole("link", { name: "Board Developer Bridge (bdb)" }));
-
-    expect(unityCall).toHaveBeenCalledOnce();
-    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
-      type: "be-home-open-external-url",
-      url: "https://dev.board.fun/#:~:text=Board%20Developer%20Bridge%20(bdb)",
-    });
-  });
-
   it("renders the support page with the support email address", async () => {
     renderApp("/support");
 
@@ -956,6 +1001,60 @@ describe("App", () => {
       "href",
       "mailto:support@boardenthusiasts.com",
     );
+  });
+
+  it("opens the Board support form in-page when the support page is running inside BE Home", async () => {
+    window.Unity = { call: vi.fn() };
+    authState.value = {
+      session: { access_token: "player-token" },
+      currentUser: {
+        subject: "user-1",
+        displayName: "Matt Stroman",
+        email: "matt@boardenthusiasts.com",
+        emailVerified: true,
+        identityProvider: "email",
+        roles: ["developer"],
+        avatarUrl: null,
+      },
+      loading: false,
+      authError: null,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      verifyEmailCode: vi.fn(),
+      verifyRecoveryCode: vi.fn(),
+      updatePassword: vi.fn(),
+      signOut: vi.fn(),
+      refreshCurrentUser: vi.fn(),
+    };
+    apiMocks.createSupportIssueReport.mockResolvedValue({ accepted: true });
+
+    renderApp("/support");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Email Support" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Send a support request" });
+    expect(within(dialog).getByDisplayValue("Matt Stroman")).toBeVisible();
+    expect(within(dialog).getByDisplayValue("matt@boardenthusiasts.com")).toBeDisabled();
+    expect(within(dialog).queryByText(/occasional Board Enthusiasts email updates/i)).not.toBeInTheDocument();
+
+    await userEvent.type(within(dialog).getByLabelText("Subject *"), "Need help with BE Home");
+    await userEvent.type(within(dialog).getByLabelText("Description *"), "Something is off in the Board browser and I need support.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Send request" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createSupportIssueReport).toHaveBeenCalledWith(
+        "http://127.0.0.1:8787",
+        expect.objectContaining({
+          category: "be_home_contact",
+          firstName: "Matt Stroman",
+          email: "matt@boardenthusiasts.com",
+          subject: "Need help with BE Home",
+          description: "Something is off in the Board browser and I need support.",
+        }),
+      );
+    });
+    expect(await screen.findByText("Your support request is on its way. We'll follow up as soon as we can.")).toBeVisible();
   });
 
   it("shows a friendly browse error message and points users to contact us when the site cannot be reached", async () => {
