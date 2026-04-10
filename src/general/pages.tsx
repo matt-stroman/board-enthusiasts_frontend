@@ -999,7 +999,10 @@ export function HomePage() {
       <section className="landing-section">
         <div className="landing-section-heading">
           <h2>Why BE exists</h2>
-          <p>The BE Game Index is the live front door, but the bigger goal is to make Board easier to discover, support, and build around.</p>
+          <p>BE's mission is to help support and grow the community around Board, in whatever capacity that needs to be as Board evolves.</p>
+          <p>In its nascent stages, we're filling perceived gaps for players and indie developers until Board is able to release official solutions. When those solutions arrive (e.g. Board's new Sideloaded menu), corresponding BE resources (e.g. the old BE App Launcher) will be phased out and point back to Board's official one.</p>
+          <p>As Board evolves, BE will continue to adapt and provide value to the community in ways that complement Board's official offerings.</p>
+          <p><b>We can't wait to see what indie game develoeprs create for the platform, and we're here to support you and your players for the long haul!</b></p>
         </div>
         <div className="landing-card-grid">
           {homepageValueCards.map((card) => (
