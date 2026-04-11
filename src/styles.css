@@ -169,6 +169,7 @@
   .app-community-bar-inner {
     @apply mx-auto grid max-w-[108rem] items-center gap-3 px-4 py-2 sm:px-6 lg:px-8;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas: "home center website";
   }
 
   .app-community-chip {
@@ -186,13 +187,19 @@
     min-width: 0;
   }
 
+  .app-community-side--home {
+    grid-area: home;
+  }
+
   .app-community-side--website {
+    grid-area: website;
     justify-content: flex-end;
     text-align: right;
   }
 
   .app-community-center {
     @apply flex items-center justify-center gap-3 text-center;
+    grid-area: center;
     min-width: 0;
   }
 
@@ -1333,6 +1340,10 @@
   @media (max-width: 1100px) {
     .app-community-bar-inner {
       grid-template-columns: 1fr;
+      grid-template-areas:
+        "center"
+        "home"
+        "website";
     }
 
     .app-community-side,
@@ -1365,6 +1376,10 @@
     .app-community-bar-inner {
       @apply gap-2 px-3 py-2;
       grid-template-columns: 1fr;
+      grid-template-areas:
+        "center"
+        "home"
+        "website";
     }
 
     .app-community-side,

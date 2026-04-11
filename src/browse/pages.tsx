@@ -71,8 +71,6 @@ type TitleShowcaseSelection =
   | { kind: "showcase"; showcaseMediaId: string }
   | { kind: "hero" };
 
-const embeddedShowcaseThumbnailImageLimit = 3;
-
 function GalleryArrowIcon({ markup }: { markup: string }) {
   return <span className="gallery-arrow-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
 }
@@ -1870,8 +1868,7 @@ export function TitleDetailPage() {
                   {spotlightThumbnails.map((mediaItem, index) => {
                     const selected = selectedShowcase.kind === "showcase" && selectedShowcase.showcaseMediaId === mediaItem.id;
                     const shouldRenderThumbnailImage = Boolean(mediaItem.imageUrl)
-                      && !failedPreviewImageUrls.has(mediaItem.imageUrl ?? "")
-                      && (!embeddedBoardShell || selected || index < embeddedShowcaseThumbnailImageLimit);
+                      && !failedPreviewImageUrls.has(mediaItem.imageUrl ?? "");
 
                     return (
                       <button

@@ -136,6 +136,19 @@ function getOrCreateBeWebsiteSessionId(): string {
   return nextValue;
 }
 
+function sendBeWebsitePresenceEndBeacon(sessionId: string): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") {
+    return false;
+  }
+
+  try {
+    const endpoint = `${appConfig.apiBaseUrl.replace(/\/$/, "")}/internal/be-home/presence/end`;
+    return navigator.sendBeacon(endpoint, JSON.stringify({ sessionId }));
+  } catch {
+    return false;
+  }
+}
+
 function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null {
   const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
 
@@ -240,9 +253,13 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
     const handlePointer = () => recordActivity(false);
     const handleKeyDown = () => recordActivity(false);
     const handleScroll = () => recordActivity(false);
-    const handlePageHide = () => {
+    const handlePageExit = () => {
       const sessionId = sessionIdRef.current;
       if (!sessionId) {
+        return;
+      }
+
+      if (sendBeWebsitePresenceEndBeacon(sessionId)) {
         return;
       }
 
@@ -255,7 +272,8 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
     window.addEventListener("pointerdown", handlePointer, { passive: true });
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pagehide", handlePageExit);
+    window.addEventListener("beforeunload", handlePageExit);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const intervalHandle = window.setInterval(() => {
@@ -268,7 +286,8 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
       window.removeEventListener("pointerdown", handlePointer);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pagehide", handlePageExit);
+      window.removeEventListener("beforeunload", handlePageExit);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(intervalHandle);
     };

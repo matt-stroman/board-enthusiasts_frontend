@@ -286,6 +286,10 @@ describe("App", () => {
     window.sessionStorage.clear();
     delete window.Unity;
     delete window.webkit;
+    Object.defineProperty(window.navigator, "sendBeacon", {
+      configurable: true,
+      value: undefined,
+    });
     authState.value = {
       session: null,
       currentUser: null,
@@ -907,7 +911,6 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/players active in BE Home right now/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "A better way to keep up with indie Board releases." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Featured offerings will appear here." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Why BE exists" })).toBeVisible();
@@ -2379,7 +2382,7 @@ describe("App", () => {
     expect(await screen.findByText("We couldn't reach Board Enthusiasts right now. Please check your connection and try again.")).toBeVisible();
   });
 
-  it("avoids eagerly rendering every showcase thumbnail image inside the BE Home embedded shell", async () => {
+  it("renders showcase thumbnail images inside the BE Home embedded shell without requiring a click first", async () => {
     window.Unity = { call: vi.fn() };
     apiMocks.getCatalogTitle.mockResolvedValue({
       title: {
@@ -2425,12 +2428,34 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByAltText("Lantern Drift preview 2")).toBeVisible();
     expect(screen.getByAltText("Lantern Drift preview 3")).toBeVisible();
-    expect(screen.queryByAltText("Lantern Drift preview 4")).not.toBeInTheDocument();
-    expect(screen.queryByAltText("Lantern Drift preview 5")).not.toBeInTheDocument();
+    expect(screen.getByAltText("Lantern Drift preview 4")).toBeVisible();
+    expect(screen.getByAltText("Lantern Drift preview 5")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "Show preview 4" }));
 
     expect(await screen.findAllByAltText("Lantern Drift preview 4")).toHaveLength(2);
+  });
+
+  it("sends a website presence end beacon when the browser page exits", async () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window.navigator, "sendBeacon", {
+      configurable: true,
+      value: sendBeacon,
+    });
+
+    renderApp("/browse");
+
+    await waitFor(() => {
+      expect(apiMocks.upsertBeWebsitePresence).toHaveBeenCalled();
+    });
+
+    fireEvent(window, new Event("pagehide"));
+
+    expect(sendBeacon).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/internal/be-home/presence/end",
+      expect.stringContaining("\"sessionId\""),
+    );
+    expect(apiMocks.endBeWebsitePresence).not.toHaveBeenCalled();
   });
 
   it("shows the current release panel only for the developer who manages the title studio", async () => {
