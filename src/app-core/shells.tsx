@@ -1,7 +1,7 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead, upsertBeWebsitePresence } from "../api";
+import { clearCurrentUserNotifications, endBeWebsitePresence, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead, upsertBeWebsitePresence } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import { hasBeHomeBridge, openBeHomeExternalUrl, publishBeHomeRouteState } from "../be-home-bridge";
 import {
@@ -240,6 +240,14 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
     const handlePointer = () => recordActivity(false);
     const handleKeyDown = () => recordActivity(false);
     const handleScroll = () => recordActivity(false);
+    const handlePageHide = () => {
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) {
+        return;
+      }
+
+      void endBeWebsitePresence(appConfig.apiBaseUrl, sessionId, { keepalive: true });
+    };
 
     recordActivity(true);
 
@@ -247,6 +255,7 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
     window.addEventListener("pointerdown", handlePointer, { passive: true });
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const intervalHandle = window.setInterval(() => {
@@ -259,6 +268,7 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
       window.removeEventListener("pointerdown", handlePointer);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(intervalHandle);
     };
@@ -325,7 +335,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
-  useBeWebsitePresence(!embeddedBoardShell, session && currentUser ? "signed_in" : "anonymous", `${location.pathname}${location.search}`);
+  const websitePresenceEnabled = !embeddedBoardShell && !hasBeHomeBridge();
+  useBeWebsitePresence(websitePresenceEnabled, session && currentUser ? "signed_in" : "anonymous", `${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -779,7 +790,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
-  useBeWebsitePresence(true, "anonymous", `${location.pathname}${location.search}`);
+  useBeWebsitePresence(!hasBeHomeBridge(), "anonymous", `${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {

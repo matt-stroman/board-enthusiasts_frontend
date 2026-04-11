@@ -61,6 +61,7 @@ const apiMocks = vi.hoisted(() => ({
   createSupportIssueReport: vi.fn(),
   getBeHomeMetrics: vi.fn(),
   upsertBeWebsitePresence: vi.fn(),
+  endBeWebsitePresence: vi.fn(),
   getHomeSpotlights: vi.fn(),
   getHomeOfferingSpotlights: vi.fn(),
   getBoardProfile: vi.fn(),
@@ -375,6 +376,13 @@ describe("App", () => {
         lastSeenAt: "2026-04-10T18:30:00Z",
         heartbeatIntervalSeconds: 30,
         activeTtlSeconds: 600,
+      },
+    });
+    apiMocks.endBeWebsitePresence.mockResolvedValue({
+      accepted: true,
+      session: {
+        sessionId: "website-session-1",
+        endedAt: "2026-04-10T18:35:00Z",
       },
     });
     apiMocks.getHomeSpotlights.mockResolvedValue({ entries: [] });
@@ -944,6 +952,17 @@ describe("App", () => {
         appEnvironment: "production",
       });
     });
+  });
+
+  it("does not post website presence heartbeats when the BE Home bridge is present without embed mode", async () => {
+    window.Unity = { call: vi.fn() };
+
+    renderApp("/browse");
+
+    await waitFor(() => {
+      expect(apiMocks.getBeHomeMetrics).toHaveBeenCalled();
+    });
+    expect(apiMocks.upsertBeWebsitePresence).not.toHaveBeenCalled();
   });
 
   it.each([

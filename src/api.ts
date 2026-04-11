@@ -177,6 +177,14 @@ export interface BeWebsitePresenceResponse {
   };
 }
 
+export interface BePresenceEndResponse {
+  accepted: true;
+  session: {
+    sessionId: string;
+    endedAt: string;
+  };
+}
+
 function isTechnicalApiMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return [
@@ -331,6 +339,14 @@ export function upsertBeWebsitePresence(apiBaseUrl: string, request: BeWebsitePr
   return apiFetch<BeWebsitePresenceResponse>(apiBaseUrl, "/internal/be-home/website-presence", {
     method: "POST",
     body: JSON.stringify(request),
+  });
+}
+
+export function endBeWebsitePresence(apiBaseUrl: string, sessionId: string, init: RequestInit = {}): Promise<BePresenceEndResponse> {
+  return apiFetch<BePresenceEndResponse>(apiBaseUrl, "/internal/be-home/presence/end", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
+    ...init,
   });
 }
 
