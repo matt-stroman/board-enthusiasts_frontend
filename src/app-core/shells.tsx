@@ -1,9 +1,9 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { clearCurrentUserNotifications, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
+import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
-import { hasBeHomeBridge, openBeHomeExternalUrl } from "../be-home-bridge";
+import { hasBeHomeBridge, openBeHomeExternalUrl, publishBeHomeRouteState } from "../be-home-bridge";
 import {
   appConfig,
   formatNotificationCategory,
@@ -101,6 +101,75 @@ function useScrollResponsiveHeader(resetKey: string): boolean {
   return headerVisible;
 }
 
+type BeHomeCommunityPulse = {
+  activeNowTotal: number;
+  activeNowAnonymous: number;
+  activeNowSignedIn: number;
+};
+
+function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null {
+  const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadMetrics(): Promise<void> {
+      try {
+        const response = await getBeHomeMetrics(appConfig.apiBaseUrl);
+        if (!cancelled) {
+          setMetrics({
+            activeNowTotal: response.metrics.activeNowTotal,
+            activeNowAnonymous: response.metrics.activeNowAnonymous,
+            activeNowSignedIn: response.metrics.activeNowSignedIn,
+          });
+        }
+      } catch {
+        // Keep the last successful community pulse visible if refresh fails.
+      }
+    }
+
+    void loadMetrics();
+    const refreshHandle = window.setInterval(() => {
+      void loadMetrics();
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshHandle);
+    };
+  }, [enabled]);
+
+  return metrics;
+}
+
+function BeHomeCommunityBar({ metrics }: { metrics: BeHomeCommunityPulse | null }) {
+  if (!metrics) {
+    return null;
+  }
+
+  const activeLabel = metrics.activeNowTotal === 1 ? "1 active right now" : `${metrics.activeNowTotal.toLocaleString()} active right now`;
+  const mixLabel = `${metrics.activeNowAnonymous.toLocaleString()} anonymous \u00b7 ${metrics.activeNowSignedIn.toLocaleString()} signed in`;
+
+  return (
+    <div className="app-community-bar" role="status" aria-live="polite">
+      <div className="app-community-bar-inner">
+        <span className="app-community-chip">BE Home Community</span>
+        <div className="app-community-copy">
+          <strong className="app-community-stat">{activeLabel}</strong>
+          <span className="app-community-separator" aria-hidden="true" />
+          <span className="app-community-detail">{mixLabel}</span>
+          <span className="app-community-separator" aria-hidden="true" />
+          <span className="app-community-detail">Live independent BE Home metric</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
@@ -128,6 +197,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
+  const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -241,6 +311,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
     writeSessionStorageValue(embeddedBoardShellStorageKey, "board");
   }, [embeddedBoardShellRequested]);
+
+  useEffect(() => {
+    if (!hasBeHomeBridge()) {
+      return;
+    }
+
+    publishBeHomeRouteState(`${location.pathname}${location.search}`);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !hasBeHomeBridge()) {
@@ -502,6 +580,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             Get Board
           </a>
         </div>
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse} />
         </header>
       ) : null}
 
@@ -571,6 +650,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
+  const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
@@ -617,6 +697,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Get Board</a>
           <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
         </nav>
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse} />
       </header>
 
       <main className="app-main landing-main">

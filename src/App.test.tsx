@@ -59,6 +59,7 @@ const authState = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   createMarketingSignup: vi.fn(),
   createSupportIssueReport: vi.fn(),
+  getBeHomeMetrics: vi.fn(),
   getHomeSpotlights: vi.fn(),
   getHomeOfferingSpotlights: vi.fn(),
   getBoardProfile: vi.fn(),
@@ -238,6 +239,45 @@ function buildNearLimitCopy(segments: readonly string[], maxLength: number, rese
   return value.slice(0, maxLength).trim();
 }
 
+function setSignedInAuthState(roles: string[]) {
+  authState.value = {
+    ...authState.value,
+    session: {
+      access_token: "signed-in-token",
+      user: {
+        email: "taylor.marsh@boardtpl.local",
+      },
+    },
+    currentUser: {
+      subject: "user-1",
+      displayName: "Taylor Marsh",
+      email: "taylor.marsh@boardtpl.local",
+      emailVerified: true,
+      identityProvider: "email",
+      roles,
+    },
+    loading: false,
+    authError: null,
+  };
+}
+
+function primePlayerWorkspaceApi() {
+  apiMocks.getUserProfile.mockResolvedValue({
+    profile: {
+      displayName: "Taylor Marsh",
+      firstName: "Taylor",
+      lastName: "Marsh",
+      email: "taylor.marsh@boardtpl.local",
+      avatarUrl: null,
+      boardUserId: null,
+    },
+  });
+  apiMocks.getPlayerLibrary.mockResolvedValue({ titles: [] });
+  apiMocks.getPlayerWishlist.mockResolvedValue({ titles: [] });
+  apiMocks.getPlayerFollowedStudios.mockResolvedValue({ studios: [] });
+  apiMocks.getPlayerTitleReports.mockResolvedValue({ reports: [] });
+}
+
 describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -310,6 +350,18 @@ describe("App", () => {
       error: null,
     });
     apiMocks.listPublicStudios.mockResolvedValue({ studios: [] });
+    apiMocks.getBeHomeMetrics.mockResolvedValue({
+      metrics: {
+        activeNowTotal: 12,
+        activeNowAnonymous: 8,
+        activeNowSignedIn: 4,
+        totalBoardsSeen: 42,
+        dailyActiveDevices: 15,
+        weeklyActiveDevices: 27,
+        monthlyActiveDevices: 35,
+        updatedAt: "2026-04-10T18:30:00Z",
+      },
+    });
     apiMocks.getHomeSpotlights.mockResolvedValue({ entries: [] });
     apiMocks.getHomeOfferingSpotlights.mockResolvedValue({ entries: [] });
     apiMocks.listCatalogTitles.mockResolvedValue({ titles: [], paging: { pageNumber: 1, pageSize: 48, totalCount: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
@@ -832,6 +884,7 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("12 players active in BE Home right now. This is a live BE Home community count, not an official Board platform metric.")).toBeVisible();
     expect(screen.getByRole("heading", { name: "A better way to keep up with indie Board releases." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Featured offerings will appear here." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Why BE exists" })).toBeVisible();
@@ -854,6 +907,79 @@ describe("App", () => {
     expect(screen.queryByRole("link", { name: "Install Guide" })).not.toBeInTheDocument();
   });
 
+  it("shows the BE Home community pulse bar in the shared site header", async () => {
+    renderApp("/browse");
+
+    expect(await screen.findByText("BE Home Community")).toBeVisible();
+    expect(screen.getByText("12 active right now")).toBeVisible();
+    expect(screen.getByText("8 anonymous · 4 signed in")).toBeVisible();
+  });
+
+  it.each([
+    ["/browse?embed=board", "browse"],
+    ["/offerings?embed=board", "offerings"],
+    ["/install-guide?embed=board", "install"],
+    ["/support?embed=board", "support"],
+    ["/privacy?embed=board", "privacy"],
+    ["/auth/signin?embed=board", "signin"],
+  ] as const)("keeps the embedded first-party public route %s mounted for BE Home", async (path, routeKind) => {
+    renderAppWithLocation(path);
+
+    if (routeKind === "browse") {
+      expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
+    } else if (routeKind === "offerings") {
+      expect(await screen.findByRole("heading", { level: 1, name: "Explore the BE ecosystem." })).toBeVisible();
+    } else if (routeKind === "install") {
+      expect(await screen.findByRole("heading", { level: 1, name: "Install Guide" })).toBeVisible();
+    } else if (routeKind === "support") {
+      expect(await screen.findByRole("heading", { level: 1, name: "Contact Us" })).toBeVisible();
+    } else if (routeKind === "signin") {
+      expect(await screen.findByRole("heading", { name: "Sign In" })).toBeVisible();
+    } else {
+      expect(await screen.findByRole("heading", { name: "BE Privacy Snapshot" })).toBeVisible();
+    }
+
+    expect(screen.getByTestId("location-display")).toHaveTextContent(path);
+    expect(screen.queryByText("Route not found")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["/player?embed=board", "player", "My Games", "/player?embed=board"],
+    ["/developer?embed=board", "player", "Become a Developer", "/developer?domain=studios&workflow=studios-overview"],
+    ["/moderate?embed=board", "moderator", "Moderate", "/moderate?embed=board"],
+  ] as const)("keeps the embedded protected route %s mounted for BE Home", async (path, role, expectedHeading, expectedLocation) => {
+    setSignedInAuthState(role === "moderator" ? ["player", "moderator"] : ["player"]);
+    primePlayerWorkspaceApi();
+
+    renderAppWithLocation(path);
+
+    expect(await screen.findByRole("heading", { name: expectedHeading })).toBeVisible();
+    expect(screen.getByTestId("location-display")).toHaveTextContent(expectedLocation);
+    expect(screen.queryByText("Route not found")).not.toBeInTheDocument();
+  });
+
+  it("does not request the optional linked Board profile while loading the default player route", async () => {
+    setSignedInAuthState(["player"]);
+    primePlayerWorkspaceApi();
+
+    renderAppWithLocation("/player?embed=board");
+
+    expect(await screen.findByRole("heading", { name: "My Games" })).toBeVisible();
+    expect(screen.getByTestId("location-display")).toHaveTextContent("/player?embed=board");
+    expect(apiMocks.getBoardProfile).not.toHaveBeenCalled();
+  });
+
+  it("loads the linked Board profile only when the account profile workflow is opened", async () => {
+    setSignedInAuthState(["player"]);
+    primePlayerWorkspaceApi();
+
+    renderAppWithLocation("/player?workflow=account-profile&embed=board");
+
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeVisible();
+    expect(screen.getByTestId("location-display")).toHaveTextContent("/player?workflow=account-profile&embed=board");
+    expect(apiMocks.getBoardProfile).toHaveBeenCalledTimes(1);
+  });
+
   it("routes Discord invite links through the BE Home bridge when available", async () => {
     const unityCall = vi.fn();
     window.Unity = { call: unityCall };
@@ -866,6 +992,23 @@ describe("App", () => {
       type: "be-home-open-external-url",
       url: "https://discord.gg/cz2zReWqcA",
     }));
+  });
+
+  it("publishes the embedded BE Home route to the Unity bridge", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    renderApp("/browse?embed=board");
+
+    await screen.findByRole("textbox");
+
+    expect(
+      unityCall.mock.calls.some(([message]) => {
+        const payload = JSON.parse(message as string) as { type?: string; path?: string };
+        return payload.type === "be-home-route-state"
+          && payload.path === "/browse?embed=board";
+      }),
+    ).toBe(true);
   });
 
   it("hides the shared shell header while scrolling down and reveals it again when scrolling up", async () => {
@@ -2176,6 +2319,68 @@ describe("App", () => {
     expect(screen.getAllByText("1.0.0").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Current release" })).not.toBeInTheDocument();
     expect(screen.queryByText("Configured")).not.toBeInTheDocument();
+  });
+
+  it("shows a friendly network error when title detail loading cannot reach the API", async () => {
+    apiMocks.getCatalogTitle.mockRejectedValue(new Error("Could not reach the Board Enthusiasts API."));
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByText("We couldn't reach Board Enthusiasts right now. Please check your connection and try again.")).toBeVisible();
+  });
+
+  it("avoids eagerly rendering every showcase thumbnail image inside the BE Home embedded shell", async () => {
+    window.Unity = { call: vi.fn() };
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 4,
+        libraryCount: 1,
+        acquisitionUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://cdn.example.com/showcase-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+          { id: "showcase-2", kind: "image", imageUrl: "https://cdn.example.com/showcase-2.webp", videoUrl: null, altText: "Lantern Drift preview 2", displayOrder: 1 },
+          { id: "showcase-3", kind: "image", imageUrl: "https://cdn.example.com/showcase-3.webp", videoUrl: null, altText: "Lantern Drift preview 3", displayOrder: 2 },
+          { id: "showcase-4", kind: "image", imageUrl: "https://cdn.example.com/showcase-4.webp", videoUrl: null, altText: "Lantern Drift preview 4", displayOrder: 3 },
+          { id: "showcase-5", kind: "image", imageUrl: "https://cdn.example.com/showcase-5.webp", videoUrl: null, altText: "Lantern Drift preview 5", displayOrder: 4 },
+        ],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift?embed=board");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.getByAltText("Lantern Drift preview 2")).toBeVisible();
+    expect(screen.getByAltText("Lantern Drift preview 3")).toBeVisible();
+    expect(screen.queryByAltText("Lantern Drift preview 4")).not.toBeInTheDocument();
+    expect(screen.queryByAltText("Lantern Drift preview 5")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show preview 4" }));
+
+    expect(await screen.findAllByAltText("Lantern Drift preview 4")).toHaveLength(2);
   });
 
   it("shows the current release panel only for the developer who manages the title studio", async () => {

@@ -11,6 +11,7 @@ import { useId, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import shareGlyph from "../assets/title-action-icons/share_24dp.svg?raw";
 import { formatMediaUploadGuidance } from "../media-upload";
+import { rememberCatalogMediaLoadFailure, rememberCatalogMediaLoadSuccess, useCatalogMediaLoadState } from "./media";
 import { supportRoute } from "./errors";
 import type { AvatarEditorState } from "./shared";
 import {
@@ -315,6 +316,7 @@ export function TitleNameHeading({
           className={imageClassName}
           src={logoAsset.sourceUrl}
           alt={logoAsset.altText ?? `${title.displayName} logo`}
+          decoding="async"
           onError={() => setLogoFailed(true)}
         />
       ) : (
@@ -325,13 +327,20 @@ export function TitleNameHeading({
 }
 
 export function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudioSummary }) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const avatarUrl = getStudioAvatarImageUrl(studio);
+  const safeAvatarUrl = avatarFailed ? null : avatarUrl;
+  const bannerLoadState = useCatalogMediaLoadState(studio.bannerUrl);
   const studioAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "studio_avatar");
+  const bannerStyle = bannerLoadState === "loaded" && studio.bannerUrl
+    ? { backgroundImage: `url('${studio.bannerUrl}')` }
+    : { backgroundImage: getFallbackGradient(studio.description) };
+
   return (
     <article className="app-panel overflow-hidden p-0">
       <div
         className="min-h-48 bg-cover bg-center"
-        style={studio.bannerUrl ? { backgroundImage: `url('${studio.bannerUrl}')` } : { backgroundImage: getFallbackGradient(studio.description) }}
+        style={bannerStyle}
       >
         <div className="h-full bg-[linear-gradient(120deg,rgba(8,10,18,0.88),rgba(8,10,18,0.52),rgba(8,10,18,0.82))] p-5">
           <div className="flex items-start justify-between gap-4">
@@ -340,9 +349,20 @@ export function StudioCard({ studio }: { studio: StudioSummary | DeveloperStudio
               <h3 className="font-display text-2xl font-bold text-white">{studio.displayName}</h3>
               <p className="max-w-xl text-sm leading-7 text-slate-300">{studio.description ?? "No studio summary yet."}</p>
             </div>
-            {avatarUrl ? (
+            {safeAvatarUrl ? (
               <div className="w-16 shrink-0 overflow-hidden rounded-[1rem] border border-white/10 md:w-24" style={{ aspectRatio: studioAvatarAspectRatio }}>
-                <img className="h-full w-full object-cover" src={avatarUrl} alt={`${studio.displayName} avatar`} />
+                <img
+                  className="h-full w-full object-cover"
+                  src={safeAvatarUrl}
+                  alt={`${studio.displayName} avatar`}
+                  loading="lazy"
+                  decoding="async"
+                  onLoad={() => rememberCatalogMediaLoadSuccess(safeAvatarUrl)}
+                  onError={() => {
+                    rememberCatalogMediaLoadFailure(safeAvatarUrl);
+                    setAvatarFailed(true);
+                  }}
+                />
               </div>
             ) : null}
           </div>
@@ -551,8 +571,9 @@ export function TitleCard({
   };
 }) {
   const [cardImageFailed, setCardImageFailed] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const cardImageUrl = !cardImageFailed ? getTitleCardImageUrl(title) : null;
-  const titleAvatarUrl = getTitleAvatarImageUrl(title);
+  const titleAvatarUrl = !avatarFailed ? getTitleAvatarImageUrl(title) : null;
   const titleAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_avatar");
   const genreTags = parseGenreTags(title.genreDisplay);
   const panelClassName = titleAvatarUrl ? "browse-title-card-panel browse-title-card-panel-logo" : "browse-title-card-panel";
@@ -568,7 +589,13 @@ export function TitleCard({
             src={cardImageUrl}
             alt=""
             aria-hidden="true"
-            onError={() => setCardImageFailed(true)}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => rememberCatalogMediaLoadSuccess(cardImageUrl)}
+            onError={() => {
+              rememberCatalogMediaLoadFailure(cardImageUrl);
+              setCardImageFailed(true);
+            }}
           />
         ) : (
           <div
@@ -611,6 +638,13 @@ export function TitleCard({
                     className="h-full w-full object-cover"
                     src={titleAvatarUrl}
                     alt={`${title.displayName} avatar`}
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={() => rememberCatalogMediaLoadSuccess(titleAvatarUrl)}
+                    onError={() => {
+                      rememberCatalogMediaLoadFailure(titleAvatarUrl);
+                      setAvatarFailed(true);
+                    }}
                   />
                 </div>
                 <div className="min-w-0 text-xl font-bold leading-tight text-white">{title.displayName}</div>

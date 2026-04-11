@@ -136,6 +136,25 @@ export interface HomeOfferingSpotlightResponse {
   entries: HomeOfferingSpotlightEntry[];
 }
 
+/**
+ * Aggregate BE Home metrics returned by the internal analytics routes.
+ * Identity-based device counts are directional estimates and should not be treated as literal Board hardware totals.
+ */
+export interface BeHomeMetrics {
+  activeNowTotal: number;
+  activeNowAnonymous: number;
+  activeNowSignedIn: number;
+  totalBoardsSeen: number;
+  dailyActiveDevices: number;
+  weeklyActiveDevices: number;
+  monthlyActiveDevices: number;
+  updatedAt: string;
+}
+
+export interface BeHomeMetricsResponse {
+  metrics: BeHomeMetrics;
+}
+
 function isTechnicalApiMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return [
@@ -280,6 +299,10 @@ export function getHomeSpotlights(apiBaseUrl: string): Promise<HomeSpotlightResp
 
 export function getHomeOfferingSpotlights(apiBaseUrl: string): Promise<HomeOfferingSpotlightResponse> {
   return apiFetch<HomeOfferingSpotlightResponse>(apiBaseUrl, "/internal/home-offering-spotlights");
+}
+
+export function getBeHomeMetrics(apiBaseUrl: string): Promise<BeHomeMetricsResponse> {
+  return apiFetch<BeHomeMetricsResponse>(apiBaseUrl, "/internal/be-home/metrics");
 }
 
 export function listGenres(apiBaseUrl: string): Promise<GenreListResponse> {

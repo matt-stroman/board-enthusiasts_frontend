@@ -53,7 +53,6 @@ import {
   getMfaQrCodeImageSource,
   getPasswordPolicyErrors,
   getSocialAuthProviderLabel,
-  isApiErrorStatus,
   isKnownStudioLink,
   isSocialAuthProvider,
   LoadingPanel,
@@ -1119,16 +1118,8 @@ export function PlayerPage() {
   }, [session?.user?.new_email]);
 
   async function loadBoardProfileSafe(): Promise<BoardProfile | null> {
-    try {
-      const response = await getBoardProfile(appConfig.apiBaseUrl, accessToken);
-      return response.boardProfile;
-    } catch (nextError) {
-      if (isApiErrorStatus(nextError, 404)) {
-        return null;
-      }
-
-      throw nextError;
-    }
+    const response = await getBoardProfile(appConfig.apiBaseUrl, accessToken);
+    return response.boardProfile;
   }
 
   async function loadConnectedAccountIdentities(): Promise<ConnectedAccountIdentity[]> {
@@ -1301,10 +1292,9 @@ export function PlayerPage() {
 
     async function load(): Promise<void> {
       try {
-        const [profileResponse, enrollmentResponse, boardProfileResponse, libraryResponse, wishlistResponse, followedStudiosResponse, mediaTypesResponse] = await Promise.all([
+        const [profileResponse, enrollmentResponse, libraryResponse, wishlistResponse, followedStudiosResponse, mediaTypesResponse] = await Promise.all([
           getUserProfile(appConfig.apiBaseUrl, accessToken),
           getDeveloperEnrollment(appConfig.apiBaseUrl, accessToken),
-          loadBoardProfileSafe(),
           getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
           getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
           getPlayerFollowedStudios(appConfig.apiBaseUrl, accessToken),
@@ -1317,7 +1307,6 @@ export function PlayerPage() {
         }
 
         setProfile(profileResponse.profile);
-        setBoardProfile(boardProfileResponse);
         setDisplayName(profileEditMode ? displayName : profileResponse.profile.displayName ?? "");
         setFirstName(settingsEditMode ? firstName : profileResponse.profile.firstName ?? "");
         setLastName(settingsEditMode ? lastName : profileResponse.profile.lastName ?? "");
@@ -1857,6 +1846,32 @@ export function PlayerPage() {
   const titleAvatarAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_avatar");
   const titleLogoAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "title_logo");
   const studioLogoAspectRatio = getCatalogMediaAspectRatioValue(catalogMediaTypes, "studio_logo");
+
+  useEffect(() => {
+    if (activeWorkflow !== "account-profile") {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadBoardProfileForAccountWorkflow(): Promise<void> {
+      try {
+        const nextBoardProfile = await loadBoardProfileSafe();
+        if (!cancelled) {
+          setBoardProfile(nextBoardProfile);
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      }
+    }
+
+    void loadBoardProfileForAccountWorkflow();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkflow, authSubject]);
 
   useEffect(() => {
     if (activeWorkflow !== "account-settings" || !pendingPasswordSectionFocusRef.current) {

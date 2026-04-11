@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createMarketingSignup, createSupportIssueReport, listAgeRatingAuthorities, listCatalogTitles, listGenres, verifyCurrentUserPassword } from "./api";
+import {
+  createMarketingSignup,
+  createSupportIssueReport,
+  getBeHomeMetrics,
+  listAgeRatingAuthorities,
+  listCatalogTitles,
+  listGenres,
+  verifyCurrentUserPassword,
+} from "./api";
 
 describe("catalog API helpers", () => {
   afterEach(() => {
@@ -247,6 +255,35 @@ describe("catalog API helpers", () => {
           screenWidth: 1440,
           screenHeight: 900,
         }),
+      }),
+    );
+  });
+
+  it("requests BE Home aggregate metrics from the internal metrics endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        metrics: {
+          activeNowTotal: 12,
+          activeNowAnonymous: 8,
+          activeNowSignedIn: 4,
+          totalBoardsSeen: 42,
+          dailyActiveDevices: 15,
+          weeklyActiveDevices: 27,
+          monthlyActiveDevices: 35,
+          updatedAt: "2026-04-10T18:30:00Z",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getBeHomeMetrics("http://127.0.0.1:8787");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/internal/be-home/metrics",
+      expect.objectContaining({
+        headers: expect.any(Headers),
       }),
     );
   });

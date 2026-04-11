@@ -28,6 +28,7 @@ import {
   writeTextToClipboard,
 } from "./shared";
 import { trackAnalyticsEvent } from "./analytics";
+import { useCatalogMediaLoadState } from "./media";
 import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
 
 export function ShareTitleModal({
@@ -391,6 +392,10 @@ export function TitleQuickViewModal({
   const shareUrl = title ? getTitleSharePageUrl(title.studioId, title.id) : null;
   const shareHelperUrl = title ? getTitleShareHelperPageUrl(title.studioId, title.id) : null;
   const titleDetailPath = title ? getTitleDetailPath(title.studioSlug, title.slug) : getTitleDetailPath(studioIdentifier, titleIdentifier);
+  const heroImageLoadState = useCatalogMediaLoadState(heroImageUrl);
+  const heroBackgroundStyle = heroImageLoadState === "loaded" && heroImageUrl
+    ? { backgroundImage: `linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('${heroImageUrl}')` }
+    : { backgroundImage: getFallbackGradient(title?.genreDisplay) };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>
@@ -435,7 +440,7 @@ export function TitleQuickViewModal({
               <div className="relative">
                 <div
                   className="min-h-[20rem] rounded-[1.75rem] bg-cover bg-center"
-                  style={heroImageUrl ? { backgroundImage: `linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('${heroImageUrl}')` } : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
+                  style={heroBackgroundStyle}
                 />
                 {isComingSoon ? (
                   <span className="coming-soon-chip-overlay absolute left-4 top-4">

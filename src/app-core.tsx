@@ -1,4 +1,5 @@
 export * from "./app-core/shared";
+export * from "./app-core/media";
 export * from "./app-core/ui";
 export * from "./app-core/modals";
 export * from "./app-core/captcha";

@@ -156,6 +156,52 @@
     @apply flex items-center gap-3;
   }
 
+  .app-community-bar {
+    border-top: 1px solid rgba(120, 72, 18, 0.24);
+    background:
+      linear-gradient(180deg, rgba(255, 225, 148, 0.98), rgba(243, 177, 58, 0.96)),
+      radial-gradient(circle at top, rgba(255, 245, 194, 0.75), transparent 62%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 249, 224, 0.6),
+      0 8px 20px rgba(62, 34, 8, 0.12);
+  }
+
+  .app-community-bar-inner {
+    @apply mx-auto flex max-w-[108rem] flex-wrap items-center gap-3 px-4 py-2 sm:px-6 lg:px-8;
+  }
+
+  .app-community-chip {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.18em];
+    color: #fff8e0;
+    border: 1px solid rgba(89, 49, 10, 0.22);
+    background: linear-gradient(180deg, rgba(95, 58, 16, 0.82), rgba(66, 39, 10, 0.9));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 6px 14px rgba(59, 34, 8, 0.14);
+  }
+
+  .app-community-copy {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1;
+    min-width: 0;
+  }
+
+  .app-community-stat {
+    font-family: var(--font-display);
+    @apply text-base font-bold uppercase;
+    color: #241607;
+    letter-spacing: 0.04em;
+  }
+
+  .app-community-detail {
+    @apply text-[0.7rem] font-semibold uppercase tracking-[0.16em];
+    color: rgba(54, 32, 8, 0.82);
+  }
+
+  .app-community-separator {
+    @apply h-1.5 w-1.5 rounded-full;
+    background: rgba(82, 45, 10, 0.42);
+  }
+
   .app-icon-button {
     @apply inline-flex size-11 items-center justify-center rounded-full border border-white/15 text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-100;
   }
@@ -1287,6 +1333,23 @@
       padding: 0.95rem 1.15rem;
       font-size: 0.72rem;
       letter-spacing: 0.16em;
+    }
+
+    .app-community-bar-inner {
+      @apply gap-2 px-3 py-2;
+    }
+
+    .app-community-copy {
+      @apply gap-x-2;
+    }
+
+    .app-community-stat {
+      font-size: 0.92rem;
+    }
+
+    .app-community-detail {
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
     }
 
     .app-brand-title {

@@ -3,6 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent 
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import keyboardArrowLeftGlyph from "../assets/landing-glyphs/keyboard_arrow_left_24dp.svg?raw";
 import keyboardArrowRightGlyph from "../assets/landing-glyphs/keyboard_arrow_right_24dp.svg?raw";
+import { hasBeHomeBridge } from "../be-home-bridge";
 import {
   addStudioToPlayerFollows,
   addTitleToPlayerLibrary,
@@ -52,6 +53,8 @@ import {
   PLAYER_FILTER_MAX,
   PLAYER_FILTER_MIN,
   PlayerRangeField,
+  rememberCatalogMediaLoadFailure,
+  rememberCatalogMediaLoadSuccess,
   ShareTitleModal,
   StudioLinkIcon,
   trackAnalyticsEvent,
@@ -60,12 +63,15 @@ import {
   TitleNameHeading,
   TitlePlayerActionButtons,
   TitleQuickViewModal,
+  useCatalogMediaLoadState,
   useDocumentMetadata,
 } from "../app-core";
 
 type TitleShowcaseSelection =
   | { kind: "showcase"; showcaseMediaId: string }
   | { kind: "hero" };
+
+const embeddedShowcaseThumbnailImageLimit = 3;
 
 function GalleryArrowIcon({ markup }: { markup: string }) {
   return <span className="gallery-arrow-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
@@ -904,7 +910,10 @@ export function StudioDetailPage() {
   const [shareTarget, setShareTarget] = useState<{ displayName: string; shareUrl: string; shareHelperUrl: string } | null>(null);
   const [quickViewTarget, setQuickViewTarget] = useState<{ studioIdentifier: string; titleIdentifier: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"catalog" | "about">("catalog");
+  const [studioAvatarFailed, setStudioAvatarFailed] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  const studioAvatarUrl = studio && !studioAvatarFailed ? getStudioAvatarImageUrl(studio) : null;
+  const studioBannerLoadState = useCatalogMediaLoadState(studio?.bannerUrl);
 
   async function refreshPlayerState(): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
@@ -973,6 +982,10 @@ export function StudioDetailPage() {
   useEffect(() => {
     setActiveTab("catalog");
   }, [studioIdentifier]);
+
+  useEffect(() => {
+    setStudioAvatarFailed(false);
+  }, [studio?.id]);
 
   const availableGenres = useMemo(
     () => Array.from(new Set(titles.flatMap((title) => parseGenreTags(title.genreDisplay)))).sort((left, right) => left.localeCompare(right)),
@@ -1160,14 +1173,16 @@ export function StudioDetailPage() {
 
   const prominentStudioLinks = studio.links.filter((link) => isKnownStudioLink(link.url));
   const additionalStudioLinks = studio.links.filter((link) => !isKnownStudioLink(link.url));
-  const studioAvatarUrl = getStudioAvatarImageUrl(studio);
   const studioAvatarAspectRatio = getCatalogMediaAspectRatioValue(undefined, "studio_avatar");
   const studioFollowed = followedStudioIds.has(studio.id);
+  const studioBannerStyle = studioBannerLoadState === "loaded" && studio.bannerUrl
+    ? { backgroundImage: `url('${studio.bannerUrl}')` }
+    : { backgroundImage: getFallbackGradient(studio.description) };
 
   return (
     <section className="space-y-8">
       <section className="app-panel relative overflow-hidden p-0">
-        <div className="min-h-[13rem] bg-cover bg-center" style={studio.bannerUrl ? { backgroundImage: `url('${studio.bannerUrl}')` } : undefined}>
+        <div className="min-h-[13rem] bg-cover bg-center" style={studioBannerStyle}>
           <div className="h-full bg-[linear-gradient(120deg,rgba(8,10,18,0.88),rgba(8,10,18,0.52),rgba(8,10,18,0.82))] p-6 md:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-4xl space-y-4">
@@ -1201,7 +1216,18 @@ export function StudioDetailPage() {
               </div>
               {studioAvatarUrl ? (
                 <div className="surface-panel-strong w-20 shrink-0 overflow-hidden rounded-[1.5rem] shadow-[0_12px_32px_rgba(0,0,0,0.35)] md:w-24" style={{ aspectRatio: studioAvatarAspectRatio }}>
-                  <img className="h-full w-full object-cover" src={studioAvatarUrl} alt={`${studio.displayName} avatar`} />
+                  <img
+                    className="h-full w-full object-cover"
+                    src={studioAvatarUrl}
+                    alt={`${studio.displayName} avatar`}
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={() => rememberCatalogMediaLoadSuccess(studioAvatarUrl)}
+                    onError={() => {
+                      rememberCatalogMediaLoadFailure(studioAvatarUrl);
+                      setStudioAvatarFailed(true);
+                    }}
+                  />
                 </div>
               ) : null}
             </div>
@@ -1425,10 +1451,12 @@ export function TitleDetailPage() {
   const autoOpenedShareRef = useRef(false);
   const [selectedShowcase, setSelectedShowcase] = useState<TitleShowcaseSelection>({ kind: "hero" });
   const [managedStudioIds, setManagedStudioIds] = useState<Set<string>>(new Set());
+  const [failedPreviewImageUrls, setFailedPreviewImageUrls] = useState<Set<string>>(new Set());
   const thumbnailRailRef = useRef<HTMLDivElement | null>(null);
   const accessToken = session?.access_token ?? "";
   const playerAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "player") : false;
   const moderatorAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "moderator") : false;
+  const embeddedBoardShell = searchParams.get("embed") === "board" || hasBeHomeBridge();
 
   async function refreshPlayerState(nextTitleId: string): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
@@ -1503,6 +1531,7 @@ export function TitleDetailPage() {
     }
 
     setSelectedShowcase(resolveInitialShowcaseSelection(title));
+    setFailedPreviewImageUrls(new Set());
   }, [title]);
 
   useEffect(() => {
@@ -1530,10 +1559,16 @@ export function TitleDetailPage() {
     }
 
     const targetLeft = activeThumbnail.offsetLeft - Math.max(0, (rail.clientWidth - activeThumbnail.offsetWidth) / 2);
-    rail.scrollTo({
-      left: Math.max(0, Math.min(targetLeft, rail.scrollWidth - rail.clientWidth)),
-      behavior: "smooth",
-    });
+    const boundedLeft = Math.max(0, Math.min(targetLeft, rail.scrollWidth - rail.clientWidth));
+    if (typeof rail.scrollTo === "function") {
+      rail.scrollTo({
+        left: boundedLeft,
+        behavior: "smooth",
+      });
+      return;
+    }
+
+    rail.scrollLeft = boundedLeft;
   }, [selectedShowcase]);
 
   useEffect(() => {
@@ -1704,6 +1739,9 @@ export function TitleDetailPage() {
     (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
     title.cardImageUrl ??
     null;
+  const safeSelectedPreviewImageUrl = selectedPreviewImageUrl && !failedPreviewImageUrls.has(selectedPreviewImageUrl)
+    ? selectedPreviewImageUrl
+    : null;
   const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia.videoUrl);
   const spotlightThumbnails = showcaseMedia;
   const showPrimaryFallbackThumbnail = showcaseMedia.length === 0 && Boolean(heroImageUrl);
@@ -1718,7 +1756,28 @@ export function TitleDetailPage() {
     }
 
     const scrollAmount = Math.max(rail.clientWidth * 0.72, 220);
-    rail.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+    if (typeof rail.scrollBy === "function") {
+      rail.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+      return;
+    }
+
+    rail.scrollLeft += direction * scrollAmount;
+  }
+
+  function rememberFailedPreviewImage(url: string | null | undefined): void {
+    if (!url) {
+      return;
+    }
+
+    setFailedPreviewImageUrls((current) => {
+      if (current.has(url)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.add(url);
+      return next;
+    });
   }
 
   return (
@@ -1728,13 +1787,20 @@ export function TitleDetailPage() {
           <div className="min-w-0 bg-[linear-gradient(160deg,rgba(14,25,45,0.96),rgba(7,11,19,0.98))] p-4 md:p-5">
             <div
               className="relative h-[18rem] overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/80 sm:h-[20rem] md:h-[23rem] lg:h-[26rem] xl:h-[32rem]"
-              style={selectedPreviewImageUrl ? undefined : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
+              style={safeSelectedPreviewImageUrl ? undefined : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
             >
-              {selectedPreviewImageUrl ? (
+              {safeSelectedPreviewImageUrl ? (
                 <img
                   className="h-full w-full bg-slate-950/45 object-contain xl:object-cover"
-                  src={selectedPreviewImageUrl}
+                  src={safeSelectedPreviewImageUrl}
                   alt={selectedShowcaseMedia?.altText ?? `${title.displayName} preview`}
+                  decoding="async"
+                  fetchPriority="high"
+                  onLoad={() => rememberCatalogMediaLoadSuccess(safeSelectedPreviewImageUrl)}
+                  onError={() => {
+                    rememberCatalogMediaLoadFailure(safeSelectedPreviewImageUrl);
+                    rememberFailedPreviewImage(safeSelectedPreviewImageUrl);
+                  }}
                 />
               ) : null}
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,15,0.06),rgba(5,8,15,0.08)_55%,rgba(5,8,15,0.62))]" />
@@ -1785,26 +1851,62 @@ export function TitleDetailPage() {
                     <button
                       className={`relative w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selectedShowcase.kind === "hero" ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
                       type="button"
+                      aria-label="Show hero preview"
                       data-showcase-selected={selectedShowcase.kind === "hero"}
                       style={{ aspectRatio: showcaseThumbnailAspectRatio }}
                       onClick={() => setSelectedShowcase({ kind: "hero" })}
                     >
-                      <img className="h-full w-full object-cover" src={heroImageUrl} alt={`${title.displayName} hero`} />
+                      <img
+                        className="h-full w-full object-cover"
+                        src={heroImageUrl}
+                        alt={`${title.displayName} hero`}
+                        loading="lazy"
+                        decoding="async"
+                        onLoad={() => rememberCatalogMediaLoadSuccess(heroImageUrl)}
+                        onError={() => rememberCatalogMediaLoadFailure(heroImageUrl)}
+                      />
                     </button>
                   ) : null}
-                  {spotlightThumbnails.map((mediaItem) => {
+                  {spotlightThumbnails.map((mediaItem, index) => {
                     const selected = selectedShowcase.kind === "showcase" && selectedShowcase.showcaseMediaId === mediaItem.id;
+                    const shouldRenderThumbnailImage = Boolean(mediaItem.imageUrl)
+                      && !failedPreviewImageUrls.has(mediaItem.imageUrl ?? "")
+                      && (!embeddedBoardShell || selected || index < embeddedShowcaseThumbnailImageLimit);
 
                     return (
                       <button
                         key={mediaItem.id}
                         className={`relative w-32 shrink-0 snap-start overflow-hidden rounded-[1rem] border ${selected ? "border-cyan-300/65 shadow-[0_0_0_1px_rgba(103,232,249,0.25)]" : "border-white/10"} bg-slate-950/80 transition hover:border-cyan-300/45 sm:w-36`}
                         type="button"
+                        aria-label={mediaItem.kind === "external_video" ? `Show video preview ${index + 1}` : `Show preview ${index + 1}`}
                         data-showcase-selected={selected}
                         style={{ aspectRatio: showcaseThumbnailAspectRatio }}
                         onClick={() => setSelectedShowcase({ kind: "showcase", showcaseMediaId: mediaItem.id })}
                       >
-                        {mediaItem.imageUrl ? <img className="h-full w-full object-cover" src={mediaItem.imageUrl} alt={mediaItem.altText ?? `${title.displayName} preview`} /> : null}
+                        {shouldRenderThumbnailImage ? (
+                          <img
+                            className="h-full w-full object-cover"
+                            src={mediaItem.imageUrl ?? undefined}
+                            alt={mediaItem.altText ?? `${title.displayName} preview`}
+                            loading="lazy"
+                            decoding="async"
+                            onLoad={() => rememberCatalogMediaLoadSuccess(mediaItem.imageUrl)}
+                            onError={() => {
+                              rememberCatalogMediaLoadFailure(mediaItem.imageUrl);
+                              rememberFailedPreviewImage(mediaItem.imageUrl);
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="grid h-full w-full place-items-center bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_30%),linear-gradient(180deg,rgba(10,14,24,0.9),rgba(5,8,15,0.98))]"
+                            style={{ backgroundImage: getFallbackGradient(title.genreDisplay) }}
+                            aria-hidden="true"
+                          >
+                            <span className="rounded-full border border-white/12 bg-slate-950/72 px-3 py-2 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white">
+                              {mediaItem.kind === "external_video" ? "Video" : `Preview ${index + 1}`}
+                            </span>
+                          </div>
+                        )}
                         {mediaItem.kind === "external_video" ? (
                           <span className="absolute inset-0 grid place-items-center bg-slate-950/22">
                             <span className="rounded-full border border-white/20 bg-slate-950/72 px-3 py-2 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white">Video</span>

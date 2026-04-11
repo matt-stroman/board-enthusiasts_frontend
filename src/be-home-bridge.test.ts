@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BE_HOME_AUTH_STATE_MESSAGE_TYPE,
   BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
+  BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
   hasBeHomeBridge,
   openBeHomeExternalUrl,
   publishBeHomeAuthState,
+  publishBeHomeRouteState,
 } from "./be-home-bridge";
 
 describe("BE Home bridge", () => {
@@ -73,6 +75,19 @@ describe("BE Home bridge", () => {
     expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
       type: BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
       url: "https://www.youtube.com/watch?v=demo",
+    });
+  });
+
+  it("publishes route state through the Unity bridge", () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    publishBeHomeRouteState("/browse/blue-harbor-games/lantern-drift?embed=board");
+
+    expect(unityCall).toHaveBeenCalledOnce();
+    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
+      type: BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
+      path: "/browse/blue-harbor-games/lantern-drift?embed=board",
     });
   });
 });

@@ -5,6 +5,7 @@ import type { PlatformRole } from "@board-enthusiasts/migration-contract";
  */
 export const BE_HOME_AUTH_STATE_MESSAGE_TYPE = "be-home-auth-state";
 export const BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE = "be-home-open-external-url";
+export const BE_HOME_ROUTE_STATE_MESSAGE_TYPE = "be-home-route-state";
 
 /**
  * Lightweight auth state snapshot mirrored from the hosted site into the BE Home shell.
@@ -22,6 +23,11 @@ interface BeHomeBridgeMessage extends BeHomeAuthStateSnapshot {
 interface BeHomeOpenExternalUrlMessage {
   type: typeof BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE;
   url: string;
+}
+
+interface BeHomeRouteStateMessage {
+  type: typeof BE_HOME_ROUTE_STATE_MESSAGE_TYPE;
+  path: string;
 }
 
 declare global {
@@ -55,20 +61,7 @@ export function publishBeHomeAuthState(snapshot: BeHomeAuthStateSnapshot): void 
     roles: snapshot.roles,
     displayName: snapshot.displayName,
   };
-  const message = JSON.stringify(payload);
-
-  try {
-    if (typeof window.Unity?.call === "function") {
-      window.Unity.call(message);
-      return;
-    }
-
-    if (typeof window.webkit?.messageHandlers?.unityControl?.postMessage === "function") {
-      window.webkit.messageHandlers.unityControl.postMessage(message);
-    }
-  } catch {
-    // Keep hosted auth resilient even if the embedding shell bridge is unavailable or rejects the message.
-  }
+  postBeHomeBridgeMessage(payload);
 }
 
 export function hasBeHomeBridge(): boolean {
@@ -89,6 +82,22 @@ export function openBeHomeExternalUrl(url: string): void {
     type: BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
     url,
   };
+  postBeHomeBridgeMessage(payload);
+}
+
+export function publishBeHomeRouteState(path: string): void {
+  if (typeof window === "undefined" || !path.trim()) {
+    return;
+  }
+
+  const payload: BeHomeRouteStateMessage = {
+    type: BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
+    path,
+  };
+  postBeHomeBridgeMessage(payload);
+}
+
+function postBeHomeBridgeMessage(payload: BeHomeBridgeMessage | BeHomeOpenExternalUrlMessage | BeHomeRouteStateMessage): void {
   const message = JSON.stringify(payload);
 
   try {
