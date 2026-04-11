@@ -149,11 +149,16 @@ function sendBeWebsitePresenceEndBeacon(sessionId: string): boolean {
   }
 }
 
-function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null {
+function useBeHomeCommunityPulse(enabled: boolean): {
+  metrics: BeHomeCommunityPulse | null;
+  refreshNow: () => void;
+} {
   const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
+  const refreshMetricsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!enabled) {
+      refreshMetricsRef.current = null;
       return;
     }
 
@@ -180,21 +185,42 @@ function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null 
       }
     }
 
+    refreshMetricsRef.current = () => {
+      void loadMetrics();
+    };
+
     void loadMetrics();
+    const bootstrapRefreshHandle = window.setTimeout(() => {
+      void loadMetrics();
+    }, 1_500);
     const refreshHandle = window.setInterval(() => {
       void loadMetrics();
     }, beCommunityMetricsRefreshMs);
 
     return () => {
       cancelled = true;
+      refreshMetricsRef.current = null;
+      window.clearTimeout(bootstrapRefreshHandle);
       window.clearInterval(refreshHandle);
     };
   }, [enabled]);
 
-  return metrics;
+  function refreshNow(): void {
+    refreshMetricsRef.current?.();
+  }
+
+  return {
+    metrics,
+    refreshNow,
+  };
 }
 
-function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed_in", pagePath: string): void {
+function useBeWebsitePresence(
+  enabled: boolean,
+  authState: "anonymous" | "signed_in",
+  pagePath: string,
+  onHeartbeatAccepted?: (() => void) | null,
+): void {
   const lastActivityAtRef = useRef<number>(Date.now());
   const lastHeartbeatAtRef = useRef<number>(0);
   const sessionIdRef = useRef<string | null>(null);
@@ -227,6 +253,7 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
           pagePath,
           appEnvironment: appConfig.appEnv,
         });
+        onHeartbeatAccepted?.();
       } catch {
         if (cancelled) {
           return;
@@ -291,7 +318,7 @@ function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(intervalHandle);
     };
-  }, [authState, enabled, pagePath]);
+  }, [authState, enabled, onHeartbeatAccepted, pagePath]);
 }
 
 function BeHomeCommunityBar({ metrics }: { metrics: BeHomeCommunityPulse | null }) {
@@ -355,7 +382,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
   const websitePresenceEnabled = !embeddedBoardShell && !hasBeHomeBridge();
-  useBeWebsitePresence(websitePresenceEnabled, session && currentUser ? "signed_in" : "anonymous", `${location.pathname}${location.search}`);
+  useBeWebsitePresence(
+    websitePresenceEnabled,
+    session && currentUser ? "signed_in" : "anonymous",
+    `${location.pathname}${location.search}`,
+    beHomeCommunityPulse.refreshNow,
+  );
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -738,7 +770,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             Get Board
           </a>
         </div>
-        <BeHomeCommunityBar metrics={beHomeCommunityPulse} />
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
         </header>
       ) : null}
 
@@ -809,7 +841,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
-  useBeWebsitePresence(!hasBeHomeBridge(), "anonymous", `${location.pathname}${location.search}`);
+  useBeWebsitePresence(!hasBeHomeBridge(), "anonymous", `${location.pathname}${location.search}`, beHomeCommunityPulse.refreshNow);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
@@ -856,7 +888,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Get Board</a>
           <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
         </nav>
-        <BeHomeCommunityBar metrics={beHomeCommunityPulse} />
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
       </header>
 
       <main className="app-main landing-main">
