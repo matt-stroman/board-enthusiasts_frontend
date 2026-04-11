@@ -507,8 +507,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    publishBeHomeRouteState(`${location.pathname}${location.search}`);
-  }, [location.pathname, location.search]);
+    publishBeHomeRouteState(`${location.pathname}${location.search}${location.hash}`);
+  }, [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !hasBeHomeBridge()) {

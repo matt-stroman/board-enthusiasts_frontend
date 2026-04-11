@@ -1051,7 +1051,7 @@ describe("App", () => {
     const unityCall = vi.fn();
     window.Unity = { call: unityCall };
 
-    renderApp("/browse?embed=board");
+    renderApp("/browse?embed=board#media");
 
     await screen.findByRole("textbox");
 
@@ -1059,7 +1059,7 @@ describe("App", () => {
       unityCall.mock.calls.some(([message]) => {
         const payload = JSON.parse(message as string) as { type?: string; path?: string };
         return payload.type === "be-home-route-state"
-          && payload.path === "/browse?embed=board";
+          && payload.path === "/browse?embed=board#media";
       }),
     ).toBe(true);
   });
@@ -2804,7 +2804,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Share title")).toBeVisible();
     expect(screen.queryByLabelText("Add to my games")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Report title")).not.toBeInTheDocument();
-    expect(screen.getByText("Reporting opens once this title has a release players can access.")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Player reporting" })).not.toBeInTheDocument();
   });
 
   it("keeps report actions on released title detail pages while also offering share", async () => {

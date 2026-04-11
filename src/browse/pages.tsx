@@ -2036,91 +2036,91 @@ export function TitleDetailPage() {
         ) : null}
       </section>
 
-      <section className={`grid gap-6 ${canViewMetadata ? "lg:grid-cols-[1.15fr_0.85fr]" : ""}`}>
-        <section className="app-panel p-6">
-          <h2 className="text-xl font-semibold text-white">Player reporting</h2>
-          {!showReportingSurface ? (
-            <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
-              <p>Reporting opens once this title has a release players can access.</p>
-            </div>
-          ) : !session ? (
-            <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
-              <p>Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>
-              <div className="mt-4">
-                <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(getTitleDetailPath(title.studioSlug, title.slug))}`}>
-                  Sign In
-                </Link>
-              </div>
-            </div>
-          ) : playerAccessEnabled ? (
-            existingReport ? (
-              <section className="surface-panel-soft mt-6 rounded-[1.25rem] p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Report status</div>
-                <div className="mt-2 text-lg font-semibold text-white">{formatReportStatus(existingReport.status)}</div>
-                <p className="mt-2 text-sm leading-7 text-slate-300">{existingReport.reason}</p>
-                <div className="mt-4">
-                  <Link className="secondary-button" to="/player?workflow=reported-titles">
-                    Open report thread
-                  </Link>
+      {showReportingSurface || canViewMetadata ? (
+        <section className={`grid gap-6 ${showReportingSurface && canViewMetadata ? "lg:grid-cols-[1.15fr_0.85fr]" : ""}`}>
+          {showReportingSurface ? (
+            <section className="app-panel p-6">
+              <h2 className="text-xl font-semibold text-white">Player reporting</h2>
+              {!session ? (
+                <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
+                  <p>Sign in to manage your library, save titles to your wishlist, and report issues to moderators.</p>
+                  <div className="mt-4">
+                    <Link className="primary-button" to={`/auth/signin?returnTo=${encodeURIComponent(getTitleDetailPath(title.studioSlug, title.slug))}`}>
+                      Sign In
+                    </Link>
+                  </div>
                 </div>
-              </section>
-            ) : (
-              <form className="mt-6 stack-form" onSubmit={handleCreateReport}>
-                <Field label="Report this title">
-                  <textarea
-                    id="title-report-field"
-                    rows={4}
-                    value={reportReason}
-                    onChange={(event) => setReportReason(event.currentTarget.value)}
-                    placeholder="Describe the issue moderators should review."
-                  />
-                </Field>
-                <div className="button-row">
-                  <button type="submit" className="primary-button" disabled={actionLoading || reportReason.trim().length === 0}>
-                    {actionLoading ? "Submitting..." : "Submit report"}
-                  </button>
+              ) : playerAccessEnabled ? (
+                existingReport ? (
+                  <section className="surface-panel-soft mt-6 rounded-[1.25rem] p-4">
+                    <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/70">Report status</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatReportStatus(existingReport.status)}</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-300">{existingReport.reason}</p>
+                    <div className="mt-4">
+                      <Link className="secondary-button" to="/player?workflow=reported-titles">
+                        Open report thread
+                      </Link>
+                    </div>
+                  </section>
+                ) : (
+                  <form className="mt-6 stack-form" onSubmit={handleCreateReport}>
+                    <Field label="Report this title">
+                      <textarea
+                        id="title-report-field"
+                        rows={4}
+                        value={reportReason}
+                        onChange={(event) => setReportReason(event.currentTarget.value)}
+                        placeholder="Describe the issue moderators should review."
+                      />
+                    </Field>
+                    <div className="button-row">
+                      <button type="submit" className="primary-button" disabled={actionLoading || reportReason.trim().length === 0}>
+                        {actionLoading ? "Submitting..." : "Submit report"}
+                      </button>
+                    </div>
+                  </form>
+                )
+              ) : (
+                <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
+                  <p>This account can sign in, but it is not set up for player features like library, wishlist, or title reporting yet.</p>
                 </div>
-              </form>
-            )
-          ) : (
-            <div className="surface-panel-strong mt-6 rounded-[1rem] p-4">
-              <p>This account can sign in, but it is not set up for player features like library, wishlist, or title reporting yet.</p>
-            </div>
-          )}
-        </section>
+              )}
+            </section>
+          ) : null}
 
-        {canViewMetadata ? (
-          <section className="app-panel p-6">
-            <h2>Metadata</h2>
-            <dl className="mt-6 grid gap-3 text-sm text-slate-300">
-              <div className="flex justify-between gap-4">
-                <dt>Visibility</dt>
-                <dd>{formatMembershipRole(title.visibility)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Lifecycle</dt>
-                <dd>{formatMembershipRole(title.lifecycleStatus)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Reported</dt>
-                <dd>{title.isReported ? "Yes" : "No"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Metadata revision</dt>
-                <dd>{title.currentMetadataRevision.toString()}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Media assets</dt>
-                <dd>{metadataMediaAssets || "None"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Updated</dt>
-                <dd>{formatTimestamp(title.updatedAt)}</dd>
-              </div>
-            </dl>
-          </section>
-        ) : null}
-      </section>
+          {canViewMetadata ? (
+            <section className="app-panel p-6">
+              <h2>Metadata</h2>
+              <dl className="mt-6 grid gap-3 text-sm text-slate-300">
+                <div className="flex justify-between gap-4">
+                  <dt>Visibility</dt>
+                  <dd>{formatMembershipRole(title.visibility)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Lifecycle</dt>
+                  <dd>{formatMembershipRole(title.lifecycleStatus)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Reported</dt>
+                  <dd>{title.isReported ? "Yes" : "No"}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Metadata revision</dt>
+                  <dd>{title.currentMetadataRevision.toString()}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Media assets</dt>
+                  <dd>{metadataMediaAssets || "None"}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Updated</dt>
+                  <dd>{formatTimestamp(title.updatedAt)}</dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
+        </section>
+      ) : null}
 
       {shareModalOpen ? (
         <ShareTitleModal
