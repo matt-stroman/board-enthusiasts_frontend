@@ -157,49 +157,63 @@
   }
 
   .app-community-bar {
-    border-top: 1px solid rgba(120, 72, 18, 0.24);
+    border-top: 1px solid rgba(120, 72, 18, 0.18);
     background:
-      linear-gradient(180deg, rgba(255, 225, 148, 0.98), rgba(243, 177, 58, 0.96)),
-      radial-gradient(circle at top, rgba(255, 245, 194, 0.75), transparent 62%);
+      linear-gradient(180deg, rgba(250, 225, 160, 0.9), rgba(228, 182, 90, 0.84)),
+      radial-gradient(circle at top, rgba(255, 244, 201, 0.42), transparent 60%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 249, 224, 0.6),
-      0 8px 20px rgba(62, 34, 8, 0.12);
+      inset 0 1px 0 rgba(255, 249, 224, 0.45),
+      0 3px 10px rgba(62, 34, 8, 0.08);
   }
 
   .app-community-bar-inner {
-    @apply mx-auto flex max-w-[108rem] flex-wrap items-center gap-3 px-4 py-2 sm:px-6 lg:px-8;
+    @apply mx-auto grid max-w-[108rem] items-center gap-3 px-4 py-2 sm:px-6 lg:px-8;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
 
   .app-community-chip {
-    @apply inline-flex items-center rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.18em];
-    color: #fff8e0;
-    border: 1px solid rgba(89, 49, 10, 0.22);
-    background: linear-gradient(180deg, rgba(95, 58, 16, 0.82), rgba(66, 39, 10, 0.9));
+    @apply inline-flex items-center rounded-full px-3 py-0.5 text-[0.63rem] font-bold uppercase tracking-[0.16em];
+    color: #fff9e8;
+    border: 1px solid rgba(89, 49, 10, 0.16);
+    background: linear-gradient(180deg, rgba(108, 72, 25, 0.74), rgba(82, 52, 18, 0.8));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      0 6px 14px rgba(59, 34, 8, 0.14);
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 3px 8px rgba(59, 34, 8, 0.1);
   }
 
-  .app-community-copy {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-1;
+  .app-community-side {
+    @apply flex items-center gap-3;
+    min-width: 0;
+  }
+
+  .app-community-side--website {
+    justify-content: flex-end;
+    text-align: right;
+  }
+
+  .app-community-center {
+    @apply flex items-center justify-center gap-3 text-center;
     min-width: 0;
   }
 
   .app-community-stat {
     font-family: var(--font-display);
-    @apply text-base font-bold uppercase;
-    color: #241607;
-    letter-spacing: 0.04em;
+    @apply text-[0.92rem] font-semibold;
+    color: #2f1c08;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
   }
 
   .app-community-detail {
-    @apply text-[0.7rem] font-semibold uppercase tracking-[0.16em];
-    color: rgba(54, 32, 8, 0.82);
+    @apply text-[0.66rem] font-medium tracking-[0.14em];
+    color: rgba(54, 32, 8, 0.74);
+    white-space: nowrap;
   }
 
-  .app-community-separator {
-    @apply h-1.5 w-1.5 rounded-full;
-    background: rgba(82, 45, 10, 0.42);
+  .app-community-center-copy {
+    @apply text-[0.72rem] font-semibold uppercase tracking-[0.18em];
+    color: rgba(54, 32, 8, 0.78);
+    white-space: nowrap;
   }
 
   .app-icon-button {
@@ -1316,6 +1330,19 @@
     }
   }
 
+  @media (max-width: 1100px) {
+    .app-community-bar-inner {
+      grid-template-columns: 1fr;
+    }
+
+    .app-community-side,
+    .app-community-side--website,
+    .app-community-center {
+      justify-content: center;
+      text-align: center;
+    }
+  }
+
   @media (max-width: 767px) {
     .app-main {
       @apply px-3 py-6;
@@ -1337,19 +1364,24 @@
 
     .app-community-bar-inner {
       @apply gap-2 px-3 py-2;
+      grid-template-columns: 1fr;
     }
 
-    .app-community-copy {
-      @apply gap-x-2;
+    .app-community-side,
+    .app-community-side--website,
+    .app-community-center {
+      justify-content: center;
+      text-align: center;
     }
 
     .app-community-stat {
-      font-size: 0.92rem;
+      font-size: 0.84rem;
     }
 
-    .app-community-detail {
-      font-size: 0.62rem;
-      letter-spacing: 0.12em;
+    .app-community-detail,
+    .app-community-center-copy {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
     }
 
     .app-brand-title {

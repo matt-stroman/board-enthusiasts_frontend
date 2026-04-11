@@ -60,6 +60,7 @@ const apiMocks = vi.hoisted(() => ({
   createMarketingSignup: vi.fn(),
   createSupportIssueReport: vi.fn(),
   getBeHomeMetrics: vi.fn(),
+  upsertBeWebsitePresence: vi.fn(),
   getHomeSpotlights: vi.fn(),
   getHomeOfferingSpotlights: vi.fn(),
   getBoardProfile: vi.fn(),
@@ -355,11 +356,25 @@ describe("App", () => {
         activeNowTotal: 12,
         activeNowAnonymous: 8,
         activeNowSignedIn: 4,
+        websiteActiveNowTotal: 6,
+        websiteActiveNowAnonymous: 5,
+        websiteActiveNowSignedIn: 1,
+        communityActiveNowTotal: 18,
         totalBoardsSeen: 42,
         dailyActiveDevices: 15,
         weeklyActiveDevices: 27,
         monthlyActiveDevices: 35,
         updatedAt: "2026-04-10T18:30:00Z",
+      },
+    });
+    apiMocks.upsertBeWebsitePresence.mockResolvedValue({
+      accepted: true,
+      session: {
+        sessionId: "website-session-1",
+        authState: "anonymous",
+        lastSeenAt: "2026-04-10T18:30:00Z",
+        heartbeatIntervalSeconds: 30,
+        activeTtlSeconds: 600,
       },
     });
     apiMocks.getHomeSpotlights.mockResolvedValue({ entries: [] });
@@ -884,7 +899,7 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Get Board" }).some((link) => link.getAttribute("href") === "https://board.fun/")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Join the Board Enthusiasts Discord" }).some((link) => link.getAttribute("href") === "https://discord.gg/cz2zReWqcA")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Sign In" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("12 players active in BE Home right now. This is a live BE Home community count, not an official Board platform metric.")).toBeVisible();
+    expect(screen.queryByText(/players active in BE Home right now/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "A better way to keep up with indie Board releases." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Featured offerings will appear here." })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Why BE exists" })).toBeVisible();
@@ -910,9 +925,25 @@ describe("App", () => {
   it("shows the BE Home community pulse bar in the shared site header", async () => {
     renderApp("/browse");
 
-    expect(await screen.findByText("BE Home Community")).toBeVisible();
-    expect(screen.getByText("12 active right now")).toBeVisible();
+    expect(await screen.findByText("BE Home")).toBeVisible();
+    expect(screen.getByText("BE Website")).toBeVisible();
+    expect(screen.getByText("18 active right now")).toBeVisible();
+    expect(screen.getByText("Welcome to the BE Community")).toBeVisible();
     expect(screen.getByText("8 anonymous · 4 signed in")).toBeVisible();
+    expect(screen.getByText("5 anonymous · 1 signed in")).toBeVisible();
+  });
+
+  it("posts website presence heartbeats from the web shell", async () => {
+    renderApp("/browse");
+
+    await waitFor(() => {
+      expect(apiMocks.upsertBeWebsitePresence).toHaveBeenCalledWith("http://127.0.0.1:8787", {
+        sessionId: expect.any(String),
+        authState: "anonymous",
+        pagePath: "/browse",
+        appEnvironment: "production",
+      });
+    });
   });
 
   it.each([

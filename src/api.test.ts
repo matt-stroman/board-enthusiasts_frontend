@@ -7,6 +7,7 @@ import {
   listAgeRatingAuthorities,
   listCatalogTitles,
   listGenres,
+  upsertBeWebsitePresence,
   verifyCurrentUserPassword,
 } from "./api";
 
@@ -283,6 +284,40 @@ describe("catalog API helpers", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8787/internal/be-home/metrics",
       expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+  });
+
+  it("posts BE website presence heartbeats to the internal metrics endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        accepted: true,
+        session: {
+          sessionId: "website-session-1",
+          authState: "anonymous",
+          lastSeenAt: "2026-04-10T18:30:00Z",
+          heartbeatIntervalSeconds: 30,
+          activeTtlSeconds: 600,
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await upsertBeWebsitePresence("http://127.0.0.1:8787", {
+      sessionId: "website-session-1",
+      authState: "anonymous",
+      pagePath: "/browse",
+      appEnvironment: "production",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/internal/be-home/website-presence",
+      expect.objectContaining({
+        method: "POST",
+        cache: "no-store",
         headers: expect.any(Headers),
       }),
     );

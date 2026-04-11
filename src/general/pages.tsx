@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FocusEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
-import { createMarketingSignup, createSupportIssueReport, getBeHomeMetrics, getHomeOfferingSpotlights, type HomeOfferingSpotlightEntry } from "../api";
+import { createMarketingSignup, createSupportIssueReport, getHomeOfferingSpotlights, type HomeOfferingSpotlightEntry } from "../api";
 import { useAuth } from "../auth";
 import { hasBeHomeBridge } from "../be-home-bridge";
 import {
@@ -946,29 +946,6 @@ export function HomePage() {
     description: liveMetadata.homeDescription,
     canonicalUrl: liveMetadata.homeCanonical,
   });
-  const [beHomeActiveNow, setBeHomeActiveNow] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadBeHomeMetrics(): Promise<void> {
-      try {
-        const response = await getBeHomeMetrics(appConfig.apiBaseUrl);
-        if (!cancelled) {
-          setBeHomeActiveNow(response.metrics.activeNowTotal);
-        }
-      } catch {
-        if (!cancelled) {
-          setBeHomeActiveNow(null);
-        }
-      }
-    }
-
-    void loadBeHomeMetrics();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <div className="landing-shell page-grid">
@@ -988,11 +965,6 @@ export function HomePage() {
                 <Link className="secondary-button" to="/offerings">Explore Offerings</Link>
                 <DiscordIconButton />
               </div>
-              {beHomeActiveNow !== null ? (
-                <p className="mt-4 text-sm leading-7 text-cyan-100">
-                  {beHomeActiveNow.toLocaleString()} players active in BE Home right now. This is a live BE Home community count, not an official Board platform metric.
-                </p>
-              ) : null}
               <p className="landing-hero-note">
                 Looking for official Board news, hardware, or platform information? Visit <a href={landingBoardUrl} target="_blank" rel="noreferrer">board.fun</a>.
               </p>

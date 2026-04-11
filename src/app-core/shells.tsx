@@ -1,7 +1,7 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
+import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead, upsertBeWebsitePresence } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import { hasBeHomeBridge, openBeHomeExternalUrl, publishBeHomeRouteState } from "../be-home-bridge";
 import {
@@ -102,10 +102,39 @@ function useScrollResponsiveHeader(resetKey: string): boolean {
 }
 
 type BeHomeCommunityPulse = {
-  activeNowTotal: number;
-  activeNowAnonymous: number;
-  activeNowSignedIn: number;
+  communityActiveNowTotal: number;
+  beHome: {
+    anonymous: number;
+    signedIn: number;
+  };
+  website: {
+    anonymous: number;
+    signedIn: number;
+  };
 };
+
+const beCommunityMetricsRefreshMs = 15_000;
+const beWebsitePresenceHeartbeatMs = 30_000;
+const beWebsitePresenceIdleMs = 10 * 60_000;
+const beWebsitePresenceSessionStorageKey = "be-website-presence-session-id";
+
+function getOrCreateBeWebsiteSessionId(): string {
+  if (typeof window === "undefined") {
+    return "server-render";
+  }
+
+  const existing = window.sessionStorage.getItem(beWebsitePresenceSessionStorageKey);
+  if (existing) {
+    return existing;
+  }
+
+  const nextValue =
+    typeof window.crypto?.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : `be-website-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  window.sessionStorage.setItem(beWebsitePresenceSessionStorageKey, nextValue);
+  return nextValue;
+}
 
 function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null {
   const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
@@ -122,9 +151,15 @@ function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null 
         const response = await getBeHomeMetrics(appConfig.apiBaseUrl);
         if (!cancelled) {
           setMetrics({
-            activeNowTotal: response.metrics.activeNowTotal,
-            activeNowAnonymous: response.metrics.activeNowAnonymous,
-            activeNowSignedIn: response.metrics.activeNowSignedIn,
+            communityActiveNowTotal: response.metrics.communityActiveNowTotal,
+            beHome: {
+              anonymous: response.metrics.activeNowAnonymous,
+              signedIn: response.metrics.activeNowSignedIn,
+            },
+            website: {
+              anonymous: response.metrics.websiteActiveNowAnonymous,
+              signedIn: response.metrics.websiteActiveNowSignedIn,
+            },
           });
         }
       } catch {
@@ -135,7 +170,7 @@ function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null 
     void loadMetrics();
     const refreshHandle = window.setInterval(() => {
       void loadMetrics();
-    }, 60_000);
+    }, beCommunityMetricsRefreshMs);
 
     return () => {
       cancelled = true;
@@ -146,24 +181,116 @@ function useBeHomeCommunityPulse(enabled: boolean): BeHomeCommunityPulse | null 
   return metrics;
 }
 
+function useBeWebsitePresence(enabled: boolean, authState: "anonymous" | "signed_in", pagePath: string): void {
+  const lastActivityAtRef = useRef<number>(Date.now());
+  const lastHeartbeatAtRef = useRef<number>(0);
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    sessionIdRef.current = sessionIdRef.current ?? getOrCreateBeWebsiteSessionId();
+    let cancelled = false;
+
+    async function sendHeartbeat(force: boolean): Promise<void> {
+      const now = Date.now();
+      const idleForMs = now - lastActivityAtRef.current;
+      if (!force && idleForMs > beWebsitePresenceIdleMs) {
+        return;
+      }
+
+      if (!force && now - lastHeartbeatAtRef.current < beWebsitePresenceHeartbeatMs) {
+        return;
+      }
+
+      lastHeartbeatAtRef.current = now;
+
+      try {
+        await upsertBeWebsitePresence(appConfig.apiBaseUrl, {
+          sessionId: sessionIdRef.current ?? getOrCreateBeWebsiteSessionId(),
+          authState,
+          pagePath,
+          appEnvironment: appConfig.appEnv,
+        });
+      } catch {
+        if (cancelled) {
+          return;
+        }
+      }
+    }
+
+    function recordActivity(forceHeartbeat: boolean): void {
+      const now = Date.now();
+      const wasIdle = now - lastActivityAtRef.current > beWebsitePresenceIdleMs;
+      lastActivityAtRef.current = now;
+
+      if (forceHeartbeat || wasIdle || now - lastHeartbeatAtRef.current >= beWebsitePresenceHeartbeatMs) {
+        void sendHeartbeat(true);
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        recordActivity(true);
+      }
+    };
+    const handleFocus = () => recordActivity(true);
+    const handlePointer = () => recordActivity(false);
+    const handleKeyDown = () => recordActivity(false);
+    const handleScroll = () => recordActivity(false);
+
+    recordActivity(true);
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pointerdown", handlePointer, { passive: true });
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const intervalHandle = window.setInterval(() => {
+      void sendHeartbeat(false);
+    }, beCommunityMetricsRefreshMs);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pointerdown", handlePointer);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(intervalHandle);
+    };
+  }, [authState, enabled, pagePath]);
+}
+
 function BeHomeCommunityBar({ metrics }: { metrics: BeHomeCommunityPulse | null }) {
   if (!metrics) {
     return null;
   }
 
-  const activeLabel = metrics.activeNowTotal === 1 ? "1 active right now" : `${metrics.activeNowTotal.toLocaleString()} active right now`;
-  const mixLabel = `${metrics.activeNowAnonymous.toLocaleString()} anonymous \u00b7 ${metrics.activeNowSignedIn.toLocaleString()} signed in`;
+  const communityLabel =
+    metrics.communityActiveNowTotal === 1
+      ? "1 active right now"
+      : `${metrics.communityActiveNowTotal.toLocaleString()} active right now`;
+  const beHomeLabel = `${metrics.beHome.anonymous.toLocaleString()} anonymous \u00b7 ${metrics.beHome.signedIn.toLocaleString()} signed in`;
+  const beWebsiteLabel = `${metrics.website.anonymous.toLocaleString()} anonymous \u00b7 ${metrics.website.signedIn.toLocaleString()} signed in`;
 
   return (
     <div className="app-community-bar" role="status" aria-live="polite">
       <div className="app-community-bar-inner">
-        <span className="app-community-chip">BE Home Community</span>
-        <div className="app-community-copy">
-          <strong className="app-community-stat">{activeLabel}</strong>
-          <span className="app-community-separator" aria-hidden="true" />
-          <span className="app-community-detail">{mixLabel}</span>
-          <span className="app-community-separator" aria-hidden="true" />
-          <span className="app-community-detail">Live independent BE Home metric</span>
+        <div className="app-community-side app-community-side--home">
+          <span className="app-community-chip">BE Home</span>
+          <span className="app-community-detail">{beHomeLabel}</span>
+        </div>
+        <div className="app-community-center">
+          <strong className="app-community-stat">{communityLabel}</strong>
+          <span className="app-community-center-copy">Welcome to the BE Community</span>
+        </div>
+        <div className="app-community-side app-community-side--website">
+          <span className="app-community-chip">BE Website</span>
+          <span className="app-community-detail">{beWebsiteLabel}</span>
         </div>
       </div>
     </div>
@@ -198,6 +325,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
+  useBeWebsitePresence(!embeddedBoardShell, session && currentUser ? "signed_in" : "anonymous", `${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -651,6 +779,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
+  useBeWebsitePresence(true, "anonymous", `${location.pathname}${location.search}`);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {

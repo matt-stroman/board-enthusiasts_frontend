@@ -144,6 +144,10 @@ export interface BeHomeMetrics {
   activeNowTotal: number;
   activeNowAnonymous: number;
   activeNowSignedIn: number;
+  websiteActiveNowTotal: number;
+  websiteActiveNowAnonymous: number;
+  websiteActiveNowSignedIn: number;
+  communityActiveNowTotal: number;
   totalBoardsSeen: number;
   dailyActiveDevices: number;
   weeklyActiveDevices: number;
@@ -153,6 +157,24 @@ export interface BeHomeMetrics {
 
 export interface BeHomeMetricsResponse {
   metrics: BeHomeMetrics;
+}
+
+export interface BeWebsitePresenceRequest {
+  sessionId: string;
+  authState?: "anonymous" | "signed_in" | null;
+  pagePath?: string | null;
+  appEnvironment?: string | null;
+}
+
+export interface BeWebsitePresenceResponse {
+  accepted: true;
+  session: {
+    sessionId: string;
+    authState: "anonymous" | "signed_in";
+    lastSeenAt: string;
+    heartbeatIntervalSeconds: number;
+    activeTtlSeconds: number;
+  };
 }
 
 function isTechnicalApiMessage(message: string): boolean {
@@ -303,6 +325,13 @@ export function getHomeOfferingSpotlights(apiBaseUrl: string): Promise<HomeOffer
 
 export function getBeHomeMetrics(apiBaseUrl: string): Promise<BeHomeMetricsResponse> {
   return apiFetch<BeHomeMetricsResponse>(apiBaseUrl, "/internal/be-home/metrics");
+}
+
+export function upsertBeWebsitePresence(apiBaseUrl: string, request: BeWebsitePresenceRequest): Promise<BeWebsitePresenceResponse> {
+  return apiFetch<BeWebsitePresenceResponse>(apiBaseUrl, "/internal/be-home/website-presence", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }
 
 export function listGenres(apiBaseUrl: string): Promise<GenreListResponse> {
