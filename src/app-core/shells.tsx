@@ -1,7 +1,7 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
+import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead, subscribeToBeCommunityMetrics } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import { hasBeHomeBridge, openBeHomeExternalUrl, publishBeHomeRouteState } from "../be-home-bridge";
 import {
@@ -161,6 +161,16 @@ function useBeHomeCommunityPulse(enabled: boolean): {
     return () => {
       cancelled = true;
     };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    return subscribeToBeCommunityMetrics((nextMetrics) => {
+      setMetrics(mapBeHomeMetricsToPulse(nextMetrics));
+    });
   }, [enabled]);
 
   return {

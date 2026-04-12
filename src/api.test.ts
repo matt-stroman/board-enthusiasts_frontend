@@ -8,6 +8,7 @@ import {
   listAgeRatingAuthorities,
   listCatalogTitles,
   listGenres,
+  subscribeToBeCommunityMetrics,
   upsertBeWebsitePresence,
   verifyCurrentUserPassword,
 } from "./api";
@@ -86,6 +87,7 @@ describe("catalog API helpers", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers(),
       json: async () => ({
         metrics: {
           activeNowTotal: 12,
@@ -110,6 +112,7 @@ describe("catalog API helpers", () => {
     await getBeHomeMetrics("http://127.0.0.1:8787");
 
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get("x-be-accept-community-metrics")).toBe("1");
     expect(headers.get("x-be-website-session-id")).toBeTruthy();
     expect(headers.get("x-be-website-auth-state")).toBe("anonymous");
     expect(headers.get("x-be-page-path")).toBe("/browse?sort=featured");
@@ -298,6 +301,7 @@ describe("catalog API helpers", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers(),
       json: async () => ({
         metrics: {
           activeNowTotal: 12,
@@ -327,6 +331,7 @@ describe("catalog API helpers", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 202,
+      headers: new Headers(),
       json: async () => ({
         accepted: true,
         session: {
@@ -375,6 +380,7 @@ describe("catalog API helpers", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 202,
+      headers: new Headers(),
       json: async () => ({
         accepted: true,
         session: {
@@ -396,6 +402,65 @@ describe("catalog API helpers", () => {
         headers: expect.any(Headers),
       }),
     );
+  });
+
+  it("publishes updated community metrics from response headers", async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToBeCommunityMetrics(listener);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        "x-be-active-now-total": "12",
+        "x-be-active-now-anonymous": "8",
+        "x-be-active-now-signed-in": "4",
+        "x-be-website-active-now-total": "6",
+        "x-be-website-active-now-anonymous": "5",
+        "x-be-website-active-now-signed-in": "1",
+        "x-be-community-active-now-total": "18",
+        "x-be-total-boards-seen": "42",
+        "x-be-daily-active-devices": "15",
+        "x-be-weekly-active-devices": "27",
+        "x-be-monthly-active-devices": "35",
+        "x-be-metrics-updated-at": "2026-04-10T18:30:00Z",
+      }),
+      json: async () => ({
+        metrics: {
+          activeNowTotal: 12,
+          activeNowAnonymous: 8,
+          activeNowSignedIn: 4,
+          websiteActiveNowTotal: 6,
+          websiteActiveNowAnonymous: 5,
+          websiteActiveNowSignedIn: 1,
+          communityActiveNowTotal: 18,
+          totalBoardsSeen: 42,
+          dailyActiveDevices: 15,
+          weeklyActiveDevices: 27,
+          monthlyActiveDevices: 35,
+          updatedAt: "2026-04-10T18:30:00Z",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getBeHomeMetrics("http://127.0.0.1:8787");
+
+    expect(listener).toHaveBeenCalledWith({
+      activeNowTotal: 12,
+      activeNowAnonymous: 8,
+      activeNowSignedIn: 4,
+      websiteActiveNowTotal: 6,
+      websiteActiveNowAnonymous: 5,
+      websiteActiveNowSignedIn: 1,
+      communityActiveNowTotal: 18,
+      totalBoardsSeen: 42,
+      dailyActiveDevices: 15,
+      weeklyActiveDevices: 27,
+      monthlyActiveDevices: 35,
+      updatedAt: "2026-04-10T18:30:00Z",
+    });
+
+    unsubscribe();
   });
 
   it("surfaces the first validation error message from API validation payloads", async () => {

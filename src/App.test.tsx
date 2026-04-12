@@ -60,6 +60,7 @@ const apiMocks = vi.hoisted(() => ({
   createMarketingSignup: vi.fn(),
   createSupportIssueReport: vi.fn(),
   getBeHomeMetrics: vi.fn(),
+  subscribeToBeCommunityMetrics: vi.fn(() => () => undefined),
   upsertBeWebsitePresence: vi.fn(),
   endBeWebsitePresence: vi.fn(),
   getHomeSpotlights: vi.fn(),

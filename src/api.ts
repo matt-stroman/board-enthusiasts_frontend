@@ -186,7 +186,41 @@ export interface BePresenceEndResponse {
   };
 }
 
+const beCommunityMetricsEventName = "be-community-metrics";
 const beWebsitePresenceSessionStorageKey = "be-website-presence-session-id";
+const beCommunityMetricsOptInWindowMs = 5_000;
+
+let beCommunityMetricsOptInInitialized = false;
+let lastBeCommunityMetricsOptInAt = 0;
+
+function markBeCommunityMetricsOptIn(): void {
+  lastBeCommunityMetricsOptInAt = Date.now();
+}
+
+function ensureBeCommunityMetricsOptInMonitoring(): void {
+  if (typeof window === "undefined" || beCommunityMetricsOptInInitialized) {
+    return;
+  }
+
+  beCommunityMetricsOptInInitialized = true;
+  markBeCommunityMetricsOptIn();
+
+  const passiveListenerOptions = { passive: true } as const;
+  window.addEventListener("pointerdown", markBeCommunityMetricsOptIn, passiveListenerOptions);
+  window.addEventListener("keydown", markBeCommunityMetricsOptIn, passiveListenerOptions);
+  window.addEventListener("submit", markBeCommunityMetricsOptIn, passiveListenerOptions);
+  window.addEventListener("popstate", markBeCommunityMetricsOptIn, passiveListenerOptions);
+  window.addEventListener("pageshow", markBeCommunityMetricsOptIn, passiveListenerOptions);
+}
+
+function shouldIncludeBeCommunityMetrics(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  ensureBeCommunityMetricsOptInMonitoring();
+  return Date.now() - lastBeCommunityMetricsOptInAt <= beCommunityMetricsOptInWindowMs;
+}
 
 function getOrCreateBeWebsitePresenceSessionId(): string | null {
   if (typeof window === "undefined") {
@@ -212,9 +246,108 @@ function appendBeWebsitePresenceHeaders(headers: Headers, accessToken?: string |
     return;
   }
 
+  if (shouldIncludeBeCommunityMetrics()) {
+    headers.set("x-be-accept-community-metrics", "1");
+  }
   headers.set("x-be-website-session-id", sessionId);
   headers.set("x-be-website-auth-state", accessToken ? "signed_in" : "anonymous");
   headers.set("x-be-page-path", `${window.location.pathname}${window.location.search}`.slice(0, 512));
+}
+
+function readHeaderNumber(headers: Headers, name: string): number | null {
+  const rawValue = headers.get(name);
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readBeCommunityMetricsHeaders(headers: Headers): BeHomeMetrics | null {
+  const activeNowTotal = readHeaderNumber(headers, "x-be-active-now-total");
+  const activeNowAnonymous = readHeaderNumber(headers, "x-be-active-now-anonymous");
+  const activeNowSignedIn = readHeaderNumber(headers, "x-be-active-now-signed-in");
+  const websiteActiveNowTotal = readHeaderNumber(headers, "x-be-website-active-now-total");
+  const websiteActiveNowAnonymous = readHeaderNumber(headers, "x-be-website-active-now-anonymous");
+  const websiteActiveNowSignedIn = readHeaderNumber(headers, "x-be-website-active-now-signed-in");
+  const communityActiveNowTotal = readHeaderNumber(headers, "x-be-community-active-now-total");
+  const totalBoardsSeen = readHeaderNumber(headers, "x-be-total-boards-seen");
+  const dailyActiveDevices = readHeaderNumber(headers, "x-be-daily-active-devices");
+  const weeklyActiveDevices = readHeaderNumber(headers, "x-be-weekly-active-devices");
+  const monthlyActiveDevices = readHeaderNumber(headers, "x-be-monthly-active-devices");
+  const updatedAt = headers.get("x-be-metrics-updated-at");
+
+  if (
+    activeNowTotal === null ||
+    activeNowAnonymous === null ||
+    activeNowSignedIn === null ||
+    websiteActiveNowTotal === null ||
+    websiteActiveNowAnonymous === null ||
+    websiteActiveNowSignedIn === null ||
+    communityActiveNowTotal === null ||
+    totalBoardsSeen === null ||
+    dailyActiveDevices === null ||
+    weeklyActiveDevices === null ||
+    monthlyActiveDevices === null ||
+    !updatedAt
+  ) {
+    return null;
+  }
+
+  return {
+    activeNowTotal,
+    activeNowAnonymous,
+    activeNowSignedIn,
+    websiteActiveNowTotal,
+    websiteActiveNowAnonymous,
+    websiteActiveNowSignedIn,
+    communityActiveNowTotal,
+    totalBoardsSeen,
+    dailyActiveDevices,
+    weeklyActiveDevices,
+    monthlyActiveDevices,
+    updatedAt,
+  };
+}
+
+function toHeaders(headers: HeadersInit | Headers | undefined): Headers | null {
+  if (!headers) {
+    return null;
+  }
+
+  return headers instanceof Headers ? headers : new Headers(headers);
+}
+
+function publishBeCommunityMetricsFromHeaders(headers: HeadersInit | Headers | undefined): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const resolvedHeaders = toHeaders(headers);
+  if (!resolvedHeaders) {
+    return;
+  }
+
+  const metrics = readBeCommunityMetricsHeaders(resolvedHeaders);
+  if (!metrics) {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent<BeHomeMetrics>(beCommunityMetricsEventName, { detail: metrics }));
+}
+
+export function subscribeToBeCommunityMetrics(listener: (metrics: BeHomeMetrics) => void): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handler = (event: Event) => {
+    listener((event as CustomEvent<BeHomeMetrics>).detail);
+  };
+
+  window.addEventListener(beCommunityMetricsEventName, handler);
+  return () => window.removeEventListener(beCommunityMetricsEventName, handler);
 }
 
 function isTechnicalApiMessage(message: string): boolean {
@@ -267,6 +400,8 @@ export async function apiFetch<T>(
       { cause: error },
     );
   }
+
+  publishBeCommunityMetricsFromHeaders((response as Response & { headers?: HeadersInit }).headers);
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
