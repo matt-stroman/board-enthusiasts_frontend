@@ -175,6 +175,7 @@ export interface BeWebsitePresenceResponse {
     heartbeatIntervalSeconds: number;
     activeTtlSeconds: number;
   };
+  metrics: BeHomeMetrics;
 }
 
 export interface BePresenceEndResponse {
@@ -183,6 +184,37 @@ export interface BePresenceEndResponse {
     sessionId: string;
     endedAt: string;
   };
+}
+
+const beWebsitePresenceSessionStorageKey = "be-website-presence-session-id";
+
+function getOrCreateBeWebsitePresenceSessionId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const existing = window.sessionStorage.getItem(beWebsitePresenceSessionStorageKey);
+  if (existing) {
+    return existing;
+  }
+
+  const nextValue =
+    typeof window.crypto?.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : `be-website-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  window.sessionStorage.setItem(beWebsitePresenceSessionStorageKey, nextValue);
+  return nextValue;
+}
+
+function appendBeWebsitePresenceHeaders(headers: Headers, accessToken?: string | null): void {
+  const sessionId = getOrCreateBeWebsitePresenceSessionId();
+  if (!sessionId || typeof window === "undefined") {
+    return;
+  }
+
+  headers.set("x-be-website-session-id", sessionId);
+  headers.set("x-be-website-auth-state", accessToken ? "signed_in" : "anonymous");
+  headers.set("x-be-page-path", `${window.location.pathname}${window.location.search}`.slice(0, 512));
 }
 
 function isTechnicalApiMessage(message: string): boolean {
@@ -219,6 +251,8 @@ export async function apiFetch<T>(
   if (accessToken) {
     headers.set("authorization", `Bearer ${accessToken}`);
   }
+
+  appendBeWebsitePresenceHeaders(headers, accessToken);
 
   let response: Response;
   try {

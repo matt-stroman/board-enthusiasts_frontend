@@ -82,6 +82,39 @@ describe("catalog API helpers", () => {
     );
   });
 
+  it("adds passive website presence headers to maintained API requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        metrics: {
+          activeNowTotal: 12,
+          activeNowAnonymous: 8,
+          activeNowSignedIn: 4,
+          websiteActiveNowTotal: 6,
+          websiteActiveNowAnonymous: 5,
+          websiteActiveNowSignedIn: 1,
+          communityActiveNowTotal: 18,
+          totalBoardsSeen: 42,
+          dailyActiveDevices: 15,
+          weeklyActiveDevices: 27,
+          monthlyActiveDevices: 35,
+          updatedAt: "2026-04-10T18:30:00Z",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/browse?sort=featured");
+
+    await getBeHomeMetrics("http://127.0.0.1:8787");
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get("x-be-website-session-id")).toBeTruthy();
+    expect(headers.get("x-be-website-auth-state")).toBe("anonymous");
+    expect(headers.get("x-be-page-path")).toBe("/browse?sort=featured");
+  });
+
   it("requests the maintained age rating authority catalog from the dedicated endpoint", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -300,8 +333,22 @@ describe("catalog API helpers", () => {
           sessionId: "website-session-1",
           authState: "anonymous",
           lastSeenAt: "2026-04-10T18:30:00Z",
-          heartbeatIntervalSeconds: 30,
-          activeTtlSeconds: 600,
+          heartbeatIntervalSeconds: 300,
+          activeTtlSeconds: 900,
+        },
+        metrics: {
+          activeNowTotal: 12,
+          activeNowAnonymous: 8,
+          activeNowSignedIn: 4,
+          websiteActiveNowTotal: 6,
+          websiteActiveNowAnonymous: 5,
+          websiteActiveNowSignedIn: 1,
+          communityActiveNowTotal: 18,
+          totalBoardsSeen: 42,
+          dailyActiveDevices: 15,
+          weeklyActiveDevices: 27,
+          monthlyActiveDevices: 35,
+          updatedAt: "2026-04-10T18:30:00Z",
         },
       }),
     });

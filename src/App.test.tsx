@@ -378,8 +378,22 @@ describe("App", () => {
         sessionId: "website-session-1",
         authState: "anonymous",
         lastSeenAt: "2026-04-10T18:30:00Z",
-        heartbeatIntervalSeconds: 30,
-        activeTtlSeconds: 600,
+        heartbeatIntervalSeconds: 300,
+        activeTtlSeconds: 900,
+      },
+      metrics: {
+        activeNowTotal: 12,
+        activeNowAnonymous: 8,
+        activeNowSignedIn: 4,
+        websiteActiveNowTotal: 6,
+        websiteActiveNowAnonymous: 5,
+        websiteActiveNowSignedIn: 1,
+        communityActiveNowTotal: 18,
+        totalBoardsSeen: 42,
+        dailyActiveDevices: 15,
+        weeklyActiveDevices: 27,
+        monthlyActiveDevices: 35,
+        updatedAt: "2026-04-10T18:30:00Z",
       },
     });
     apiMocks.endBeWebsitePresence.mockResolvedValue({
@@ -942,19 +956,16 @@ describe("App", () => {
     expect(screen.getByText("Welcome to the BE Community")).toBeVisible();
     expect(screen.getByText("8 anonymous · 4 signed in")).toBeVisible();
     expect(screen.getByText("5 anonymous · 1 signed in")).toBeVisible();
+    expect(apiMocks.getBeHomeMetrics).toHaveBeenCalledOnce();
   });
 
-  it("posts website presence heartbeats from the web shell", async () => {
+  it("does not post dedicated website presence heartbeats from the web shell", async () => {
     renderApp("/browse");
 
     await waitFor(() => {
-      expect(apiMocks.upsertBeWebsitePresence).toHaveBeenCalledWith("http://127.0.0.1:8787", {
-        sessionId: expect.any(String),
-        authState: "anonymous",
-        pagePath: "/browse",
-        appEnvironment: "production",
-      });
+      expect(apiMocks.getBeHomeMetrics).toHaveBeenCalled();
     });
+    expect(apiMocks.upsertBeWebsitePresence).not.toHaveBeenCalled();
   });
 
   it("does not post website presence heartbeats when the BE Home bridge is present without embed mode", async () => {
@@ -2436,7 +2447,7 @@ describe("App", () => {
     expect(await screen.findAllByAltText("Lantern Drift preview 4")).toHaveLength(2);
   });
 
-  it("sends a website presence end beacon when the browser page exits", async () => {
+  it("does not send a dedicated website presence end beacon when the browser page exits", async () => {
     const sendBeacon = vi.fn().mockReturnValue(true);
     Object.defineProperty(window.navigator, "sendBeacon", {
       configurable: true,
@@ -2446,15 +2457,12 @@ describe("App", () => {
     renderApp("/browse");
 
     await waitFor(() => {
-      expect(apiMocks.upsertBeWebsitePresence).toHaveBeenCalled();
+      expect(apiMocks.getBeHomeMetrics).toHaveBeenCalled();
     });
 
     fireEvent(window, new Event("pagehide"));
 
-    expect(sendBeacon).toHaveBeenCalledWith(
-      "http://127.0.0.1:8787/internal/be-home/presence/end",
-      expect.stringContaining("\"sessionId\""),
-    );
+    expect(sendBeacon).not.toHaveBeenCalled();
     expect(apiMocks.endBeWebsitePresence).not.toHaveBeenCalled();
   });
 

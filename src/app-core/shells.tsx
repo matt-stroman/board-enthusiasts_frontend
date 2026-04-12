@@ -1,7 +1,7 @@
 import type { UserNotification } from "@board-enthusiasts/migration-contract";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { clearCurrentUserNotifications, endBeWebsitePresence, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead, upsertBeWebsitePresence } from "../api";
+import { clearCurrentUserNotifications, getBeHomeMetrics, getCurrentUserNotifications, markCurrentUserNotificationRead } from "../api";
 import { hasPlatformRole, useAuth } from "../auth";
 import { hasBeHomeBridge, openBeHomeExternalUrl, publishBeHomeRouteState } from "../be-home-bridge";
 import {
@@ -113,52 +113,33 @@ type BeHomeCommunityPulse = {
   };
 };
 
-const beCommunityMetricsRefreshMs = 15_000;
-const beWebsitePresenceHeartbeatMs = 30_000;
-const beWebsitePresenceIdleMs = 10 * 60_000;
-const beWebsitePresenceSessionStorageKey = "be-website-presence-session-id";
-
-function getOrCreateBeWebsiteSessionId(): string {
-  if (typeof window === "undefined") {
-    return "server-render";
-  }
-
-  const existing = window.sessionStorage.getItem(beWebsitePresenceSessionStorageKey);
-  if (existing) {
-    return existing;
-  }
-
-  const nextValue =
-    typeof window.crypto?.randomUUID === "function"
-      ? window.crypto.randomUUID()
-      : `be-website-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  window.sessionStorage.setItem(beWebsitePresenceSessionStorageKey, nextValue);
-  return nextValue;
-}
-
-function sendBeWebsitePresenceEndBeacon(sessionId: string): boolean {
-  if (typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") {
-    return false;
-  }
-
-  try {
-    const endpoint = `${appConfig.apiBaseUrl.replace(/\/$/, "")}/internal/be-home/presence/end`;
-    return navigator.sendBeacon(endpoint, JSON.stringify({ sessionId }));
-  } catch {
-    return false;
-  }
+function mapBeHomeMetricsToPulse(metrics: {
+  communityActiveNowTotal: number;
+  activeNowAnonymous: number;
+  activeNowSignedIn: number;
+  websiteActiveNowAnonymous: number;
+  websiteActiveNowSignedIn: number;
+}): BeHomeCommunityPulse {
+  return {
+    communityActiveNowTotal: metrics.communityActiveNowTotal,
+    beHome: {
+      anonymous: metrics.activeNowAnonymous,
+      signedIn: metrics.activeNowSignedIn,
+    },
+    website: {
+      anonymous: metrics.websiteActiveNowAnonymous,
+      signedIn: metrics.websiteActiveNowSignedIn,
+    },
+  };
 }
 
 function useBeHomeCommunityPulse(enabled: boolean): {
   metrics: BeHomeCommunityPulse | null;
-  refreshNow: () => void;
 } {
   const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
-  const refreshMetricsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!enabled) {
-      refreshMetricsRef.current = null;
       return;
     }
 
@@ -168,157 +149,23 @@ function useBeHomeCommunityPulse(enabled: boolean): {
       try {
         const response = await getBeHomeMetrics(appConfig.apiBaseUrl);
         if (!cancelled) {
-          setMetrics({
-            communityActiveNowTotal: response.metrics.communityActiveNowTotal,
-            beHome: {
-              anonymous: response.metrics.activeNowAnonymous,
-              signedIn: response.metrics.activeNowSignedIn,
-            },
-            website: {
-              anonymous: response.metrics.websiteActiveNowAnonymous,
-              signedIn: response.metrics.websiteActiveNowSignedIn,
-            },
-          });
+          setMetrics(mapBeHomeMetricsToPulse(response.metrics));
         }
       } catch {
         // Keep the last successful community pulse visible if refresh fails.
       }
     }
 
-    refreshMetricsRef.current = () => {
-      void loadMetrics();
-    };
-
     void loadMetrics();
-    const bootstrapRefreshHandle = window.setTimeout(() => {
-      void loadMetrics();
-    }, 1_500);
-    const refreshHandle = window.setInterval(() => {
-      void loadMetrics();
-    }, beCommunityMetricsRefreshMs);
 
     return () => {
       cancelled = true;
-      refreshMetricsRef.current = null;
-      window.clearTimeout(bootstrapRefreshHandle);
-      window.clearInterval(refreshHandle);
     };
   }, [enabled]);
 
-  function refreshNow(): void {
-    refreshMetricsRef.current?.();
-  }
-
   return {
     metrics,
-    refreshNow,
   };
-}
-
-function useBeWebsitePresence(
-  enabled: boolean,
-  authState: "anonymous" | "signed_in",
-  pagePath: string,
-  onHeartbeatAccepted?: (() => void) | null,
-): void {
-  const lastActivityAtRef = useRef<number>(Date.now());
-  const lastHeartbeatAtRef = useRef<number>(0);
-  const sessionIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!enabled || typeof window === "undefined" || typeof document === "undefined") {
-      return;
-    }
-
-    sessionIdRef.current = sessionIdRef.current ?? getOrCreateBeWebsiteSessionId();
-    let cancelled = false;
-
-    async function sendHeartbeat(force: boolean): Promise<void> {
-      const now = Date.now();
-      const idleForMs = now - lastActivityAtRef.current;
-      if (!force && idleForMs > beWebsitePresenceIdleMs) {
-        return;
-      }
-
-      if (!force && now - lastHeartbeatAtRef.current < beWebsitePresenceHeartbeatMs) {
-        return;
-      }
-
-      lastHeartbeatAtRef.current = now;
-
-      try {
-        await upsertBeWebsitePresence(appConfig.apiBaseUrl, {
-          sessionId: sessionIdRef.current ?? getOrCreateBeWebsiteSessionId(),
-          authState,
-          pagePath,
-          appEnvironment: appConfig.appEnv,
-        });
-        onHeartbeatAccepted?.();
-      } catch {
-        if (cancelled) {
-          return;
-        }
-      }
-    }
-
-    function recordActivity(forceHeartbeat: boolean): void {
-      const now = Date.now();
-      const wasIdle = now - lastActivityAtRef.current > beWebsitePresenceIdleMs;
-      lastActivityAtRef.current = now;
-
-      if (forceHeartbeat || wasIdle || now - lastHeartbeatAtRef.current >= beWebsitePresenceHeartbeatMs) {
-        void sendHeartbeat(true);
-      }
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        recordActivity(true);
-      }
-    };
-    const handleFocus = () => recordActivity(true);
-    const handlePointer = () => recordActivity(false);
-    const handleKeyDown = () => recordActivity(false);
-    const handleScroll = () => recordActivity(false);
-    const handlePageExit = () => {
-      const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        return;
-      }
-
-      if (sendBeWebsitePresenceEndBeacon(sessionId)) {
-        return;
-      }
-
-      void endBeWebsitePresence(appConfig.apiBaseUrl, sessionId, { keepalive: true });
-    };
-
-    recordActivity(true);
-
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pointerdown", handlePointer, { passive: true });
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("pagehide", handlePageExit);
-    window.addEventListener("beforeunload", handlePageExit);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    const intervalHandle = window.setInterval(() => {
-      void sendHeartbeat(false);
-    }, beCommunityMetricsRefreshMs);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pointerdown", handlePointer);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("pagehide", handlePageExit);
-      window.removeEventListener("beforeunload", handlePageExit);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.clearInterval(intervalHandle);
-    };
-  }, [authState, enabled, onHeartbeatAccepted, pagePath]);
 }
 
 function BeHomeCommunityBar({ metrics }: { metrics: BeHomeCommunityPulse | null }) {
@@ -381,13 +228,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
-  const websitePresenceEnabled = !embeddedBoardShell && !hasBeHomeBridge();
-  useBeWebsitePresence(
-    websitePresenceEnabled,
-    session && currentUser ? "signed_in" : "anonymous",
-    `${location.pathname}${location.search}`,
-    beHomeCommunityPulse.refreshNow,
-  );
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {
@@ -841,7 +681,6 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
-  useBeWebsitePresence(!hasBeHomeBridge(), "anonymous", `${location.pathname}${location.search}`, beHomeCommunityPulse.refreshNow);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
