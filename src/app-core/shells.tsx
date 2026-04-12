@@ -25,7 +25,50 @@ import { DiscordIconButton, LandingUpdatesLink } from "./site";
 import { ErrorPanel, LoadingPanel } from "./ui";
 import { passwordRecoveryRedirectStorageKey } from "../auth";
 
-const embeddedBoardShellStorageKey = "be-shell-embedded-surface";
+/**
+ * Session storage key that preserves Board-embedded shell routing across internal navigation.
+ */
+export const embeddedBoardShellStorageKey = "be-shell-embedded-surface";
+
+/**
+ * Determines whether the current route explicitly requested the Board-embedded shell.
+ *
+ * @param search The current location search string.
+ * @returns True when the route includes `embed=board`.
+ */
+export function isEmbeddedBoardShellRequested(search: string): boolean {
+  return new URLSearchParams(search).get("embed") === "board";
+}
+
+/**
+ * Determines whether the Board-embedded shell should currently be treated as active.
+ *
+ * @param search The current location search string.
+ * @returns True when the route explicitly requests the embedded shell or prior embedded navigation was preserved in session storage.
+ */
+export function isEmbeddedBoardShellActive(search: string): boolean {
+  return isEmbeddedBoardShellRequested(search) || readSessionStorageValue(embeddedBoardShellStorageKey) === "board";
+}
+
+/**
+ * Determines whether the current session is being hosted inside BE Home's thin-layer browse experience.
+ *
+ * @param search The current location search string.
+ * @returns True when the BE Home bridge is present or the embedded Board shell route family is active.
+ */
+export function isBeHomeThinLayerAccess(search: string): boolean {
+  return hasBeHomeBridge() || isEmbeddedBoardShellActive(search);
+}
+
+/**
+ * Resolves the browse route that unsupported BE Home thin-layer pages should fall back to.
+ *
+ * @param search The current location search string.
+ * @returns The browse route that preserves embedded shell mode when it is active.
+ */
+export function resolveBeHomeThinLayerBrowseRoute(search: string): string {
+  return isEmbeddedBoardShellActive(search) ? "/browse?embed=board" : "/browse";
+}
 
 function isDiscordInviteUrl(url: string): boolean {
   try {
@@ -214,17 +257,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { session, currentUser, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const embeddedBoardShellRequested = new URLSearchParams(location.search).get("embed") === "board";
+  const embeddedBoardShellRequested = isEmbeddedBoardShellRequested(location.search);
   const currentYear = new Date().getFullYear();
   const accessToken = session?.access_token ?? "";
   const homeShell = location.pathname === "/";
   const browseActive = isBrowsePath(location.pathname);
   const offeringsActive = location.pathname.startsWith("/offerings");
   const installActive = location.pathname.startsWith("/install-guide");
-  const embeddedBoardShell = embeddedBoardShellRequested || readSessionStorageValue(embeddedBoardShellStorageKey) === "board";
+  const embeddedBoardShell = isEmbeddedBoardShellActive(location.search);
+  const beHomeThinLayerAccess = isBeHomeThinLayerAccess(location.search);
   const showSignedInSections = Boolean(session && currentUser);
   const accountReady = Boolean(currentUser);
-  const showModerateSection = currentUser ? hasPlatformRole(currentUser.roles, "moderator") : false;
+  const showModerateSection = currentUser ? hasPlatformRole(currentUser.roles, "moderator") && !beHomeThinLayerAccess : false;
   const avatarInitials = getInitials(currentUser?.displayName ?? currentUser?.email);
   const signInHref = `/auth/signin?returnTo=${encodeURIComponent(location.pathname)}`;
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -235,7 +279,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [notificationError, setNotificationError] = useState<string | null>(null);
 
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
-  const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
+  const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") && !beHomeThinLayerAccess : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell, accessToken || null);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
@@ -418,19 +462,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link to="/offerings" className={navLinkClass(offeringsActive)}>
               Offerings
             </Link>
-            {showSignedInSections ? (
-              <>
-                <NavLink to="/player" className={({ isActive }) => navLinkClass(isActive)}>
-                  Play
-                </NavLink>
+          {showSignedInSections ? (
+            <>
+              <NavLink to="/player" className={({ isActive }) => navLinkClass(isActive)}>
+                Play
+              </NavLink>
+              {showDeveloperSection ? (
                 <NavLink to="/developer" className={({ isActive }) => navLinkClass(isActive)}>
                   Develop
                 </NavLink>
-                {showModerateSection ? (
-                  <NavLink to="/moderate" className={({ isActive }) => navLinkClass(isActive)}>
-                    Moderate
-                  </NavLink>
-                ) : null}
+              ) : null}
+              {showModerateSection ? (
+                <NavLink to="/moderate" className={({ isActive }) => navLinkClass(isActive)}>
+                  Moderate
+                </NavLink>
+              ) : null}
               </>
             ) : null}
             {!homeShell ? (
@@ -601,9 +647,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <NavLink to="/player" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
                 Play
               </NavLink>
-              <NavLink to="/developer" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
-                Develop
-              </NavLink>
+              {showDeveloperSection ? (
+                <NavLink to="/developer" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
+                  Develop
+                </NavLink>
+              ) : null}
               {showModerateSection ? (
                 <NavLink to="/moderate" className={({ isActive }) => `${navLinkClass(isActive)} whitespace-nowrap`}>
                   Moderate

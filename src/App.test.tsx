@@ -1012,19 +1012,32 @@ describe("App", () => {
     expect(screen.queryByText("Route not found")).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["/player?embed=board", "player", "My Games", "/player?embed=board"],
-    ["/developer?embed=board", "player", "Become a Developer", "/developer?domain=studios&workflow=studios-overview"],
-    ["/moderate?embed=board", "moderator", "Moderate", "/moderate?embed=board"],
-  ] as const)("keeps the embedded protected route %s mounted for BE Home", async (path, role, expectedHeading, expectedLocation) => {
-    setSignedInAuthState(role === "moderator" ? ["player", "moderator"] : ["player"]);
+  it("keeps the embedded player route mounted for BE Home", async () => {
+    setSignedInAuthState(["player"]);
     primePlayerWorkspaceApi();
 
-    renderAppWithLocation(path);
+    renderAppWithLocation("/player?embed=board");
 
-    expect(await screen.findByRole("heading", { name: expectedHeading })).toBeVisible();
-    expect(screen.getByTestId("location-display")).toHaveTextContent(expectedLocation);
+    expect(await screen.findByRole("heading", { name: "My Games" })).toBeVisible();
+    expect(screen.getByTestId("location-display")).toHaveTextContent("/player?embed=board");
     expect(screen.queryByText("Route not found")).not.toBeInTheDocument();
+  });
+
+  it("hides developer and moderate navigation when the full website is hosted inside BE Home", async () => {
+    window.Unity = { call: vi.fn() };
+    setSignedInAuthState(["player", "developer", "moderator"]);
+    primePlayerWorkspaceApi();
+
+    renderApp("/browse");
+
+    expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
+    expect(screen.queryAllByRole("link", { name: "Develop" })).toHaveLength(0);
+    expect(screen.queryAllByRole("link", { name: "Moderate" })).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("button", { name: /open account/i }));
+
+    expect(screen.queryByRole("button", { name: "Developer Console" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Moderate" })).not.toBeInTheDocument();
   });
 
   it("does not request the optional linked Board profile while loading the default player route", async () => {
