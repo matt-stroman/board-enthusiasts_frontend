@@ -690,7 +690,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const currentYear = new Date().getFullYear();
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
-  const beHomeCommunityPulse = useBeHomeCommunityPulse(true);
+  const beHomeCommunityPulse = useBeHomeCommunityPulse(true, null);
   usePageAnalytics(`${location.pathname}${location.search}`, "anonymous");
 
   useEffect(() => {
