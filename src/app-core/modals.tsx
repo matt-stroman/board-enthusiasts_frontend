@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Link, useLocation } from "react-router-dom";
 import copyGlyph from "../assets/title-action-icons/content_copy_24dp.svg?raw";
-import { hasBeHomeBridge, publishBeHomeDiagnostics } from "../be-home-bridge";
+import { hasBeHomeBridge } from "../be-home-bridge";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
@@ -31,6 +31,7 @@ import {
 import { trackAnalyticsEvent } from "./analytics";
 import { useCatalogMediaLoadState } from "./media";
 import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
+import { useBeHomeTimedDiagnostics } from "../use-be-home-timed-diagnostics";
 
 function tryGetUrlHost(value: string | null | undefined): string | null {
   if (!value) {
@@ -336,39 +337,6 @@ export function TitleQuickViewModal({
     });
   }, [currentUser, location.pathname, location.search, session, title]);
 
-  useEffect(() => {
-    if (!title || !hasBeHomeBridge()) {
-      return;
-    }
-
-    const heroImageUrl = getHeroImageUrl(title);
-    const showcaseMedia = title.showcaseMedia ?? [];
-
-    publishBeHomeDiagnostics({
-      surface: "quick-view",
-      route: `${location.pathname}${location.search}`,
-      titleId: title.id,
-      studioId: title.studioId,
-      studioSlug: title.studioSlug,
-      titleSlug: title.slug,
-      titleDisplayName: title.displayName,
-      studioDisplayName: title.studioDisplayName,
-      contentKind: title.contentKind,
-      selectedPreviewKind: "hero",
-      selectedPreviewHost: tryGetUrlHost(heroImageUrl),
-      heroImageHost: tryGetUrlHost(heroImageUrl),
-      cardImageHost: tryGetUrlHost(title.cardImageUrl),
-      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
-      showcaseMediaCount: showcaseMedia.length,
-      showcaseImageCount: showcaseMedia.filter((candidate) => candidate.kind !== "external_video").length,
-      showcaseVideoCount: showcaseMedia.filter((candidate) => candidate.kind === "external_video").length,
-      hasHeroImage: Boolean(heroImageUrl),
-      hasCardImage: Boolean(title.cardImageUrl),
-      hasLogoImage: Boolean(title.logoImageUrl),
-      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
-    });
-  }, [location.pathname, location.search, title]);
-
   async function handleLibraryToggle(nextIncluded: boolean): Promise<void> {
     if (!title || !accessToken) {
       return;
@@ -442,6 +410,36 @@ export function TitleQuickViewModal({
   const heroBackgroundStyle = heroImageLoadState === "loaded" && heroImageUrl
     ? { backgroundImage: `linear-gradient(135deg, rgba(4,19,29,0.16), rgba(4,19,29,0.58)), url('${heroImageUrl}')` }
     : { backgroundImage: getFallbackGradient(title?.genreDisplay) };
+
+  useBeHomeTimedDiagnostics({
+    enabled: Boolean(title) && hasBeHomeBridge(),
+    timelineKey: title ? `quick-view|${location.pathname}${location.search}|${title.id}` : "",
+    snapshot: title ? {
+      surface: "quick-view",
+      route: `${location.pathname}${location.search}`,
+      titleId: title.id,
+      studioId: title.studioId,
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      titleDisplayName: title.displayName,
+      studioDisplayName: title.studioDisplayName,
+      contentKind: title.contentKind,
+      selectedPreviewKind: "hero",
+      selectedPreviewHost: tryGetUrlHost(heroImageUrl),
+      heroImageHost: tryGetUrlHost(heroImageUrl),
+      cardImageHost: tryGetUrlHost(title.cardImageUrl),
+      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
+      showcaseMediaCount: (title.showcaseMedia ?? []).length,
+      showcaseImageCount: (title.showcaseMedia ?? []).filter((candidate) => candidate.kind !== "external_video").length,
+      showcaseVideoCount: (title.showcaseMedia ?? []).filter((candidate) => candidate.kind === "external_video").length,
+      heroImageLoadState,
+      selectedPreviewImageLoadState: heroImageLoadState,
+      hasHeroImage: Boolean(heroImageUrl),
+      hasCardImage: Boolean(title.cardImageUrl),
+      hasLogoImage: Boolean(title.logoImageUrl),
+      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
+    } : null,
+  });
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm md:p-8" onClick={onClose}>

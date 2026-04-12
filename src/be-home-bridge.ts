@@ -20,6 +20,11 @@ export interface BeHomeAuthStateSnapshot {
 export interface BeHomeDiagnosticsSnapshot {
   surface: string;
   route: string;
+  diagnosticsReason?: string | null;
+  surfaceAgeMs?: number;
+  documentVisibilityState?: string | null;
+  documentFocusState?: string | null;
+  networkState?: string | null;
   titleId?: string | null;
   studioId?: string | null;
   studioSlug?: string | null;
@@ -41,6 +46,8 @@ export interface BeHomeDiagnosticsSnapshot {
   searchQueryLength?: number;
   selectedStudiosCount?: number;
   selectedGenresCount?: number;
+  heroImageLoadState?: string | null;
+  selectedPreviewImageLoadState?: string | null;
   hasHeroImage?: boolean;
   hasCardImage?: boolean;
   hasLogoImage?: boolean;

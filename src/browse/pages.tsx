@@ -66,6 +66,7 @@ import {
   useCatalogMediaLoadState,
   useDocumentMetadata,
 } from "../app-core";
+import { useBeHomeTimedDiagnostics } from "../use-be-home-timed-diagnostics";
 
 type TitleShowcaseSelection =
   | { kind: "showcase"; showcaseMediaId: string }
@@ -1631,46 +1632,6 @@ export function TitleDetailPage() {
   }, [currentUser, location.pathname, location.search, session, title]);
 
   useEffect(() => {
-    if (!embeddedBoardShell || !title) {
-      return;
-    }
-
-    const showcaseMedia = title.showcaseMedia ?? [];
-    const selectedShowcaseMedia =
-      selectedShowcase.kind === "showcase" ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null : null;
-    const heroImageUrl = getPrimaryTitleShowcaseImageUrl(title);
-    const selectedPreviewUrl =
-      selectedShowcaseMedia?.imageUrl ??
-      (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
-      title.cardImageUrl ??
-      null;
-
-    publishBeHomeDiagnostics({
-      surface: "title-detail",
-      route: `${location.pathname}${location.search}`,
-      titleId: title.id,
-      studioId: title.studioId,
-      studioSlug: title.studioSlug,
-      titleSlug: title.slug,
-      titleDisplayName: title.displayName,
-      studioDisplayName: title.studioDisplayName,
-      contentKind: title.contentKind,
-      selectedPreviewKind: selectedShowcaseMedia?.kind ?? selectedShowcase.kind,
-      selectedPreviewHost: tryGetUrlHost(selectedShowcaseMedia?.videoUrl ?? selectedPreviewUrl),
-      heroImageHost: tryGetUrlHost(heroImageUrl),
-      cardImageHost: tryGetUrlHost(title.cardImageUrl),
-      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
-      showcaseMediaCount: showcaseMedia.length,
-      showcaseImageCount: showcaseMedia.filter((candidate) => candidate.kind !== "external_video").length,
-      showcaseVideoCount: showcaseMedia.filter((candidate) => candidate.kind === "external_video").length,
-      hasHeroImage: Boolean(heroImageUrl),
-      hasCardImage: Boolean(title.cardImageUrl),
-      hasLogoImage: Boolean(title.logoImageUrl),
-      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
-    });
-  }, [embeddedBoardShell, location.pathname, location.search, selectedShowcase, title]);
-
-  useEffect(() => {
     let cancelled = false;
 
     async function loadManagedStudios(): Promise<void> {
@@ -1783,6 +1744,52 @@ export function TitleDetailPage() {
     }
   }
 
+  const heroImageUrl = title ? getPrimaryTitleShowcaseImageUrl(title) : null;
+  const showcaseMedia = title?.showcaseMedia ?? [];
+  const selectedShowcaseMedia = title && selectedShowcase.kind === "showcase"
+    ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null
+    : null;
+  const selectedPreviewImageUrl =
+    selectedShowcaseMedia?.imageUrl ??
+    (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
+    title?.cardImageUrl ??
+    null;
+  const safeSelectedPreviewImageUrl = selectedPreviewImageUrl && !failedPreviewImageUrls.has(selectedPreviewImageUrl)
+    ? selectedPreviewImageUrl
+    : null;
+  const heroImageLoadState = useCatalogMediaLoadState(heroImageUrl);
+  const selectedPreviewImageLoadState = useCatalogMediaLoadState(safeSelectedPreviewImageUrl);
+
+  useBeHomeTimedDiagnostics({
+    enabled: embeddedBoardShell,
+    timelineKey: title ? `title-detail|${location.pathname}${location.search}|${title.id}|${selectedShowcase.kind === "showcase" ? selectedShowcase.showcaseMediaId : "hero"}` : "",
+    snapshot: title ? {
+      surface: "title-detail",
+      route: `${location.pathname}${location.search}`,
+      titleId: title.id,
+      studioId: title.studioId,
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      titleDisplayName: title.displayName,
+      studioDisplayName: title.studioDisplayName,
+      contentKind: title.contentKind,
+      selectedPreviewKind: selectedShowcaseMedia?.kind ?? selectedShowcase.kind,
+      selectedPreviewHost: tryGetUrlHost(selectedShowcaseMedia?.videoUrl ?? selectedPreviewImageUrl),
+      heroImageHost: tryGetUrlHost(heroImageUrl),
+      cardImageHost: tryGetUrlHost(title.cardImageUrl),
+      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
+      showcaseMediaCount: showcaseMedia.length,
+      showcaseImageCount: showcaseMedia.filter((candidate) => candidate.kind !== "external_video").length,
+      showcaseVideoCount: showcaseMedia.filter((candidate) => candidate.kind === "external_video").length,
+      heroImageLoadState,
+      selectedPreviewImageLoadState,
+      hasHeroImage: Boolean(heroImageUrl),
+      hasCardImage: Boolean(title.cardImageUrl),
+      hasLogoImage: Boolean(title.logoImageUrl),
+      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
+    } : null,
+  });
+
   if (loading) {
     return <LoadingPanel title="Loading title..." />;
   }
@@ -1795,7 +1802,6 @@ export function TitleDetailPage() {
     return <ErrorPanel title="Title not found" detail="The requested title could not be loaded." />;
   }
 
-  const heroImageUrl = getPrimaryTitleShowcaseImageUrl(title);
   const showcaseThumbnailAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_showcase");
   const canViewMetadata = moderatorAccessEnabled || managedStudioIds.has(title.studioId);
   const canViewCurrentReleasePanel = managedStudioIds.has(title.studioId);
@@ -1810,18 +1816,7 @@ export function TitleDetailPage() {
   ].filter((label): label is string => label !== null);
   const showOwnedAndReportActions = !isComingSoon;
   const showReportingSurface = !isComingSoon;
-  const showcaseMedia = title.showcaseMedia ?? [];
-  const selectedShowcaseMedia =
-    selectedShowcase.kind === "showcase" ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null : null;
-  const selectedPreviewImageUrl =
-    selectedShowcaseMedia?.imageUrl ??
-    (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
-    title.cardImageUrl ??
-    null;
-  const safeSelectedPreviewImageUrl = selectedPreviewImageUrl && !failedPreviewImageUrls.has(selectedPreviewImageUrl)
-    ? selectedPreviewImageUrl
-    : null;
-  const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia.videoUrl);
+  const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia?.videoUrl);
   const spotlightThumbnails = showcaseMedia;
   const showPrimaryFallbackThumbnail = showcaseMedia.length === 0 && Boolean(heroImageUrl);
   const galleryThumbnailCount = (showPrimaryFallbackThumbnail ? 1 : 0) + spotlightThumbnails.length;
