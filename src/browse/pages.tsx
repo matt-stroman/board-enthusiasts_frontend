@@ -1699,7 +1699,7 @@ export function TitleDetailPage() {
   }, [selectedShowcase]);
 
   useEffect(() => {
-    if (!title) {
+    if (!title || embeddedBoardShell) {
       return;
     }
 

@@ -1943,6 +1943,8 @@ describe("App", () => {
 
   it("publishes embedded title detail view events to the Unity host", async () => {
     const unityCall = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
     window.Unity = { call: unityCall };
     apiMocks.getCatalogTitle.mockResolvedValue({
       title: {
@@ -1992,6 +1994,11 @@ describe("App", () => {
         surface: "title-detail",
       });
     });
+
+    const analyticsPayloads = fetchMock.mock.calls
+      .filter(([url]) => url === "http://127.0.0.1:8787/analytics/events")
+      .map(([, init]) => JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}")));
+    expect(analyticsPayloads.some((payload) => payload.event === "title_detail_viewed")).toBe(false);
   });
 
   it("opens the share modal from a scanned helper link and can use the native share sheet on supported phones", async () => {
