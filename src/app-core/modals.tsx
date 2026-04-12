@@ -33,6 +33,12 @@ import { useCatalogMediaLoadState } from "./media";
 import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
 import { useBeHomeTimedDiagnostics } from "../use-be-home-timed-diagnostics";
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : Boolean(typeof error === "object" && error !== null && "name" in error && (error as { name?: string }).name === "AbortError");
+}
+
 function tryGetUrlHost(value: string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -262,52 +268,53 @@ export function TitleQuickViewModal({
     });
   }, [location.pathname, location.search, studioIdentifier, titleIdentifier]);
 
-  async function refreshPlayerState(nextTitleId: string): Promise<void> {
+  async function refreshPlayerState(nextTitleId: string, signal?: AbortSignal): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
+      setTitleInLibrary(false);
+      setTitleInWishlist(false);
+      setPlayerStateError(null);
+      setPlayerStateLoading(false);
       return;
     }
 
     setPlayerStateLoading(true);
     try {
       const [libraryResponse, wishlistResponse] = await Promise.all([
-        getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
-        getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
+        getPlayerLibrary(appConfig.apiBaseUrl, accessToken, signal),
+        getPlayerWishlist(appConfig.apiBaseUrl, accessToken, signal),
       ]);
       setTitleInLibrary(libraryResponse.titles.some((candidate) => candidate.id === nextTitleId));
       setTitleInWishlist(wishlistResponse.titles.some((candidate) => candidate.id === nextTitleId));
       setPlayerStateError(null);
     } catch (nextError) {
+      if (isAbortError(nextError)) {
+        return;
+      }
+
       setPlayerStateError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
-      setPlayerStateLoading(false);
+      if (!signal?.aborted) {
+        setPlayerStateLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null);
-        if (cancelled) {
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null, controller.signal);
+        setTitle(response.title);
+        setError(null);
+      } catch (nextError) {
+        if (isAbortError(nextError)) {
           return;
         }
 
-        setTitle(response.title);
-        if (accessToken && playerAccessEnabled) {
-          await refreshPlayerState(response.title.id);
-        } else {
-          setTitleInLibrary(false);
-          setTitleInWishlist(false);
-          setPlayerStateError(null);
-        }
-        setError(null);
-      } catch (nextError) {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : String(nextError));
-        }
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -325,11 +332,32 @@ export function TitleQuickViewModal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      cancelled = true;
+      controller.abort();
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [accessToken, onClose, playerAccessEnabled, studioIdentifier, titleIdentifier]);
+
+  useEffect(() => {
+    const nextTitleId = title?.id ?? "";
+    if (!nextTitleId || !accessToken || !playerAccessEnabled) {
+      setTitleInLibrary(false);
+      setTitleInWishlist(false);
+      setPlayerStateError(null);
+      setPlayerStateLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => {
+      void refreshPlayerState(nextTitleId, controller.signal);
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutHandle);
+    };
+  }, [accessToken, playerAccessEnabled, title?.id]);
 
   useEffect(() => {
     if (!title) {
@@ -547,7 +575,11 @@ export function TitleQuickViewModal({
                     <div className="mt-2 text-sm text-slate-300">{title.currentRelease?.version ?? "Not published"}</div>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Link className="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950" to={titleDetailPath}>
+                    <Link
+                      className="rounded-full bg-cyan-300 px-5 py-3 text-center text-sm font-bold uppercase tracking-[0.18em] text-slate-950"
+                      to={titleDetailPath}
+                      state={title ? { preloadedTitle: title } : null}
+                    >
                       Details
                     </Link>
                     {title.acquisition?.url ?? title.acquisitionUrl ? (

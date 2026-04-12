@@ -394,6 +394,12 @@ function isTechnicalApiMessage(message: string): boolean {
   ].some((pattern) => normalized.includes(pattern));
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : Boolean(typeof error === "object" && error !== null && "name" in error && (error as { name?: string }).name === "AbortError");
+}
+
 export async function apiFetch<T>(
   apiBaseUrl: string,
   path: string,
@@ -423,6 +429,10 @@ export async function apiFetch<T>(
       headers
     });
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
     throw new Error(
       "We couldn't reach Board Enthusiasts right now. Please check your connection and try again.",
       { cause: error },
@@ -516,8 +526,14 @@ export function listCatalogTitles(apiBaseUrl: string, query: CatalogTitleListQue
   return apiFetch<CatalogTitleListResponse>(apiBaseUrl, `/catalog?${searchParams.toString()}`);
 }
 
-export function getCatalogTitle(apiBaseUrl: string, studioIdentifier: string, titleIdentifier: string, accessToken?: string | null): Promise<CatalogTitleResponse> {
-  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioIdentifier}/${titleIdentifier}`, {}, accessToken ?? undefined);
+export function getCatalogTitle(
+  apiBaseUrl: string,
+  studioIdentifier: string,
+  titleIdentifier: string,
+  accessToken?: string | null,
+  signal?: AbortSignal
+): Promise<CatalogTitleResponse> {
+  return apiFetch<CatalogTitleResponse>(apiBaseUrl, `/catalog/${studioIdentifier}/${titleIdentifier}`, { signal }, accessToken ?? undefined);
 }
 
 export function getHomeSpotlights(apiBaseUrl: string): Promise<HomeSpotlightResponse> {
@@ -632,8 +648,8 @@ export function enrollAsDeveloper(apiBaseUrl: string, accessToken: string): Prom
   return apiFetch<DeveloperEnrollmentResponse>(apiBaseUrl, "/identity/me/developer-enrollment", { method: "POST" }, accessToken);
 }
 
-export function getPlayerLibrary(apiBaseUrl: string, accessToken: string): Promise<PlayerTitleListResponse> {
-  return apiFetch<PlayerTitleListResponse>(apiBaseUrl, "/player/library", {}, accessToken);
+export function getPlayerLibrary(apiBaseUrl: string, accessToken: string, signal?: AbortSignal): Promise<PlayerTitleListResponse> {
+  return apiFetch<PlayerTitleListResponse>(apiBaseUrl, "/player/library", { signal }, accessToken);
 }
 
 export function addTitleToPlayerLibrary(apiBaseUrl: string, accessToken: string, titleId: string): Promise<PlayerCollectionMutationResponse> {
@@ -644,8 +660,8 @@ export function removeTitleFromPlayerLibrary(apiBaseUrl: string, accessToken: st
   return apiFetch<PlayerCollectionMutationResponse>(apiBaseUrl, `/player/library/titles/${titleId}`, { method: "DELETE" }, accessToken);
 }
 
-export function getPlayerWishlist(apiBaseUrl: string, accessToken: string): Promise<PlayerTitleListResponse> {
-  return apiFetch<PlayerTitleListResponse>(apiBaseUrl, "/player/wishlist", {}, accessToken);
+export function getPlayerWishlist(apiBaseUrl: string, accessToken: string, signal?: AbortSignal): Promise<PlayerTitleListResponse> {
+  return apiFetch<PlayerTitleListResponse>(apiBaseUrl, "/player/wishlist", { signal }, accessToken);
 }
 
 export function addTitleToPlayerWishlist(apiBaseUrl: string, accessToken: string, titleId: string): Promise<PlayerCollectionMutationResponse> {
@@ -668,8 +684,8 @@ export function removeStudioFromPlayerFollows(apiBaseUrl: string, accessToken: s
   return apiFetch<PlayerStudioFollowMutationResponse>(apiBaseUrl, `/player/followed-studios/${studioId}`, { method: "DELETE" }, accessToken);
 }
 
-export function getPlayerTitleReports(apiBaseUrl: string, accessToken: string): Promise<PlayerTitleReportListResponse> {
-  return apiFetch<PlayerTitleReportListResponse>(apiBaseUrl, "/player/reports", {}, accessToken);
+export function getPlayerTitleReports(apiBaseUrl: string, accessToken: string, signal?: AbortSignal): Promise<PlayerTitleReportListResponse> {
+  return apiFetch<PlayerTitleReportListResponse>(apiBaseUrl, "/player/reports", { signal }, accessToken);
 }
 
 export function createPlayerTitleReport(apiBaseUrl: string, accessToken: string, request: CreatePlayerTitleReportRequest): Promise<PlayerTitleReportResponse> {
@@ -689,8 +705,8 @@ export function addPlayerTitleReportMessage(
   return apiFetch<TitleReportDetailResponse>(apiBaseUrl, `/player/reports/${reportId}/messages`, { method: "POST", body: JSON.stringify(request) }, accessToken);
 }
 
-export function listManagedStudios(apiBaseUrl: string, accessToken: string): Promise<DeveloperStudioListResponse> {
-  return apiFetch<DeveloperStudioListResponse>(apiBaseUrl, "/developer/studios", {}, accessToken);
+export function listManagedStudios(apiBaseUrl: string, accessToken: string, signal?: AbortSignal): Promise<DeveloperStudioListResponse> {
+  return apiFetch<DeveloperStudioListResponse>(apiBaseUrl, "/developer/studios", { signal }, accessToken);
 }
 
 export function listCatalogMediaTypes(apiBaseUrl: string, accessToken: string): Promise<CatalogMediaTypeListResponse> {

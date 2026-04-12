@@ -6,6 +6,7 @@ import {
   createSupportIssueReport,
   endBeWebsitePresence,
   getBeHomeMetrics,
+  getCatalogTitle,
   listAgeRatingAuthorities,
   listCatalogTitles,
   listGenres,
@@ -64,6 +65,37 @@ describe("catalog API helpers", () => {
         headers: expect.any(Headers),
       }),
     );
+  });
+
+  it("passes abort signals through title detail requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ title: { id: "title-1", studioId: "studio-1", studioSlug: "blue-harbor-games", slug: "lantern-drift" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await getCatalogTitle("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null, controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/catalog/blue-harbor-games/lantern-drift",
+      expect.objectContaining({
+        signal: controller.signal,
+      }),
+    );
+  });
+
+  it("does not translate aborted requests into generic connectivity errors", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new DOMException("The user aborted a request.", "AbortError"));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await expect(
+      getCatalogTitle("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", null, controller.signal),
+    ).rejects.toMatchObject({
+      name: "AbortError",
+    });
   });
 
   it("requests the maintained genre catalog from the dedicated endpoint", async () => {

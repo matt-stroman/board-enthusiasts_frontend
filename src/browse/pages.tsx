@@ -72,6 +72,30 @@ type TitleShowcaseSelection =
   | { kind: "showcase"; showcaseMediaId: string }
   | { kind: "hero" };
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : Boolean(typeof error === "object" && error !== null && "name" in error && (error as { name?: string }).name === "AbortError");
+}
+
+function doesTitleMatchRoute(
+  title: CatalogTitleResponse["title"] | null | undefined,
+  studioIdentifier: string,
+  titleIdentifier: string
+): boolean {
+  if (!title) {
+    return false;
+  }
+
+  return (
+    title.studioSlug === studioIdentifier ||
+    title.studioId === studioIdentifier
+  ) && (
+    title.slug === titleIdentifier ||
+    title.id === titleIdentifier
+  );
+}
+
 function GalleryArrowIcon({ markup }: { markup: string }) {
   return <span className="gallery-arrow-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: markup }} />;
 }
@@ -1476,8 +1500,12 @@ export function TitleDetailPage() {
   const params = useParams<{ studioSlug: string; titleSlug: string }>();
   const studioIdentifier = params.studioSlug ?? "";
   const titleIdentifier = params.titleSlug ?? "";
-  const [title, setTitle] = useState<CatalogTitleResponse["title"] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const preloadedTitle = useMemo(() => {
+    const nextTitle = (location.state as { preloadedTitle?: CatalogTitleResponse["title"] | null } | null)?.preloadedTitle ?? null;
+    return doesTitleMatchRoute(nextTitle, studioIdentifier, titleIdentifier) ? nextTitle : null;
+  }, [location.state, studioIdentifier, titleIdentifier]);
+  const [title, setTitle] = useState<CatalogTitleResponse["title"] | null>(preloadedTitle);
+  const [loading, setLoading] = useState(!preloadedTitle);
   const [error, setError] = useState<string | null>(null);
   const [playerStateLoading, setPlayerStateLoading] = useState(false);
   const [playerStateError, setPlayerStateError] = useState<string | null>(null);
@@ -1499,6 +1527,12 @@ export function TitleDetailPage() {
   const embeddedBoardShell = searchParams.get("embed") === "board" || hasBeHomeBridge();
 
   useEffect(() => {
+    setTitle(preloadedTitle);
+    setLoading(!preloadedTitle);
+    setError(null);
+  }, [preloadedTitle]);
+
+  useEffect(() => {
     if (!embeddedBoardShell) {
       return;
     }
@@ -1512,72 +1546,109 @@ export function TitleDetailPage() {
     });
   }, [embeddedBoardShell, location.pathname, location.search, studioIdentifier, titleIdentifier]);
 
-  async function refreshPlayerState(nextTitleId: string): Promise<void> {
+  async function refreshPlayerState(nextTitleId: string, signal?: AbortSignal): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
       setTitleInLibrary(false);
       setTitleInWishlist(false);
       setExistingReport(null);
       setPlayerStateError(null);
+      setPlayerStateLoading(false);
       return;
     }
 
     setPlayerStateLoading(true);
     try {
       const [libraryResponse, wishlistResponse, reportsResponse] = await Promise.all([
-        getPlayerLibrary(appConfig.apiBaseUrl, accessToken),
-        getPlayerWishlist(appConfig.apiBaseUrl, accessToken),
-        getPlayerTitleReports(appConfig.apiBaseUrl, accessToken),
+        getPlayerLibrary(appConfig.apiBaseUrl, accessToken, signal),
+        getPlayerWishlist(appConfig.apiBaseUrl, accessToken, signal),
+        getPlayerTitleReports(appConfig.apiBaseUrl, accessToken, signal),
       ]);
       setTitleInLibrary(libraryResponse.titles.some((candidate) => candidate.id === nextTitleId));
       setTitleInWishlist(wishlistResponse.titles.some((candidate) => candidate.id === nextTitleId));
       setExistingReport(reportsResponse.reports.find((candidate) => candidate.titleId === nextTitleId) ?? null);
       setPlayerStateError(null);
     } catch (nextError) {
+      if (isAbortError(nextError)) {
+        return;
+      }
+
       setPlayerStateError(getUserFacingErrorMessage(nextError, "We couldn't refresh your player details right now. Please try again."));
     } finally {
-      setPlayerStateLoading(false);
+      if (!signal?.aborted) {
+        setPlayerStateLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const refreshDelayMs = preloadedTitle ? 350 : 0;
 
     async function load(): Promise<void> {
       try {
-        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null);
-        if (cancelled) {
-          return;
+        if (!preloadedTitle) {
+          setLoading(true);
         }
 
+        const response = await getCatalogTitle(appConfig.apiBaseUrl, studioIdentifier, titleIdentifier, accessToken || null, controller.signal);
         setTitle(response.title);
         if (studioIdentifier !== response.title.studioSlug || titleIdentifier !== response.title.slug) {
           navigate({ pathname: getTitleDetailPath(response.title.studioSlug, response.title.slug), search: location.search }, { replace: true });
         }
-        if (accessToken && playerAccessEnabled) {
-          await refreshPlayerState(response.title.id);
-        } else {
-          setTitleInLibrary(false);
-          setTitleInWishlist(false);
-          setExistingReport(null);
-          setPlayerStateError(null);
-        }
         setError(null);
       } catch (nextError) {
-        if (!cancelled) {
-          setError(getUserFacingErrorMessage(nextError, "We couldn't load that title right now. Please try again."));
+        if (isAbortError(nextError)) {
+          return;
         }
+
+        setError(getUserFacingErrorMessage(nextError, "We couldn't load that title right now. Please try again."));
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     }
 
-    void load();
+    const timeoutHandle = window.setTimeout(() => {
+      void load();
+    }, refreshDelayMs);
+
     return () => {
-      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutHandle);
     };
-  }, [accessToken, location.search, navigate, playerAccessEnabled, studioIdentifier, titleIdentifier]);
+  }, [accessToken, location.search, navigate, preloadedTitle, studioIdentifier, titleIdentifier]);
+
+  useEffect(() => {
+    const nextTitleId = title?.id ?? "";
+    if (!nextTitleId) {
+      setTitleInLibrary(false);
+      setTitleInWishlist(false);
+      setExistingReport(null);
+      setPlayerStateError(null);
+      setPlayerStateLoading(false);
+      return;
+    }
+
+    if (!accessToken || !playerAccessEnabled) {
+      setTitleInLibrary(false);
+      setTitleInWishlist(false);
+      setExistingReport(null);
+      setPlayerStateError(null);
+      setPlayerStateLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => {
+      void refreshPlayerState(nextTitleId, controller.signal);
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutHandle);
+    };
+  }, [accessToken, playerAccessEnabled, title?.id]);
 
   useEffect(() => {
     if (!title) {
@@ -1646,7 +1717,10 @@ export function TitleDetailPage() {
   }, [currentUser, location.pathname, location.search, session, title]);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => {
+      void loadManagedStudios();
+    }, 500);
 
     async function loadManagedStudios(): Promise<void> {
       if (!accessToken || !currentUser || !hasPlatformRole(currentUser.roles, "developer")) {
@@ -1655,20 +1729,18 @@ export function TitleDetailPage() {
       }
 
       try {
-        const response = await listManagedStudios(appConfig.apiBaseUrl, accessToken);
-        if (!cancelled) {
-          setManagedStudioIds(new Set(response.studios.map((studio) => studio.id)));
-        }
-      } catch {
-        if (!cancelled) {
+        const response = await listManagedStudios(appConfig.apiBaseUrl, accessToken, controller.signal);
+        setManagedStudioIds(new Set(response.studios.map((studio) => studio.id)));
+      } catch (nextError) {
+        if (!isAbortError(nextError)) {
           setManagedStudioIds(new Set());
         }
       }
     }
 
-    void loadManagedStudios();
     return () => {
-      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutHandle);
     };
   }, [accessToken, currentUser]);
 
