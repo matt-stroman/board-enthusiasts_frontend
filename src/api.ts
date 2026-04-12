@@ -240,9 +240,37 @@ function getOrCreateBeWebsitePresenceSessionId(): string | null {
   return nextValue;
 }
 
+function isEmbeddedBeHomeRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return new URLSearchParams(window.location.search).get("embed") === "board" || typeof window.Unity !== "undefined";
+}
+
+export function readBeWebsitePresenceSessionId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.sessionStorage.getItem(beWebsitePresenceSessionStorageKey);
+}
+
+export function clearBeWebsitePresenceSession(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(beWebsitePresenceSessionStorageKey);
+}
+
 function appendBeWebsitePresenceHeaders(headers: Headers, accessToken?: string | null): void {
+  if (typeof window === "undefined" || isEmbeddedBeHomeRuntime()) {
+    return;
+  }
+
   const sessionId = getOrCreateBeWebsitePresenceSessionId();
-  if (!sessionId || typeof window === "undefined") {
+  if (!sessionId) {
     return;
   }
 
@@ -500,8 +528,8 @@ export function getHomeOfferingSpotlights(apiBaseUrl: string): Promise<HomeOffer
   return apiFetch<HomeOfferingSpotlightResponse>(apiBaseUrl, "/internal/home-offering-spotlights");
 }
 
-export function getBeHomeMetrics(apiBaseUrl: string): Promise<BeHomeMetricsResponse> {
-  return apiFetch<BeHomeMetricsResponse>(apiBaseUrl, "/internal/be-home/metrics");
+export function getBeHomeMetrics(apiBaseUrl: string, accessToken?: string | null): Promise<BeHomeMetricsResponse> {
+  return apiFetch<BeHomeMetricsResponse>(apiBaseUrl, "/internal/be-home/metrics", {}, accessToken ?? undefined);
 }
 
 export function upsertBeWebsitePresence(apiBaseUrl: string, request: BeWebsitePresenceRequest): Promise<BeWebsitePresenceResponse> {

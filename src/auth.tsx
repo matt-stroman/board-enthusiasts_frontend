@@ -1,7 +1,7 @@
 import type { CurrentUserResponse, PlatformRole } from "@board-enthusiasts/migration-contract";
 import { createClient, type Session, type SupabaseClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, getCurrentUser } from "./api";
+import { ApiError, clearBeWebsitePresenceSession, endBeWebsitePresence, getCurrentUser, readBeWebsitePresenceSessionId } from "./api";
 import { trackAnalyticsEvent } from "./app-core/analytics";
 import { getUserFacingErrorMessage } from "./app-core/errors";
 import { hasAuthRedirectCallbackParams, readAuthRedirectMode, writeSessionStorageValue } from "./app-core/shared";
@@ -265,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null);
     setAuthError(null);
     clearPendingOAuthState();
+    clearBeWebsitePresenceSession();
 
     for (const storageKey of getSupabaseStorageKeys(appConfig.supabaseUrl)) {
       try {
@@ -602,10 +603,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut(options?: { tolerateNetworkFailure?: boolean }): Promise<void> {
         clearPasswordRecoveryExpected();
+        const websitePresenceSessionId = readBeWebsitePresenceSessionId();
         try {
           const result = await supabase.auth.signOut();
           if (result.error) {
             throw new Error(getUserFacingErrorMessage(result.error));
+          }
+
+          if (websitePresenceSessionId) {
+            try {
+              await endBeWebsitePresence(appConfig.apiBaseUrl, websitePresenceSessionId, { keepalive: true });
+            } catch {
+              // Best-effort website presence cleanup should not block sign-out.
+            }
           }
         } catch (error) {
           if (!options?.tolerateNetworkFailure) {

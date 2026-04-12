@@ -133,7 +133,7 @@ function mapBeHomeMetricsToPulse(metrics: {
   };
 }
 
-function useBeHomeCommunityPulse(enabled: boolean): {
+function useBeHomeCommunityPulse(enabled: boolean, accessToken: string | null): {
   metrics: BeHomeCommunityPulse | null;
 } {
   const [metrics, setMetrics] = useState<BeHomeCommunityPulse | null>(null);
@@ -147,7 +147,7 @@ function useBeHomeCommunityPulse(enabled: boolean): {
 
     async function loadMetrics(): Promise<void> {
       try {
-        const response = await getBeHomeMetrics(appConfig.apiBaseUrl);
+        const response = await getBeHomeMetrics(appConfig.apiBaseUrl, accessToken || null);
         if (!cancelled) {
           setMetrics(mapBeHomeMetricsToPulse(response.metrics));
         }
@@ -161,7 +161,7 @@ function useBeHomeCommunityPulse(enabled: boolean): {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [accessToken, enabled]);
 
   useEffect(() => {
     if (!enabled) {
@@ -237,7 +237,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
   const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") : false;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
-  const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell);
+  const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell, accessToken || null);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");
 
   function navLinkClass(active: boolean): string {

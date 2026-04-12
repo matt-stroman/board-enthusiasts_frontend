@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  clearBeWebsitePresenceSession,
   createMarketingSignup,
   createSupportIssueReport,
   endBeWebsitePresence,
@@ -116,6 +117,79 @@ describe("catalog API helpers", () => {
     expect(headers.get("x-be-website-session-id")).toBeTruthy();
     expect(headers.get("x-be-website-auth-state")).toBe("anonymous");
     expect(headers.get("x-be-page-path")).toBe("/browse?sort=featured");
+  });
+
+  it("uses the active access token when requesting BE Home metrics", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => ({
+        metrics: {
+          activeNowTotal: 1,
+          activeNowAnonymous: 0,
+          activeNowSignedIn: 1,
+          websiteActiveNowTotal: 1,
+          websiteActiveNowAnonymous: 0,
+          websiteActiveNowSignedIn: 1,
+          communityActiveNowTotal: 2,
+          totalBoardsSeen: 1,
+          dailyActiveDevices: 1,
+          weeklyActiveDevices: 1,
+          monthlyActiveDevices: 1,
+          updatedAt: "2026-04-12T13:40:00Z",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getBeHomeMetrics("http://127.0.0.1:8787", "signed-in-token");
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get("authorization")).toBe("Bearer signed-in-token");
+    expect(headers.get("x-be-website-auth-state")).toBe("signed_in");
+  });
+
+  it("does not attach website presence headers when running inside BE Home", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => ({
+        metrics: {
+          activeNowTotal: 1,
+          activeNowAnonymous: 0,
+          activeNowSignedIn: 1,
+          websiteActiveNowTotal: 0,
+          websiteActiveNowAnonymous: 0,
+          websiteActiveNowSignedIn: 0,
+          communityActiveNowTotal: 1,
+          totalBoardsSeen: 1,
+          dailyActiveDevices: 1,
+          weeklyActiveDevices: 1,
+          monthlyActiveDevices: 1,
+          updatedAt: "2026-04-12T13:40:00Z",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/browse?embed=board");
+    window.Unity = { call: vi.fn() };
+
+    await getBeHomeMetrics("http://127.0.0.1:8787");
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get("x-be-website-session-id")).toBeNull();
+    expect(headers.get("x-be-website-auth-state")).toBeNull();
+    expect(headers.get("x-be-page-path")).toBeNull();
+  });
+
+  it("clears the browser website presence session id", () => {
+    window.sessionStorage.setItem("be-website-presence-session-id", "website-session-1");
+
+    clearBeWebsitePresenceSession();
+
+    expect(window.sessionStorage.getItem("be-website-presence-session-id")).toBeNull();
   });
 
   it("requests the maintained age rating authority catalog from the dedicated endpoint", async () => {
