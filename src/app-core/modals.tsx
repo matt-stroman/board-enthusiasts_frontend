@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Link, useLocation } from "react-router-dom";
 import copyGlyph from "../assets/title-action-icons/content_copy_24dp.svg?raw";
-import { hasBeHomeBridge } from "../be-home-bridge";
+import { hasBeHomeBridge, publishBeHomeDiagnostics } from "../be-home-bridge";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
@@ -247,6 +247,20 @@ export function TitleQuickViewModal({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const accessToken = session?.access_token ?? "";
   const playerAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "player") : false;
+
+  useEffect(() => {
+    if (!hasBeHomeBridge()) {
+      return;
+    }
+
+    publishBeHomeDiagnostics({
+      surface: "quick-view",
+      route: `${location.pathname}${location.search}`,
+      diagnosticsReason: "surface-navigation-start",
+      studioSlug: studioIdentifier || null,
+      titleSlug: titleIdentifier || null,
+    });
+  }, [location.pathname, location.search, studioIdentifier, titleIdentifier]);
 
   async function refreshPlayerState(nextTitleId: string): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {

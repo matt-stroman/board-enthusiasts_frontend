@@ -1498,6 +1498,20 @@ export function TitleDetailPage() {
   const moderatorAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "moderator") : false;
   const embeddedBoardShell = searchParams.get("embed") === "board" || hasBeHomeBridge();
 
+  useEffect(() => {
+    if (!embeddedBoardShell) {
+      return;
+    }
+
+    publishBeHomeDiagnostics({
+      surface: "title-detail",
+      route: `${location.pathname}${location.search}`,
+      diagnosticsReason: "surface-navigation-start",
+      studioSlug: studioIdentifier || null,
+      titleSlug: titleIdentifier || null,
+    });
+  }, [embeddedBoardShell, location.pathname, location.search, studioIdentifier, titleIdentifier]);
+
   async function refreshPlayerState(nextTitleId: string): Promise<void> {
     if (!accessToken || !playerAccessEnabled) {
       setTitleInLibrary(false);

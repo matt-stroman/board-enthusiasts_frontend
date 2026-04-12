@@ -1888,7 +1888,24 @@ describe("App", () => {
     expect(await screen.findByRole("dialog", { name: "Lantern Drift" })).toBeVisible();
 
     await waitFor(() => {
-      const diagnosticsMessage = getUnityBridgeMessages(unityCall).find((payload) => payload.type === "be-home-diagnostics" && payload.surface === "quick-view");
+      const navigationMessage = getUnityBridgeMessages(unityCall).find(
+        (payload) =>
+          payload.type === "be-home-diagnostics"
+          && payload.surface === "quick-view"
+          && payload.diagnosticsReason === "surface-navigation-start",
+      );
+      expect(navigationMessage).toMatchObject({
+        route: "/browse?embed=board",
+        studioSlug: "studio-1",
+        titleSlug: "title-1",
+      });
+
+      const diagnosticsMessage = getUnityBridgeMessages(unityCall).find(
+        (payload) =>
+          payload.type === "be-home-diagnostics"
+          && payload.surface === "quick-view"
+          && payload.diagnosticsReason === "surface-activated",
+      );
       expect(diagnosticsMessage).toMatchObject({
         route: "/browse?embed=board",
         titleId: "title-1",
@@ -2617,6 +2634,18 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
 
     await waitFor(() => {
+      const navigationMessage = getUnityBridgeMessages(unityCall).find(
+        (payload) =>
+          payload.type === "be-home-diagnostics"
+          && payload.surface === "title-detail"
+          && payload.diagnosticsReason === "surface-navigation-start",
+      );
+      expect(navigationMessage).toMatchObject({
+        route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+        studioSlug: "blue-harbor-games",
+        titleSlug: "lantern-drift",
+      });
+
       const diagnosticsMessages = getUnityBridgeMessages(unityCall).filter((payload) => payload.type === "be-home-diagnostics" && payload.surface === "title-detail");
       const diagnosticsMessage = diagnosticsMessages.at(-1);
       expect(diagnosticsMessage).toMatchObject({
