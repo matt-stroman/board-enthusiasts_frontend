@@ -1794,7 +1794,7 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.getByLabelText("Search")).toBeVisible();
     expect(within(quickViewDialog).getByLabelText("Share title")).toBeVisible();
-    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null);
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null, expect.any(AbortSignal));
 
     await userEvent.click(within(quickViewDialog).getByLabelText("Share title"));
 
@@ -2720,8 +2720,12 @@ describe("App", () => {
         titleSlug: "lantern-drift",
       });
 
-      const diagnosticsMessages = getUnityBridgeMessages(unityCall).filter((payload) => payload.type === "be-home-diagnostics" && payload.surface === "title-detail");
-      const diagnosticsMessage = diagnosticsMessages.at(-1);
+      const diagnosticsMessage = getUnityBridgeMessages(unityCall).find(
+        (payload) =>
+          payload.type === "be-home-diagnostics"
+          && payload.surface === "title-detail"
+          && payload.diagnosticsReason === "surface-activated",
+      );
       expect(diagnosticsMessage).toMatchObject({
         route: "/browse/blue-harbor-games/lantern-drift?embed=board",
         titleId: "title-1",
@@ -2729,8 +2733,8 @@ describe("App", () => {
         studioSlug: "blue-harbor-games",
         diagnosticsReason: "surface-activated",
         documentVisibilityState: "visible",
-        selectedPreviewKind: "image",
-        selectedPreviewHost: "media.example.com",
+        selectedPreviewKind: "hero",
+        selectedPreviewHost: "cdn.example.com",
         cardImageHost: "cdn.example.com",
         acquisitionHost: "publisher.example.com",
         showcaseMediaCount: 5,
@@ -2843,7 +2847,9 @@ describe("App", () => {
     renderApp("/browse/blue-harbor-games/lantern-drift");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Current release" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Current release" })).toBeVisible();
+    });
     expect(screen.getByText("Configured")).toBeVisible();
   });
 
@@ -2934,7 +2940,13 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
     expect(screen.queryByRole("link", { name: /Get title/i })).not.toBeInTheDocument();
-    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "blue-harbor-games", "lantern-drift", "player-token");
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787",
+      "blue-harbor-games",
+      "lantern-drift",
+      "player-token",
+      expect.any(AbortSignal),
+    );
   });
 
   it("hides library and report actions for coming-soon titles in browse cards and quick view", async () => {
@@ -3647,7 +3659,7 @@ describe("App", () => {
     renderAppWithLocation("/browse/studio-1/title-1");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null);
+    expect(apiMocks.getCatalogTitle).toHaveBeenCalledWith("http://127.0.0.1:8787", "studio-1", "title-1", null, expect.any(AbortSignal));
     await waitFor(() => {
       expect(screen.getByTestId("location-display")).toHaveTextContent("/browse/blue-harbor-games/lantern-drift");
     });
@@ -3783,7 +3795,9 @@ describe("App", () => {
 
     renderApp("/developer?domain=studios&workflow=studios-analytics&studioId=studio-1");
 
-    expect(await screen.findByRole("heading", { name: "Studio analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Studio analytics" })).toBeVisible();
+    });
     expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
     expect(screen.getByText("Follower count")).toBeVisible();
     expect(screen.getByText("42")).toBeVisible();
