@@ -10,6 +10,7 @@ import type {
 import { useId, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import shareGlyph from "../assets/title-action-icons/share_24dp.svg?raw";
+import visibilityGlyph from "../assets/title-action-icons/visibility_24dp.svg?raw";
 import { formatMediaUploadGuidance } from "../media-upload";
 import { rememberCatalogMediaLoadFailure, rememberCatalogMediaLoadSuccess, useCatalogMediaLoadState } from "./media";
 import { supportRoute } from "./errors";
@@ -37,6 +38,56 @@ import {
   getTitleLogoAsset,
   parseGenreTags,
 } from "./shared";
+
+type TitlePublicInterestChipKind = "views" | "wishlist" | "library";
+
+function TitleViewChipIcon() {
+  return <span className="inline-svg-icon h-4 w-4 shrink-0 translate-y-[0.5px]" aria-hidden="true" dangerouslySetInnerHTML={{ __html: visibilityGlyph }} />;
+}
+
+function TitleWishlistChipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-current stroke-current stroke-[1.6] -translate-y-[0.5px]" aria-hidden="true">
+      <path d="M12 21 4.7 13.8a4.9 4.9 0 0 1 6.9-6.9L12 7.3l.4-.4a4.9 4.9 0 0 1 6.9 6.9Z" />
+    </svg>
+  );
+}
+
+function TitleLibraryChipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2" aria-hidden="true">
+      <path d="m5 12 4.2 4.2L19 6.5" />
+    </svg>
+  );
+}
+
+export function TitlePublicInterestChip({
+  kind,
+  count,
+  label,
+}: {
+  kind: TitlePublicInterestChipKind;
+  count: number;
+  label: string;
+}) {
+  const icon = kind === "views"
+    ? <TitleViewChipIcon />
+    : kind === "wishlist"
+      ? <TitleWishlistChipIcon />
+      : <TitleLibraryChipIcon />;
+
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-slate-950/35 px-4 py-2 text-sm leading-none font-semibold text-white"
+      aria-label={label}
+      title={label}
+    >
+      <span className="inline-flex h-4 w-4 items-center justify-center text-white">{icon}</span>
+      <span className="inline-flex items-center self-stretch text-white/30" aria-hidden="true">|</span>
+      <span className="inline-flex items-center">{count}</span>
+    </span>
+  );
+}
 
 export function FilePicker({
   accept,

@@ -3,7 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent 
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import keyboardArrowLeftGlyph from "../assets/landing-glyphs/keyboard_arrow_left_24dp.svg?raw";
 import keyboardArrowRightGlyph from "../assets/landing-glyphs/keyboard_arrow_right_24dp.svg?raw";
-import { hasBeHomeBridge, publishBeHomeDiagnostics } from "../be-home-bridge";
+import { hasBeHomeBridge, publishBeHomeDiagnostics, publishBeHomeTitleDetailView } from "../be-home-bridge";
 import {
   addStudioToPlayerFollows,
   addTitleToPlayerLibrary,
@@ -32,6 +32,7 @@ import {
   Field,
   formatContentKindLabel,
   formatTitleLibraryInterestLabel,
+  formatTitleViewInterestLabel,
   formatTitleWishlistInterestLabel,
   getCatalogMediaAspectRatioValue,
   formatMembershipRole,
@@ -62,6 +63,7 @@ import {
   TitleCard,
   TitleNameHeading,
   TitlePlayerActionButtons,
+  TitlePublicInterestChip,
   TitleQuickViewModal,
   useCatalogMediaLoadState,
   useDocumentMetadata,
@@ -1651,7 +1653,7 @@ export function TitleDetailPage() {
   }, [accessToken, playerAccessEnabled, title?.id]);
 
   useEffect(() => {
-    if (!title) {
+    if (!title || embeddedBoardShell) {
       return;
     }
 
@@ -1714,7 +1716,21 @@ export function TitleDetailPage() {
         studioId: title.studioId,
       },
     });
-  }, [currentUser, location.pathname, location.search, session, title]);
+  }, [currentUser, embeddedBoardShell, location.pathname, location.search, session, title]);
+
+  useEffect(() => {
+    if (!title || !embeddedBoardShell || !hasBeHomeBridge()) {
+      return;
+    }
+
+    publishBeHomeTitleDetailView({
+      titleId: title.id,
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      route: `${location.pathname}${location.search}`,
+      surface: "title-detail",
+    });
+  }, [embeddedBoardShell, location.pathname, location.search, title]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1894,12 +1910,20 @@ export function TitleDetailPage() {
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
   const availabilityNote = getCatalogTitleAvailabilityNote(title);
   const isComingSoon = availabilityNote === "Coming soon";
+  const titleViewCount = title.viewCount ?? 0;
   const titleWishlistCount = title.wishlistCount ?? 0;
   const titleLibraryCount = title.libraryCount ?? 0;
   const publicInterestChips = [
-    titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
-    titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
-  ].filter((label): label is string => label !== null);
+    titleViewCount > 0
+      ? { kind: "views" as const, count: titleViewCount, label: formatTitleViewInterestLabel(titleViewCount) }
+      : null,
+    titleWishlistCount > 0
+      ? { kind: "wishlist" as const, count: titleWishlistCount, label: formatTitleWishlistInterestLabel(titleWishlistCount) }
+      : null,
+    titleLibraryCount > 0
+      ? { kind: "library" as const, count: titleLibraryCount, label: formatTitleLibraryInterestLabel(titleLibraryCount) }
+      : null,
+  ].filter((chip): chip is { kind: "views" | "wishlist" | "library"; count: number; label: string } => chip !== null);
   const showOwnedAndReportActions = !isComingSoon;
   const showReportingSurface = !isComingSoon;
   const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia?.videoUrl);
@@ -2102,10 +2126,13 @@ export function TitleDetailPage() {
                 <div className="mt-4 text-sm font-semibold uppercase tracking-[0.22em] text-cyan-100/75">{title.studioDisplayName}</div>
                 {publicInterestChips.length > 0 ? (
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {publicInterestChips.map((label) => (
-                      <div key={label} className="rounded-full border border-white/15 bg-slate-950/45 px-4 py-2 text-sm font-semibold text-slate-100">
-                        {label}
-                      </div>
+                    {publicInterestChips.map((chip) => (
+                      <TitlePublicInterestChip
+                        key={`${chip.kind}-${chip.count}`}
+                        kind={chip.kind}
+                        count={chip.count}
+                        label={chip.label}
+                      />
                     ))}
                   </div>
                 ) : null}

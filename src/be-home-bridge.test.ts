@@ -4,10 +4,12 @@ import {
   BE_HOME_DIAGNOSTICS_MESSAGE_TYPE,
   BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
   BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
+  BE_HOME_TITLE_DETAIL_VIEW_MESSAGE_TYPE,
   hasBeHomeBridge,
   openBeHomeExternalUrl,
   publishBeHomeAuthState,
   publishBeHomeDiagnostics,
+  publishBeHomeTitleDetailView,
   publishBeHomeRouteState,
 } from "./be-home-bridge";
 
@@ -135,6 +137,28 @@ describe("BE Home bridge", () => {
       showcaseVideoCount: 1,
       hasHeroImage: true,
       hasAcquisitionUrl: true,
+    });
+  });
+
+  it("publishes title detail view events through the Unity bridge", () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    publishBeHomeTitleDetailView({
+      titleId: "title-1",
+      studioSlug: "blue-harbor-games",
+      titleSlug: "lantern-drift",
+      route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+    });
+
+    expect(unityCall).toHaveBeenCalledOnce();
+    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
+      type: BE_HOME_TITLE_DETAIL_VIEW_MESSAGE_TYPE,
+      titleId: "title-1",
+      studioSlug: "blue-harbor-games",
+      titleSlug: "lantern-drift",
+      route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+      surface: "title-detail",
     });
   });
 });

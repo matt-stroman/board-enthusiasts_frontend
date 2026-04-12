@@ -18,6 +18,7 @@ import {
   appConfig,
   formatContentKindLabel,
   formatTitleLibraryInterestLabel,
+  formatTitleViewInterestLabel,
   formatTitleWishlistInterestLabel,
   getCatalogTitleAvailabilityNote,
   getFallbackGradient,
@@ -30,8 +31,14 @@ import {
 } from "./shared";
 import { trackAnalyticsEvent } from "./analytics";
 import { useCatalogMediaLoadState } from "./media";
-import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
+import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons, TitlePublicInterestChip } from "./ui";
 import { useBeHomeTimedDiagnostics } from "../use-be-home-timed-diagnostics";
+
+type PublicInterestChipModel = {
+  kind: "views" | "wishlist" | "library";
+  count: number;
+  label: string;
+};
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException
@@ -430,12 +437,20 @@ export function TitleQuickViewModal({
   const heroImageUrl = title ? getHeroImageUrl(title) : null;
   const availabilityNote = title ? getCatalogTitleAvailabilityNote(title) : null;
   const isComingSoon = availabilityNote === "Coming soon";
+  const titleViewCount = title?.viewCount ?? 0;
   const titleWishlistCount = title?.wishlistCount ?? 0;
   const titleLibraryCount = title?.libraryCount ?? 0;
   const publicInterestChips = [
-    titleWishlistCount > 0 ? formatTitleWishlistInterestLabel(titleWishlistCount) : null,
-    titleLibraryCount > 0 ? formatTitleLibraryInterestLabel(titleLibraryCount) : null,
-  ].filter((label): label is string => label !== null);
+    titleViewCount > 0
+      ? { kind: "views" as const, count: titleViewCount, label: formatTitleViewInterestLabel(titleViewCount) }
+      : null,
+    titleWishlistCount > 0
+      ? { kind: "wishlist" as const, count: titleWishlistCount, label: formatTitleWishlistInterestLabel(titleWishlistCount) }
+      : null,
+    titleLibraryCount > 0
+      ? { kind: "library" as const, count: titleLibraryCount, label: formatTitleLibraryInterestLabel(titleLibraryCount) }
+      : null,
+  ].filter((chip): chip is PublicInterestChipModel => chip !== null);
   const metadataChips = title
     ? [
         title.contentKind?.trim() ? formatContentKindLabel(title.contentKind) : null,
@@ -541,10 +556,13 @@ export function TitleQuickViewModal({
                 </div>
                 {publicInterestChips.length > 0 ? (
                   <div className="flex flex-wrap gap-3">
-                    {publicInterestChips.map((label) => (
-                      <div key={label} className="rounded-full border border-white/15 bg-slate-950/45 px-4 py-2 text-sm font-semibold text-slate-100">
-                        {label}
-                      </div>
+                    {publicInterestChips.map((chip) => (
+                      <TitlePublicInterestChip
+                        key={`${chip.kind}-${chip.count}`}
+                        kind={chip.kind}
+                        count={chip.count}
+                        label={chip.label}
+                      />
                     ))}
                   </div>
                 ) : null}

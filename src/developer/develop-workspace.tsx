@@ -4173,6 +4173,11 @@ export function DevelopWorkspacePage() {
 
         <section className="grid gap-4 xl:grid-cols-3">
           <div className="develop-stat-card p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Title detail views</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.viewCount ?? 0}</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">How many unique Boards or website visitors have opened the full title details page.</p>
+          </div>
+          <div className="develop-stat-card p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Wishlisted count</div>
             <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.wishlistCount ?? 0}</div>
             <p className="mt-3 text-sm leading-7 text-slate-300">How many players have saved this title to revisit later.</p>

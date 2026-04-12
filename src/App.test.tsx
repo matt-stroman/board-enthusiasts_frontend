@@ -773,6 +773,7 @@ describe("App", () => {
           minAgeYears: 10,
           playerCountDisplay: "1-4 players",
           ageDisplay: "ESRB E10+",
+          viewCount: 63,
           wishlistCount: 18,
           libraryCount: 7,
           cardImageUrl: "/seed-catalog/lantern-drift/card.png",
@@ -802,6 +803,7 @@ describe("App", () => {
         minAgeYears: 10,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E10+",
+        viewCount: 63,
         wishlistCount: 18,
         libraryCount: 7,
         currentMetadataRevision: 3,
@@ -1939,6 +1941,59 @@ describe("App", () => {
     });
   });
 
+  it("publishes embedded title detail view events to the Unity host", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 4,
+        libraryCount: 1,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift?embed=board");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    await waitFor(() => {
+      const titleViewMessage = getUnityBridgeMessages(unityCall).find(
+        (payload) => payload.type === "be-home-title-detail-view",
+      );
+      expect(titleViewMessage).toMatchObject({
+        titleId: "title-1",
+        studioSlug: "blue-harbor-games",
+        titleSlug: "lantern-drift",
+        route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+        surface: "title-detail",
+      });
+    });
+  });
+
   it("opens the share modal from a scanned helper link and can use the native share sheet on supported phones", async () => {
     const nativeShare = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "share", {
@@ -2076,6 +2131,7 @@ describe("App", () => {
           ageRatingValue: "E",
           minAgeYears: 6,
           ageDisplay: "ESRB E",
+          viewCount: 41,
           wishlistCount: 24,
           libraryCount: 9,
           cardImageUrl: null,
@@ -2103,6 +2159,7 @@ describe("App", () => {
         currentMetadataRevision: 2,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E",
+        viewCount: 41,
         wishlistCount: 24,
         libraryCount: 9,
         acquisitionUrl: "https://example.com/lantern-drift",
@@ -2124,8 +2181,9 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
 
     expect(await screen.findByRole("dialog")).toBeVisible();
-    expect(screen.getByText("Wishlisted by 24")).toBeVisible();
-    expect(screen.getByText("In 9 libraries")).toBeVisible();
+    expect(screen.getByLabelText("41 title detail views")).toBeVisible();
+    expect(screen.getByLabelText("Wishlisted by 24")).toBeVisible();
+    expect(screen.getByLabelText("In 9 libraries")).toBeVisible();
   });
 
   it("hides zero-value public title interest counts in quick view", async () => {
@@ -2152,6 +2210,7 @@ describe("App", () => {
           ageRatingValue: "E",
           minAgeYears: 6,
           ageDisplay: "ESRB E",
+          viewCount: 0,
           wishlistCount: 0,
           libraryCount: 0,
           cardImageUrl: null,
@@ -2179,6 +2238,7 @@ describe("App", () => {
         currentMetadataRevision: 2,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E",
+        viewCount: 0,
         wishlistCount: 0,
         libraryCount: 0,
         acquisitionUrl: "https://example.com/lantern-drift",
@@ -2200,6 +2260,7 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
 
     expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.queryByLabelText(/^0 title detail views$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Wishlisted by 0$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
   });
@@ -3027,6 +3088,7 @@ describe("App", () => {
         currentMetadataRevision: 2,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E",
+        viewCount: 29,
         wishlistCount: 11,
         libraryCount: 3,
         acquisitionUrl: null,
@@ -3041,8 +3103,9 @@ describe("App", () => {
     renderApp("/browse/blue-harbor-games/lantern-drift");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
-    expect(screen.getByText("Wishlisted by 11")).toBeVisible();
-    expect(screen.getByText("In 3 libraries")).toBeVisible();
+    expect(screen.getByLabelText("29 title detail views")).toBeVisible();
+    expect(screen.getByLabelText("Wishlisted by 11")).toBeVisible();
+    expect(screen.getByLabelText("In 3 libraries")).toBeVisible();
     expect(screen.getByLabelText("Add to wishlist")).toBeVisible();
     expect(screen.getByLabelText("Share title")).toBeVisible();
     expect(screen.queryByLabelText("Add to my games")).not.toBeInTheDocument();
@@ -3136,6 +3199,7 @@ describe("App", () => {
         currentMetadataRevision: 2,
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E",
+        viewCount: 0,
         wishlistCount: 0,
         libraryCount: 0,
         acquisitionUrl: null,
@@ -3154,6 +3218,7 @@ describe("App", () => {
     renderApp("/browse/blue-harbor-games/lantern-drift");
 
     expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+    expect(screen.queryByLabelText(/^0 title detail views$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Wishlisted by 0$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^In 0 libraries$/)).not.toBeInTheDocument();
   });
@@ -3747,6 +3812,8 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Analytics" })).toHaveClass("workflow-active-button");
     expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("workflow-active-button");
+    expect(screen.getByText("Title detail views")).toBeVisible();
+    expect(screen.getByText("63")).toBeVisible();
     expect(screen.getByText("Wishlisted count")).toBeVisible();
     expect(screen.getByText("18")).toBeVisible();
     expect(screen.getByText("Added to library count")).toBeVisible();

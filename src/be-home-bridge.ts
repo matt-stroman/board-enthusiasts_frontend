@@ -7,6 +7,7 @@ export const BE_HOME_AUTH_STATE_MESSAGE_TYPE = "be-home-auth-state";
 export const BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE = "be-home-open-external-url";
 export const BE_HOME_ROUTE_STATE_MESSAGE_TYPE = "be-home-route-state";
 export const BE_HOME_DIAGNOSTICS_MESSAGE_TYPE = "be-home-diagnostics";
+export const BE_HOME_TITLE_DETAIL_VIEW_MESSAGE_TYPE = "be-home-title-detail-view";
 
 /**
  * Lightweight auth state snapshot mirrored from the hosted site into the BE Home shell.
@@ -54,6 +55,14 @@ export interface BeHomeDiagnosticsSnapshot {
   hasAcquisitionUrl?: boolean;
 }
 
+export interface BeHomeTitleDetailViewSnapshot {
+  titleId: string;
+  studioSlug?: string | null;
+  titleSlug?: string | null;
+  route?: string | null;
+  surface?: string | null;
+}
+
 interface BeHomeBridgeMessage extends BeHomeAuthStateSnapshot {
   type: typeof BE_HOME_AUTH_STATE_MESSAGE_TYPE;
 }
@@ -70,6 +79,10 @@ interface BeHomeRouteStateMessage {
 
 interface BeHomeDiagnosticsMessage extends BeHomeDiagnosticsSnapshot {
   type: typeof BE_HOME_DIAGNOSTICS_MESSAGE_TYPE;
+}
+
+interface BeHomeTitleDetailViewMessage extends BeHomeTitleDetailViewSnapshot {
+  type: typeof BE_HOME_TITLE_DETAIL_VIEW_MESSAGE_TYPE;
 }
 
 declare global {
@@ -151,7 +164,23 @@ export function publishBeHomeDiagnostics(snapshot: BeHomeDiagnosticsSnapshot): v
   postBeHomeBridgeMessage(payload);
 }
 
-function postBeHomeBridgeMessage(payload: BeHomeBridgeMessage | BeHomeOpenExternalUrlMessage | BeHomeRouteStateMessage | BeHomeDiagnosticsMessage): void {
+export function publishBeHomeTitleDetailView(snapshot: BeHomeTitleDetailViewSnapshot): void {
+  if (typeof window === "undefined" || !snapshot.titleId.trim()) {
+    return;
+  }
+
+  const payload: BeHomeTitleDetailViewMessage = {
+    type: BE_HOME_TITLE_DETAIL_VIEW_MESSAGE_TYPE,
+    route: snapshot.route ?? "",
+    surface: snapshot.surface ?? "title-detail",
+    ...snapshot,
+  };
+  postBeHomeBridgeMessage(payload);
+}
+
+function postBeHomeBridgeMessage(
+  payload: BeHomeBridgeMessage | BeHomeOpenExternalUrlMessage | BeHomeRouteStateMessage | BeHomeDiagnosticsMessage | BeHomeTitleDetailViewMessage,
+): void {
   const message = JSON.stringify(payload);
 
   try {

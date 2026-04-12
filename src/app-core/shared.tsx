@@ -803,6 +803,10 @@ export function formatTitleLibraryInterestLabel(count: number): string {
   return count === 1 ? "In 1 library" : `In ${count} libraries`;
 }
 
+export function formatTitleViewInterestLabel(count: number): string {
+  return count === 1 ? "1 title detail view" : `${count} title detail views`;
+}
+
 export function createInitialTitleState(): TitleCreateState {
   return {
     displayName: "",
