@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Link, useLocation } from "react-router-dom";
 import copyGlyph from "../assets/title-action-icons/content_copy_24dp.svg?raw";
+import { hasBeHomeBridge, publishBeHomeDiagnostics } from "../be-home-bridge";
 import {
   addTitleToPlayerLibrary,
   addTitleToPlayerWishlist,
@@ -30,6 +31,18 @@ import {
 import { trackAnalyticsEvent } from "./analytics";
 import { useCatalogMediaLoadState } from "./media";
 import { ErrorPanel, LoadingPanel, TitleNameHeading, TitlePlayerActionButtons } from "./ui";
+
+function tryGetUrlHost(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value, typeof window !== "undefined" ? window.location.href : "https://boardenthusiasts.com").host;
+  } catch {
+    return null;
+  }
+}
 
 export function ShareTitleModal({
   titleDisplayName,
@@ -322,6 +335,39 @@ export function TitleQuickViewModal({
       },
     });
   }, [currentUser, location.pathname, location.search, session, title]);
+
+  useEffect(() => {
+    if (!title || !hasBeHomeBridge()) {
+      return;
+    }
+
+    const heroImageUrl = getHeroImageUrl(title);
+    const showcaseMedia = title.showcaseMedia ?? [];
+
+    publishBeHomeDiagnostics({
+      surface: "quick-view",
+      route: `${location.pathname}${location.search}`,
+      titleId: title.id,
+      studioId: title.studioId,
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      titleDisplayName: title.displayName,
+      studioDisplayName: title.studioDisplayName,
+      contentKind: title.contentKind,
+      selectedPreviewKind: "hero",
+      selectedPreviewHost: tryGetUrlHost(heroImageUrl),
+      heroImageHost: tryGetUrlHost(heroImageUrl),
+      cardImageHost: tryGetUrlHost(title.cardImageUrl),
+      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
+      showcaseMediaCount: showcaseMedia.length,
+      showcaseImageCount: showcaseMedia.filter((candidate) => candidate.kind !== "external_video").length,
+      showcaseVideoCount: showcaseMedia.filter((candidate) => candidate.kind === "external_video").length,
+      hasHeroImage: Boolean(heroImageUrl),
+      hasCardImage: Boolean(title.cardImageUrl),
+      hasLogoImage: Boolean(title.logoImageUrl),
+      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
+    });
+  }, [location.pathname, location.search, title]);
 
   async function handleLibraryToggle(nextIncluded: boolean): Promise<void> {
     if (!title || !accessToken) {

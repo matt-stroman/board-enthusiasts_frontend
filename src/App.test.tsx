@@ -242,6 +242,10 @@ function buildNearLimitCopy(segments: readonly string[], maxLength: number, rese
   return value.slice(0, maxLength).trim();
 }
 
+function getUnityBridgeMessages(unityCall: ReturnType<typeof vi.fn>) {
+  return unityCall.mock.calls.map(([message]) => JSON.parse(message as string));
+}
+
 function setSignedInAuthState(roles: string[]) {
   authState.value = {
     ...authState.value,
@@ -1795,6 +1799,114 @@ describe("App", () => {
     });
   });
 
+  it("publishes embedded quick view diagnostics to the Unity host", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+    apiMocks.listCatalogTitles.mockResolvedValue({
+      titles: [
+        {
+          id: "title-1",
+          studioId: "studio-1",
+          studioSlug: "blue-harbor-games",
+          studioDisplayName: "Blue Harbor Games",
+          slug: "lantern-drift",
+          contentKind: "game",
+          lifecycleStatus: "active",
+          visibility: "listed",
+          isReported: false,
+          currentMetadataRevision: 2,
+          displayName: "Lantern Drift",
+          shortDescription: "Guide glowing paper boats through midnight canals.",
+          genreDisplay: "Puzzle, Family",
+          minPlayers: 1,
+          maxPlayers: 4,
+          playerCountDisplay: "1-4 players",
+          ageRatingAuthority: "ESRB",
+          ageRatingValue: "E",
+          minAgeYears: 6,
+          ageDisplay: "ESRB E",
+          cardImageUrl: "https://cdn.example.com/titles/lantern-drift/card.webp",
+          logoImageUrl: "https://cdn.example.com/titles/lantern-drift/logo.webp",
+          acquisitionUrl: "https://publisher.example.com/lantern-drift",
+        },
+      ],
+      paging: { pageNumber: 1, pageSize: 48, totalCount: 1, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+    });
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        cardImageUrl: "https://cdn.example.com/titles/lantern-drift/card.webp",
+        logoImageUrl: "https://cdn.example.com/titles/lantern-drift/logo.webp",
+        acquisitionUrl: "https://publisher.example.com/lantern-drift",
+        acquisition: {
+          url: "https://publisher.example.com/lantern-drift",
+          label: "Open publisher page",
+          providerDisplayName: "Blue Harbor Games Direct",
+          providerHomepageUrl: "https://publisher.example.com",
+        },
+        currentRelease: {
+          id: "release-1",
+          titleId: "title-1",
+          version: "1.0.0",
+          status: "production",
+          isCurrent: true,
+          publishedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-08T12:00:00Z",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://media.example.com/lantern-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+          { id: "showcase-2", kind: "image", imageUrl: "https://media.example.com/lantern-2.webp", videoUrl: null, altText: "Lantern Drift preview 2", displayOrder: 1 },
+          { id: "showcase-3", kind: "external_video", imageUrl: "https://media.example.com/lantern-video-poster.webp", videoUrl: "https://video.example.com/watch?v=lantern", altText: "Lantern Drift trailer", displayOrder: 2 },
+        ],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse?embed=board");
+
+    expect(await screen.findByRole("button", { name: /lantern drift/i })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /lantern drift/i }));
+
+    expect(await screen.findByRole("dialog", { name: "Lantern Drift" })).toBeVisible();
+
+    await waitFor(() => {
+      const diagnosticsMessage = getUnityBridgeMessages(unityCall).find((payload) => payload.type === "be-home-diagnostics" && payload.surface === "quick-view");
+      expect(diagnosticsMessage).toMatchObject({
+        route: "/browse?embed=board",
+        titleId: "title-1",
+        titleDisplayName: "Lantern Drift",
+        studioSlug: "blue-harbor-games",
+        showcaseMediaCount: 3,
+        showcaseImageCount: 2,
+        showcaseVideoCount: 1,
+        heroImageHost: "cdn.example.com",
+        acquisitionHost: "publisher.example.com",
+        hasHeroImage: true,
+        hasCardImage: true,
+        hasLogoImage: true,
+        hasAcquisitionUrl: true,
+      });
+    });
+  });
+
   it("opens the share modal from a scanned helper link and can use the native share sheet on supported phones", async () => {
     const nativeShare = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "share", {
@@ -2446,6 +2558,82 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show preview 4" }));
 
     expect(await screen.findAllByAltText("Lantern Drift preview 4")).toHaveLength(2);
+  });
+
+  it("publishes embedded title detail diagnostics to the Unity host", async () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        wishlistCount: 4,
+        libraryCount: 1,
+        cardImageUrl: "https://cdn.example.com/titles/lantern-drift/card.webp",
+        logoImageUrl: "https://cdn.example.com/titles/lantern-drift/logo.webp",
+        acquisitionUrl: "https://publisher.example.com/lantern-drift",
+        acquisition: {
+          url: "https://publisher.example.com/lantern-drift",
+          label: "Open publisher page",
+          providerDisplayName: "Blue Harbor Games Direct",
+          providerHomepageUrl: "https://publisher.example.com",
+        },
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://media.example.com/lantern-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+          { id: "showcase-2", kind: "image", imageUrl: "https://media.example.com/lantern-2.webp", videoUrl: null, altText: "Lantern Drift preview 2", displayOrder: 1 },
+          { id: "showcase-3", kind: "image", imageUrl: "https://media.example.com/lantern-3.webp", videoUrl: null, altText: "Lantern Drift preview 3", displayOrder: 2 },
+          { id: "showcase-4", kind: "image", imageUrl: "https://media.example.com/lantern-4.webp", videoUrl: null, altText: "Lantern Drift preview 4", displayOrder: 3 },
+          { id: "showcase-5", kind: "external_video", imageUrl: "https://media.example.com/lantern-video-poster.webp", videoUrl: "https://video.example.com/watch?v=lantern", altText: "Lantern Drift trailer", displayOrder: 4 },
+        ],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift?embed=board");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    await waitFor(() => {
+      const diagnosticsMessages = getUnityBridgeMessages(unityCall).filter((payload) => payload.type === "be-home-diagnostics" && payload.surface === "title-detail");
+      const diagnosticsMessage = diagnosticsMessages.at(-1);
+      expect(diagnosticsMessage).toMatchObject({
+        route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+        titleId: "title-1",
+        titleDisplayName: "Lantern Drift",
+        studioSlug: "blue-harbor-games",
+        selectedPreviewKind: "image",
+        selectedPreviewHost: "media.example.com",
+        cardImageHost: "cdn.example.com",
+        acquisitionHost: "publisher.example.com",
+        showcaseMediaCount: 5,
+        showcaseImageCount: 4,
+        showcaseVideoCount: 1,
+        hasCardImage: true,
+        hasLogoImage: true,
+        hasAcquisitionUrl: true,
+      });
+    });
   });
 
   it("does not send a dedicated website presence end beacon when the browser page exits", async () => {

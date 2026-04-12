@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BE_HOME_AUTH_STATE_MESSAGE_TYPE,
+  BE_HOME_DIAGNOSTICS_MESSAGE_TYPE,
   BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE,
   BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
   hasBeHomeBridge,
   openBeHomeExternalUrl,
   publishBeHomeAuthState,
+  publishBeHomeDiagnostics,
   publishBeHomeRouteState,
 } from "./be-home-bridge";
 
@@ -88,6 +90,37 @@ describe("BE Home bridge", () => {
     expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
       type: BE_HOME_ROUTE_STATE_MESSAGE_TYPE,
       path: "/browse/blue-harbor-games/lantern-drift?embed=board",
+    });
+  });
+
+  it("publishes diagnostics through the Unity bridge", () => {
+    const unityCall = vi.fn();
+    window.Unity = { call: unityCall };
+
+    publishBeHomeDiagnostics({
+      surface: "title-detail",
+      route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+      titleId: "title-1",
+      titleDisplayName: "Lantern Drift",
+      showcaseMediaCount: 5,
+      showcaseImageCount: 4,
+      showcaseVideoCount: 1,
+      hasHeroImage: true,
+      hasAcquisitionUrl: true,
+    });
+
+    expect(unityCall).toHaveBeenCalledOnce();
+    expect(JSON.parse(unityCall.mock.calls[0][0] as string)).toEqual({
+      type: BE_HOME_DIAGNOSTICS_MESSAGE_TYPE,
+      surface: "title-detail",
+      route: "/browse/blue-harbor-games/lantern-drift?embed=board",
+      titleId: "title-1",
+      titleDisplayName: "Lantern Drift",
+      showcaseMediaCount: 5,
+      showcaseImageCount: 4,
+      showcaseVideoCount: 1,
+      hasHeroImage: true,
+      hasAcquisitionUrl: true,
     });
   });
 });

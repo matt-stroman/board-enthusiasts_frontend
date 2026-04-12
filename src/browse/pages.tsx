@@ -3,7 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent 
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import keyboardArrowLeftGlyph from "../assets/landing-glyphs/keyboard_arrow_left_24dp.svg?raw";
 import keyboardArrowRightGlyph from "../assets/landing-glyphs/keyboard_arrow_right_24dp.svg?raw";
-import { hasBeHomeBridge } from "../be-home-bridge";
+import { hasBeHomeBridge, publishBeHomeDiagnostics } from "../be-home-bridge";
 import {
   addStudioToPlayerFollows,
   addTitleToPlayerLibrary,
@@ -77,6 +77,18 @@ function GalleryArrowIcon({ markup }: { markup: string }) {
 
 function truncateUrlDisplay(value: string, maxLength = 48): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
+}
+
+function tryGetUrlHost(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value, typeof window !== "undefined" ? window.location.href : "https://boardenthusiasts.com").host;
+  } catch {
+    return null;
+  }
 }
 
 function resolveInitialShowcaseSelection(title: CatalogTitleResponse["title"]): TitleShowcaseSelection {
@@ -278,6 +290,7 @@ export function BrowsePage() {
   const { session, currentUser } = useAuth();
   const location = useLocation();
   const accessToken = session?.access_token ?? "";
+  const embeddedBoardShell = new URLSearchParams(location.search).get("embed") === "board" || hasBeHomeBridge();
   const playerAccessEnabled = currentUser ? hasPlatformRole(currentUser.roles, "player") : false;
   const [studios, setStudios] = useState<StudioSummary[]>([]);
   const [titles, setTitles] = useState<CatalogTitleSummary[]>([]);
@@ -512,6 +525,34 @@ export function BrowsePage() {
   const visibleResultStart =
     filteredTitles.length === 0 || pagedTitles.length === 0 ? 0 : normalizedResultsPerPage <= 0 ? 1 : (currentPage - 1) * normalizedResultsPerPage + 1;
   const visibleResultEnd = visibleResultStart === 0 ? 0 : visibleResultStart + pagedTitles.length - 1;
+
+  useEffect(() => {
+    if (!embeddedBoardShell || quickViewTarget) {
+      return;
+    }
+
+    publishBeHomeDiagnostics({
+      surface: "browse",
+      route: `${location.pathname}${location.search}`,
+      searchResultCount: pagedTitles.length,
+      totalCatalogCount: filteredTitles.length,
+      currentPage,
+      searchQueryLength: deferredQuery.trim().length,
+      selectedStudiosCount: selectedStudios.length,
+      selectedGenresCount: selectedGenres.length,
+    });
+  }, [
+    currentPage,
+    deferredQuery,
+    embeddedBoardShell,
+    filteredTitles.length,
+    location.pathname,
+    location.search,
+    pagedTitles.length,
+    quickViewTarget,
+    selectedGenres.length,
+    selectedStudios.length,
+  ]);
 
   function toggleStudio(studioSlug: string): void {
     setSelectedStudios((current) => (current.includes(studioSlug) ? current.filter((candidate) => candidate !== studioSlug) : [...current, studioSlug]));
@@ -1588,6 +1629,46 @@ export function TitleDetailPage() {
       },
     });
   }, [currentUser, location.pathname, location.search, session, title]);
+
+  useEffect(() => {
+    if (!embeddedBoardShell || !title) {
+      return;
+    }
+
+    const showcaseMedia = title.showcaseMedia ?? [];
+    const selectedShowcaseMedia =
+      selectedShowcase.kind === "showcase" ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null : null;
+    const heroImageUrl = getPrimaryTitleShowcaseImageUrl(title);
+    const selectedPreviewUrl =
+      selectedShowcaseMedia?.imageUrl ??
+      (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
+      title.cardImageUrl ??
+      null;
+
+    publishBeHomeDiagnostics({
+      surface: "title-detail",
+      route: `${location.pathname}${location.search}`,
+      titleId: title.id,
+      studioId: title.studioId,
+      studioSlug: title.studioSlug,
+      titleSlug: title.slug,
+      titleDisplayName: title.displayName,
+      studioDisplayName: title.studioDisplayName,
+      contentKind: title.contentKind,
+      selectedPreviewKind: selectedShowcaseMedia?.kind ?? selectedShowcase.kind,
+      selectedPreviewHost: tryGetUrlHost(selectedShowcaseMedia?.videoUrl ?? selectedPreviewUrl),
+      heroImageHost: tryGetUrlHost(heroImageUrl),
+      cardImageHost: tryGetUrlHost(title.cardImageUrl),
+      acquisitionHost: tryGetUrlHost(title.acquisition?.url ?? title.acquisitionUrl),
+      showcaseMediaCount: showcaseMedia.length,
+      showcaseImageCount: showcaseMedia.filter((candidate) => candidate.kind !== "external_video").length,
+      showcaseVideoCount: showcaseMedia.filter((candidate) => candidate.kind === "external_video").length,
+      hasHeroImage: Boolean(heroImageUrl),
+      hasCardImage: Boolean(title.cardImageUrl),
+      hasLogoImage: Boolean(title.logoImageUrl),
+      hasAcquisitionUrl: Boolean(title.acquisition?.url ?? title.acquisitionUrl),
+    });
+  }, [embeddedBoardShell, location.pathname, location.search, selectedShowcase, title]);
 
   useEffect(() => {
     let cancelled = false;

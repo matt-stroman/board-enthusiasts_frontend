@@ -6,6 +6,7 @@ import type { PlatformRole } from "@board-enthusiasts/migration-contract";
 export const BE_HOME_AUTH_STATE_MESSAGE_TYPE = "be-home-auth-state";
 export const BE_HOME_OPEN_EXTERNAL_URL_MESSAGE_TYPE = "be-home-open-external-url";
 export const BE_HOME_ROUTE_STATE_MESSAGE_TYPE = "be-home-route-state";
+export const BE_HOME_DIAGNOSTICS_MESSAGE_TYPE = "be-home-diagnostics";
 
 /**
  * Lightweight auth state snapshot mirrored from the hosted site into the BE Home shell.
@@ -14,6 +15,36 @@ export interface BeHomeAuthStateSnapshot {
   authenticated: boolean;
   roles: PlatformRole[];
   displayName: string | null;
+}
+
+export interface BeHomeDiagnosticsSnapshot {
+  surface: string;
+  route: string;
+  titleId?: string | null;
+  studioId?: string | null;
+  studioSlug?: string | null;
+  titleSlug?: string | null;
+  titleDisplayName?: string | null;
+  studioDisplayName?: string | null;
+  contentKind?: string | null;
+  selectedPreviewKind?: string | null;
+  selectedPreviewHost?: string | null;
+  heroImageHost?: string | null;
+  cardImageHost?: string | null;
+  acquisitionHost?: string | null;
+  showcaseMediaCount?: number;
+  showcaseImageCount?: number;
+  showcaseVideoCount?: number;
+  searchResultCount?: number;
+  totalCatalogCount?: number;
+  currentPage?: number;
+  searchQueryLength?: number;
+  selectedStudiosCount?: number;
+  selectedGenresCount?: number;
+  hasHeroImage?: boolean;
+  hasCardImage?: boolean;
+  hasLogoImage?: boolean;
+  hasAcquisitionUrl?: boolean;
 }
 
 interface BeHomeBridgeMessage extends BeHomeAuthStateSnapshot {
@@ -28,6 +59,10 @@ interface BeHomeOpenExternalUrlMessage {
 interface BeHomeRouteStateMessage {
   type: typeof BE_HOME_ROUTE_STATE_MESSAGE_TYPE;
   path: string;
+}
+
+interface BeHomeDiagnosticsMessage extends BeHomeDiagnosticsSnapshot {
+  type: typeof BE_HOME_DIAGNOSTICS_MESSAGE_TYPE;
 }
 
 declare global {
@@ -97,7 +132,19 @@ export function publishBeHomeRouteState(path: string): void {
   postBeHomeBridgeMessage(payload);
 }
 
-function postBeHomeBridgeMessage(payload: BeHomeBridgeMessage | BeHomeOpenExternalUrlMessage | BeHomeRouteStateMessage): void {
+export function publishBeHomeDiagnostics(snapshot: BeHomeDiagnosticsSnapshot): void {
+  if (typeof window === "undefined" || !snapshot.route.trim() || !snapshot.surface.trim()) {
+    return;
+  }
+
+  const payload: BeHomeDiagnosticsMessage = {
+    type: BE_HOME_DIAGNOSTICS_MESSAGE_TYPE,
+    ...snapshot,
+  };
+  postBeHomeBridgeMessage(payload);
+}
+
+function postBeHomeBridgeMessage(payload: BeHomeBridgeMessage | BeHomeOpenExternalUrlMessage | BeHomeRouteStateMessage | BeHomeDiagnosticsMessage): void {
   const message = JSON.stringify(payload);
 
   try {
