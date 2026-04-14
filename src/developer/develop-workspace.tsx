@@ -4171,11 +4171,17 @@ export function DevelopWorkspacePage() {
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Track early player interest for this title before and after release.</p>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-3">
+        <section className="grid gap-4 xl:grid-cols-4">
           <div className="develop-stat-card p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Title detail views</div>
             <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.viewCount ?? 0}</div>
             <p className="mt-3 text-sm leading-7 text-slate-300">How many unique Boards or website visitors have opened the full title details page.</p>
+          </div>
+          <div className="develop-stat-card p-5">
+            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Get Title clicks</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.getTitleClickCount ?? 0}</div>
+            <p className="mt-3 text-sm leading-7 text-slate-300">How many unique visitors clicked <code>Get Title</code> from quick view or full details.</p>
+            <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">Last click {formatDateTime(activeTitle.lastGetTitleClickedAt)}</p>
           </div>
           <div className="develop-stat-card p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Wishlisted count</div>

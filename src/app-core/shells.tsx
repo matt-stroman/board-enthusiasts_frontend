@@ -54,10 +54,10 @@ export function isEmbeddedBoardShellActive(search: string): boolean {
  * Determines whether the current session is being hosted inside BE Home's thin-layer browse experience.
  *
  * @param search The current location search string.
- * @returns True when the BE Home bridge is present or the embedded Board shell route family is active.
+ * @returns True when the embedded Board shell route family is active.
  */
 export function isBeHomeThinLayerAccess(search: string): boolean {
-  return hasBeHomeBridge() || isEmbeddedBoardShellActive(search);
+  return isEmbeddedBoardShellActive(search);
 }
 
 /**
@@ -279,7 +279,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [notificationError, setNotificationError] = useState<string | null>(null);
 
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
-  const showDeveloperSection = currentUser ? hasPlatformRole(currentUser.roles, "developer") && !beHomeThinLayerAccess : false;
+  const showDeveloperSection = showSignedInSections && !beHomeThinLayerAccess;
   const headerVisible = useScrollResponsiveHeader(`${location.pathname}${location.search}`);
   const beHomeCommunityPulse = useBeHomeCommunityPulse(!embeddedBoardShell, accessToken || null);
   usePageAnalytics(`${location.pathname}${location.search}`, session && currentUser ? "authenticated" : "anonymous");

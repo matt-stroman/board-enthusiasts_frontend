@@ -804,6 +804,8 @@ describe("App", () => {
         playerCountDisplay: "1-4 players",
         ageDisplay: "ESRB E10+",
         viewCount: 63,
+        getTitleClickCount: 12,
+        lastGetTitleClickedAt: "2026-04-10T19:45:00Z",
         wishlistCount: 18,
         libraryCount: 7,
         currentMetadataRevision: 3,
@@ -1025,7 +1027,7 @@ describe("App", () => {
     expect(screen.queryByText("Route not found")).not.toBeInTheDocument();
   });
 
-  it("hides developer and moderate navigation when the full website is hosted inside BE Home", async () => {
+  it("keeps developer and moderate navigation visible when the Unity bridge is present without embed mode", async () => {
     window.Unity = { call: vi.fn() };
     setSignedInAuthState(["player", "developer", "moderator"]);
     primePlayerWorkspaceApi();
@@ -1033,13 +1035,24 @@ describe("App", () => {
     renderApp("/browse");
 
     expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
-    expect(screen.queryAllByRole("link", { name: "Develop" })).toHaveLength(0);
-    expect(screen.queryAllByRole("link", { name: "Moderate" })).toHaveLength(0);
+    expect(screen.getAllByRole("link", { name: "Develop" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Moderate" }).length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getByRole("button", { name: /open account/i }));
 
-    expect(screen.queryByRole("button", { name: "Developer Console" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Moderate" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Developer Console" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Moderate" })).toBeVisible();
+  });
+
+  it("hides developer and moderate navigation when the embedded website shell is active", async () => {
+    setSignedInAuthState(["player", "developer", "moderator"]);
+    primePlayerWorkspaceApi();
+
+    renderApp("/browse?embed=board");
+
+    expect(await screen.findByRole("textbox")).toHaveAttribute("placeholder", "Title, studio, description");
+    expect(screen.queryAllByRole("link", { name: "Develop" })).toHaveLength(0);
+    expect(screen.queryAllByRole("link", { name: "Moderate" })).toHaveLength(0);
   });
 
   it("does not request the optional linked Board profile while loading the default player route", async () => {
@@ -3750,9 +3763,16 @@ describe("App", () => {
     renderApp("/developer");
 
     expect(await screen.findByRole("heading", { name: "Become a Developer" })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Develop" }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("link", { name: "Moderate" })).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Become a Developer" })).toBeVisible();
     expect(screen.getByText(/Signed in as taylor\.marsh@boardtpl\.local/i)).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Access not available" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /open account/i }));
+
+    expect(screen.getByRole("button", { name: "Developer Console" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Moderate" })).not.toBeInTheDocument();
   });
 
   it("restores the maintained studio workflow navigation inside /developer", async () => {
@@ -3835,6 +3855,9 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("workflow-active-button");
     expect(screen.getByText("Title detail views")).toBeVisible();
     expect(screen.getByText("63")).toBeVisible();
+    expect(screen.getByText("Get Title clicks")).toBeVisible();
+    expect(screen.getByText("12")).toBeVisible();
+    expect(screen.getByText(/Last click/i)).toBeVisible();
     expect(screen.getByText("Wishlisted count")).toBeVisible();
     expect(screen.getByText("18")).toBeVisible();
     expect(screen.getByText("Added to library count")).toBeVisible();
