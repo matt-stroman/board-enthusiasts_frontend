@@ -96,6 +96,11 @@ const apiMocks = vi.hoisted(() => ({
   verifyCurrentUserPassword: vi.fn(),
   enrollAsDeveloper: vi.fn(),
   listManagedStudios: vi.fn(),
+  listDeveloperAnalyticsSavedViews: vi.fn(),
+  createDeveloperAnalyticsSavedView: vi.fn(),
+  updateDeveloperAnalyticsSavedView: vi.fn(),
+  deleteDeveloperAnalyticsSavedView: vi.fn(),
+  getDeveloperStudioAnalytics: vi.fn(),
   createStudio: vi.fn(),
   updateStudio: vi.fn(),
   deleteStudio: vi.fn(),
@@ -112,6 +117,7 @@ const apiMocks = vi.hoisted(() => ({
   listStudioTitles: vi.fn(),
   createTitle: vi.fn(),
   getDeveloperTitle: vi.fn(),
+  getDeveloperTitleAnalytics: vi.fn(),
   updateTitle: vi.fn(),
   activateTitle: vi.fn(),
   archiveTitle: vi.fn(),
@@ -742,6 +748,107 @@ describe("App", () => {
         },
       ],
     });
+    apiMocks.listDeveloperAnalyticsSavedViews.mockResolvedValue({ views: [] });
+    apiMocks.createDeveloperAnalyticsSavedView.mockResolvedValue({
+      view: {
+        id: "saved-view-1",
+        subjectScope: "title",
+        name: "Saved view",
+        panels: [
+          {
+            descriptor: "title_detail_viewed",
+            rangePresetId: "last-24-hours",
+            customFrom: null,
+            customTo: null,
+          },
+        ],
+        createdAt: "2026-04-14T00:00:00Z",
+        updatedAt: "2026-04-14T00:00:00Z",
+      },
+    });
+    apiMocks.updateDeveloperAnalyticsSavedView.mockResolvedValue({
+      view: {
+        id: "saved-view-1",
+        subjectScope: "title",
+        name: "Saved view",
+        panels: [
+          {
+            descriptor: "title_detail_viewed",
+            rangePresetId: "last-24-hours",
+            customFrom: null,
+            customTo: null,
+          },
+        ],
+        createdAt: "2026-04-14T00:00:00Z",
+        updatedAt: "2026-04-14T00:00:00Z",
+      },
+    });
+    apiMocks.deleteDeveloperAnalyticsSavedView.mockResolvedValue(undefined);
+    apiMocks.getDeveloperStudioAnalytics.mockResolvedValue({
+      range: {
+        from: "2026-03-15T00:00:00Z",
+        to: "2026-04-14T00:00:00Z",
+      },
+      metrics: [
+        {
+          id: "metric-studio-followed",
+          descriptor: "studio_followed",
+          displayName: "Studio follows",
+          internalDescription: "Counts studio follows.",
+          publicDescription: "How many times players chose to follow this studio during the selected time range.",
+          publicTooltip: "Studio follows tooltip",
+          subjectScope: "studio",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "42",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 10,
+          value: 42,
+          lastOccurredAt: "2026-04-10T19:45:00Z",
+        },
+        {
+          id: "metric-studio-unfollowed",
+          descriptor: "studio_unfollowed",
+          displayName: "Studio unfollows",
+          internalDescription: "Counts studio unfollows.",
+          publicDescription: "How many times players stopped following this studio during the selected time range.",
+          publicTooltip: "Studio unfollows tooltip",
+          subjectScope: "studio",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "5",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 20,
+          value: 5,
+          lastOccurredAt: "2026-04-09T18:15:00Z",
+        },
+        {
+          id: "metric-studio-follow-net-change",
+          descriptor: "studio_follow_net_change",
+          displayName: "Follower net change",
+          internalDescription: "Balances follows and unfollows together.",
+          publicDescription: "The overall change in followers during the selected time range after follows and unfollows are balanced together.",
+          publicTooltip: "Follower net change tooltip",
+          subjectScope: "studio",
+          aggregationKind: "event_count",
+          metricKind: "net_change",
+          valueFormat: "number",
+          valueDisplay: "37",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 30,
+          value: 37,
+          lastOccurredAt: "2026-04-10T19:45:00Z",
+        },
+      ],
+    });
     apiMocks.listStudioLinks.mockResolvedValue({
       links: [
         { id: "studio-link-1", label: "Website", url: "https://blue-harbor-games.example", createdAt: "2026-03-08T12:00:00Z", updatedAt: "2026-03-08T12:00:00Z" },
@@ -815,6 +922,242 @@ describe("App", () => {
           version: "1.0.0",
         },
       },
+    });
+    apiMocks.getDeveloperTitleAnalytics.mockResolvedValue({
+      range: {
+        from: "2026-03-15T00:00:00Z",
+        to: "2026-04-14T00:00:00Z",
+      },
+      metrics: [
+        {
+          id: "metric-title-detail-viewed",
+          descriptor: "title_detail_viewed",
+          displayName: "Title detail views",
+          internalDescription: "Counts title detail views.",
+          publicDescription: "How many unique Boards or website visitors opened this title during the selected time range.",
+          publicTooltip: "Title detail views tooltip",
+          subjectScope: "title",
+          aggregationKind: "unique_actor_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "63",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 10,
+          value: 63,
+          lastOccurredAt: "2026-04-12T19:45:00Z",
+        },
+        {
+          id: "metric-title-get-clicked",
+          descriptor: "title_get_clicked",
+          displayName: "Get Title clicks",
+          internalDescription: "Counts Get Title clicks.",
+          publicDescription: "How many unique visitors clicked Get Title for this title during the selected time range.",
+          publicTooltip: "Get Title clicks tooltip",
+          subjectScope: "title",
+          aggregationKind: "unique_actor_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "12",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 20,
+          value: 12,
+          lastOccurredAt: "2026-04-10T19:45:00Z",
+        },
+        {
+          id: "metric-title-view-to-wishlist-conversion",
+          descriptor: "title_view_to_wishlist_conversion",
+          displayName: "Wishlist conversion",
+          internalDescription: "Shows wishlist conversion.",
+          publicDescription: "The share of visitors who added this title to their wishlist after opening it during the selected time range.",
+          publicTooltip: "Wishlist conversion tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "conversion_rate",
+          valueFormat: "percentage",
+          valueDisplay: "28.6%",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 25,
+          value: 28.6,
+          lastOccurredAt: "2026-04-12T19:45:00Z",
+        },
+        {
+          id: "metric-title-view-to-wishlist-conversion-change",
+          descriptor: "title_view_to_wishlist_conversion_change",
+          displayName: "Wishlist conversion change",
+          internalDescription: "Shows wishlist conversion change.",
+          publicDescription: "How the wishlist conversion rate changed compared with the previous matching time range.",
+          publicTooltip: "Wishlist conversion change tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "conversion_rate_comparison",
+          valueFormat: "percentage",
+          valueDisplay: "28.6%",
+          secondaryValue: "Up 4.1 percentage points from the previous matching time range.",
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 26,
+          value: 28.6,
+          lastOccurredAt: "2026-04-12T19:45:00Z",
+        },
+        {
+          id: "metric-title-wishlisted",
+          descriptor: "title_wishlisted",
+          displayName: "Added to wishlist",
+          internalDescription: "Counts wishlist adds.",
+          publicDescription: "How many times players added this title to their wishlist during the selected time range.",
+          publicTooltip: "Added to wishlist tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "18",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 30,
+          value: 18,
+          lastOccurredAt: "2026-04-10T17:05:00Z",
+        },
+        {
+          id: "metric-title-unwishlisted",
+          descriptor: "title_unwishlisted",
+          displayName: "Removed from wishlist",
+          internalDescription: "Counts wishlist removals.",
+          publicDescription: "How many times players removed this title from their wishlist during the selected time range.",
+          publicTooltip: "Removed from wishlist tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "3",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 40,
+          value: 3,
+          lastOccurredAt: "2026-04-09T17:05:00Z",
+        },
+        {
+          id: "metric-title-wishlist-net-change",
+          descriptor: "title_wishlist_net_change",
+          displayName: "Wishlist net change",
+          internalDescription: "Shows wishlist net change.",
+          publicDescription: "The overall change in wishlists during the selected time range after additions and removals are balanced together.",
+          publicTooltip: "Wishlist net change tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "net_change",
+          valueFormat: "number",
+          valueDisplay: "15",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 45,
+          value: 15,
+          lastOccurredAt: "2026-04-10T17:05:00Z",
+        },
+        {
+          id: "metric-title-added-to-library",
+          descriptor: "title_added_to_library",
+          displayName: "Added to library",
+          internalDescription: "Counts library adds.",
+          publicDescription: "How many times players added this title to their library during the selected time range.",
+          publicTooltip: "Added to library tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "7",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 50,
+          value: 7,
+          lastOccurredAt: "2026-04-08T17:05:00Z",
+        },
+        {
+          id: "metric-title-view-to-library-conversion",
+          descriptor: "title_view_to_library_conversion",
+          displayName: "Library conversion",
+          internalDescription: "Shows library conversion.",
+          publicDescription: "The share of visitors who added this title to their library after opening it during the selected time range.",
+          publicTooltip: "Library conversion tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "conversion_rate",
+          valueFormat: "percentage",
+          valueDisplay: "11.1%",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 55,
+          value: 11.1,
+          lastOccurredAt: "2026-04-12T19:45:00Z",
+        },
+        {
+          id: "metric-title-view-to-library-conversion-change",
+          descriptor: "title_view_to_library_conversion_change",
+          displayName: "Library conversion change",
+          internalDescription: "Shows library conversion change.",
+          publicDescription: "How the library conversion rate changed compared with the previous matching time range.",
+          publicTooltip: "Library conversion change tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "conversion_rate_comparison",
+          valueFormat: "percentage",
+          valueDisplay: "11.1%",
+          secondaryValue: "Down 1.4 percentage points from the previous matching time range.",
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 56,
+          value: 11.1,
+          lastOccurredAt: "2026-04-12T19:45:00Z",
+        },
+        {
+          id: "metric-title-removed-from-library",
+          descriptor: "title_removed_from_library",
+          displayName: "Removed from library",
+          internalDescription: "Counts library removals.",
+          publicDescription: "How many times players removed this title from their library during the selected time range.",
+          publicTooltip: "Removed from library tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "tracked_event",
+          valueFormat: "number",
+          valueDisplay: "1",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 60,
+          value: 1,
+          lastOccurredAt: "2026-04-07T17:05:00Z",
+        },
+        {
+          id: "metric-title-library-net-change",
+          descriptor: "title_library_net_change",
+          displayName: "Library net change",
+          internalDescription: "Shows library net change.",
+          publicDescription: "The overall change in library adds during the selected time range after additions and removals are balanced together.",
+          publicTooltip: "Library net change tooltip",
+          subjectScope: "title",
+          aggregationKind: "event_count",
+          metricKind: "net_change",
+          valueFormat: "number",
+          valueDisplay: "6",
+          secondaryValue: null,
+          statusMessage: null,
+          supportsDateRange: true,
+          displayOrder: 65,
+          value: 6,
+          lastOccurredAt: "2026-04-08T17:05:00Z",
+        },
+      ],
     });
     apiMocks.getTitleMetadataVersions.mockResolvedValue({
       metadataVersions: [
@@ -966,6 +1309,13 @@ describe("App", () => {
     expect(screen.getByText("8 anonymous · 4 signed in")).toBeVisible();
     expect(screen.getByText("5 anonymous · 1 signed in")).toBeVisible();
     expect(apiMocks.getBeHomeMetrics).toHaveBeenCalledOnce();
+
+    const header = screen.getByRole("banner");
+    const communityBar = header.querySelector(".app-community-bar");
+    const headerInner = header.querySelector(".app-header-inner");
+    expect(communityBar).not.toBeNull();
+    expect(headerInner).not.toBeNull();
+    expect(communityBar?.compareDocumentPosition(headerInner as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("does not post dedicated website presence heartbeats from the web shell", async () => {
@@ -3823,11 +4173,17 @@ describe("App", () => {
     renderApp("/developer?domain=studios&workflow=studios-analytics&studioId=studio-1");
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Studio analytics" })).toBeVisible();
+      expect(apiMocks.getDeveloperTitle).toHaveBeenCalled();
     });
-    expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
-    expect(screen.getByText("Follower count")).toBeVisible();
-    expect(screen.getByText("42")).toBeVisible();
+    await apiMocks.getDeveloperTitle.mock.results[0]!.value;
+    expect(await screen.findByRole("heading", { name: "Studio analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Add studio analytics panel" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Analytics" })).toBeVisible();
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Studio follows");
+      expect(screen.getByText("42")).toBeVisible();
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(1);
+    });
   });
 
   it("shows maintained studio media aspect ratios in the studio overview", async () => {
@@ -3851,17 +4207,375 @@ describe("App", () => {
     renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
 
     expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Analytics" })).toHaveClass("workflow-active-button");
-    expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("workflow-active-button");
-    expect(screen.getByText("Title detail views")).toBeVisible();
-    expect(screen.getByText("63")).toBeVisible();
-    expect(screen.getByText("Get Title clicks")).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Add title analytics panel" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Analytics" })).toHaveClass("workflow-active-button");
+      expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("workflow-active-button");
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Title detail views");
+      expect(screen.getByText("63")).toBeVisible();
+      expect(screen.getAllByText(/Last activity/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(1);
+      expect(screen.getByRole("button", { name: "Add title analytics panel" })).toBeVisible();
+    });
+  });
+
+  it("lets developers add and switch title analytics panels", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    const addButton = await screen.findByRole("button", { name: "Add title analytics panel" });
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(1);
+    });
+
+    await userEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(2);
+    });
+
+    expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })[1]).toHaveTextContent("Get Title clicks");
     expect(screen.getByText("12")).toBeVisible();
-    expect(screen.getByText(/Last click/i)).toBeVisible();
-    expect(screen.getByText("Wishlisted count")).toBeVisible();
-    expect(screen.getByText("18")).toBeVisible();
-    expect(screen.getByText("Added to library count")).toBeVisible();
-    expect(screen.getByText("7")).toBeVisible();
+
+    const metricSelectors = screen.getAllByRole("combobox", { name: "Select analytics metric" });
+    await userEvent.click(metricSelectors[1]!);
+    await userEvent.click(await screen.findByRole("option", { name: "Added to wishlist" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })[1]).toHaveTextContent("Added to wishlist");
+      expect(screen.getByText("18")).toBeVisible();
+    });
+  });
+
+  it("renders derived analytics metrics with percentage and comparison copy", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    const metricSelector = await screen.findByRole("combobox", { name: "Select analytics metric" });
+
+    await userEvent.click(metricSelector);
+    await userEvent.click(await screen.findByRole("option", { name: "Wishlist conversion change" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Wishlist conversion change");
+      expect(screen.getByText("28.6%")).toBeVisible();
+      expect(screen.getByText("Up 4.1 percentage points from the previous matching time range.")).toBeVisible();
+    });
+  });
+
+  it("shows a metric description while hovering options in the analytics selector", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    const metricSelector = await screen.findByRole("combobox", { name: "Select analytics metric" });
+
+    await userEvent.click(metricSelector);
+    await userEvent.hover(await screen.findByRole("option", { name: "Wishlist conversion" }));
+
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "The share of visitors who added this title to their wishlist after opening it during the selected time range.",
+    );
+  });
+
+  it("saves a custom title analytics view and makes it selectable", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.createDeveloperAnalyticsSavedView.mockResolvedValue({
+      view: {
+        id: "saved-view-2",
+        subjectScope: "title",
+        name: "Release watch",
+        panels: [
+          {
+            descriptor: "title_detail_viewed",
+            rangePresetId: "last-24-hours",
+            customFrom: null,
+            customTo: null,
+          },
+          {
+            descriptor: "title_get_clicked",
+            rangePresetId: "last-24-hours",
+            customFrom: null,
+            customTo: null,
+          },
+        ],
+        createdAt: "2026-04-14T00:00:00Z",
+        updatedAt: "2026-04-14T00:00:00Z",
+      },
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Add title analytics panel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save title analytics view" }));
+
+    const saveDialog = await screen.findByRole("dialog", { name: "Save title analytics view" });
+    await userEvent.type(within(saveDialog).getByLabelText("View name"), "Release watch");
+    await userEvent.click(within(saveDialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createDeveloperAnalyticsSavedView).toHaveBeenCalledWith(
+        "http://127.0.0.1:8787",
+        "developer-token",
+        expect.objectContaining({
+          subjectScope: "title",
+          name: "Release watch",
+          panels: [
+            expect.objectContaining({ descriptor: "title_detail_viewed", rangePresetId: "last-24-hours" }),
+            expect.objectContaining({ descriptor: "title_get_clicked", rangePresetId: "last-24-hours" }),
+          ],
+        }),
+      );
+    });
+
+    const savedViewSelector = screen.getByRole("combobox", { name: "Select saved title analytics view" });
+    expect(savedViewSelector).toBeVisible();
+    expect(within(savedViewSelector).getByRole("option", { name: "Create new..." })).toBeVisible();
+    expect(within(savedViewSelector).queryByRole("option", { name: "Current view" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete title analytics view" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save title analytics view" })).not.toBeInTheDocument();
+  });
+
+  it("loads saved title analytics views and treats reset date ranges as a change", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.listDeveloperAnalyticsSavedViews.mockResolvedValue({
+      views: [
+        {
+          id: "saved-view-3",
+          subjectScope: "title",
+          name: "Daily watch",
+          panels: [
+            {
+              descriptor: "title_get_clicked",
+              rangePresetId: "today",
+              customFrom: null,
+              customTo: null,
+            },
+          ],
+          createdAt: "2026-04-14T00:00:00Z",
+          updatedAt: "2026-04-14T00:00:00Z",
+        },
+      ],
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Get Title clicks");
+      expect(screen.getByRole("button", { name: "Today" })).toBeVisible();
+    });
+    expect(screen.getByRole("combobox", { name: "Select saved title analytics view" })).toHaveValue("saved-view-3");
+
+    expect(screen.getByRole("button", { name: "Delete title analytics view" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save title analytics view" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset title analytics date ranges" })).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Reset title analytics date ranges" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Last 24 hours" })).toBeVisible();
+    });
+    expect(screen.getByRole("button", { name: "Save title analytics view" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete title analytics view" })).toBeVisible();
+  });
+
+  it("restores the most recently viewed saved title analytics view when the page opens again", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.listDeveloperAnalyticsSavedViews.mockResolvedValue({
+      views: [
+        {
+          id: "saved-view-4",
+          subjectScope: "title",
+          name: "Daily watch",
+          panels: [
+            {
+              descriptor: "title_get_clicked",
+              rangePresetId: "today",
+              customFrom: null,
+              customTo: null,
+            },
+          ],
+          createdAt: "2026-04-14T00:00:00Z",
+          updatedAt: "2026-04-14T00:00:00Z",
+        },
+        {
+          id: "saved-view-5",
+          subjectScope: "title",
+          name: "Library watch",
+          panels: [
+            {
+              descriptor: "title_added_to_library",
+              rangePresetId: "this-month",
+              customFrom: null,
+              customTo: null,
+            },
+          ],
+          createdAt: "2026-04-13T00:00:00Z",
+          updatedAt: "2026-04-13T00:00:00Z",
+        },
+      ],
+    });
+
+    const firstRender = renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    const savedViewSelector = await screen.findByRole("combobox", { name: "Select saved title analytics view" });
+    await userEvent.selectOptions(savedViewSelector, "saved-view-5");
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select saved title analytics view" })).toHaveValue("saved-view-5");
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Added to library");
+      expect(screen.getByRole("button", { name: "This Month" })).toBeVisible();
+    });
+    expect(window.localStorage.getItem("developer-analytics-recent-view")).toContain("saved-view-5");
+
+    firstRender.unmount();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select saved title analytics view" })).toHaveValue("saved-view-5");
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Added to library");
+      expect(screen.getByRole("button", { name: "This Month" })).toBeVisible();
+    });
+  });
+
+  it("lets developers start a new title analytics view from the selector", async () => {
+    seedDeveloperWorkspace();
+    apiMocks.listDeveloperAnalyticsSavedViews.mockResolvedValue({
+      views: [
+        {
+          id: "saved-view-6",
+          subjectScope: "title",
+          name: "Library watch",
+          panels: [
+            {
+              descriptor: "title_added_to_library",
+              rangePresetId: "this-month",
+              customFrom: null,
+              customTo: null,
+            },
+          ],
+          createdAt: "2026-04-14T00:00:00Z",
+          updatedAt: "2026-04-14T00:00:00Z",
+        },
+      ],
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select saved title analytics view" })).toHaveValue("saved-view-6");
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Added to library");
+      expect(screen.getByRole("button", { name: "This Month" })).toBeVisible();
+    });
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Select saved title analytics view" }), "");
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Select saved title analytics view" })).toHaveValue("");
+      expect(screen.getByRole("combobox", { name: "Select analytics metric" })).toHaveTextContent("Title detail views");
+      expect(screen.getByRole("button", { name: "Last 24 hours" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Delete title analytics view" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save title analytics view" })).toBeVisible();
+    });
+  });
+
+  it("shows only the selected and remaining analytics metrics in each selector dropdown", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Select saved title analytics view" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Add title analytics panel" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Add title analytics panel" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(2);
+    });
+
+    const metricSelectors = screen.getAllByRole("combobox", { name: "Select analytics metric" });
+    await userEvent.click(metricSelectors[0]!);
+    expect(screen.getByRole("option", { name: "Title detail views" })).toBeVisible();
+    expect(screen.queryByRole("option", { name: "Get Title clicks" })).not.toBeInTheDocument();
+    await userEvent.click(metricSelectors[1]!);
+    expect(screen.getByRole("option", { name: "Get Title clicks" })).toBeVisible();
+    expect(screen.queryByRole("option", { name: "Title detail views" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Wishlist conversion" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "Added to wishlist" })).toBeVisible();
+  });
+
+  it("lets developers add another studio analytics panel", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=studios&workflow=studios-analytics&studioId=studio-1");
+
+    await waitFor(() => {
+      expect(apiMocks.getDeveloperTitle).toHaveBeenCalled();
+    });
+    await apiMocks.getDeveloperTitle.mock.results[0]!.value;
+    expect(await screen.findByRole("heading", { name: "Studio analytics" })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Add studio analytics panel" })).toBeVisible();
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(1);
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Add studio analytics panel" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })[1]).toHaveTextContent("Studio unfollows");
+      expect(screen.getByText("5")).toBeVisible();
+      expect(screen.getAllByRole("combobox", { name: "Select analytics metric" })).toHaveLength(2);
+    });
+  });
+
+  it("shows the expanded rolling and calendar date presets in the title analytics filter", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Last 24 hours" })[0]!);
+
+    const filterDialog = await screen.findByRole("dialog", { name: "Filter Title detail views" });
+    expect(within(filterDialog).getByRole("button", { name: "Last 6 months" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "Last Year" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "Today" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "Yesterday" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "This Week" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "This Month" })).toBeVisible();
+    expect(within(filterDialog).getByRole("button", { name: "This Year" })).toBeVisible();
+    expect(within(filterDialog).getByText("Custom range")).toBeVisible();
+  });
+
+  it("closes the title analytics filter when the user clicks outside the popup", async () => {
+    seedDeveloperWorkspace();
+
+    renderApp("/developer?domain=titles&workflow=titles-analytics&studioId=studio-1&titleId=title-1");
+
+    expect(await screen.findByRole("heading", { name: "Title analytics" })).toBeVisible();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Last 24 hours" })[0]!);
+    expect(await screen.findByRole("dialog", { name: "Filter Title detail views" })).toBeVisible();
+
+    fireEvent.pointerDown(document.body);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Filter Title detail views" })).not.toBeInTheDocument();
+    });
   });
 
   it("restores the maintained title overview as summary cards instead of inline editors", async () => {

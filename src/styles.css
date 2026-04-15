@@ -157,7 +157,7 @@
   }
 
   .app-community-bar {
-    border-top: 1px solid rgba(120, 72, 18, 0.18);
+    border-bottom: 1px solid rgba(120, 72, 18, 0.18);
     background:
       linear-gradient(180deg, rgba(250, 225, 160, 0.9), rgba(228, 182, 90, 0.84)),
       radial-gradient(circle at top, rgba(255, 244, 201, 0.42), transparent 60%);

@@ -11,6 +11,10 @@ import type {
   CatalogTitleResponse,
   CreateCatalogMediaEntryRequest,
   CreateDeveloperTitleRequest,
+  DeveloperAnalyticsResponse,
+  DeveloperAnalyticsSavedViewListResponse,
+  DeveloperAnalyticsSavedViewResponse,
+  DeveloperAnalyticsSubjectScope,
   DeleteDeveloperTitleRequest,
   CreatePlayerTitleReportRequest,
   CurrentUserResponse,
@@ -38,6 +42,7 @@ import type {
   UpdateUserProfileRequest,
   UpdateCatalogMediaEntryRequest,
   UpsertBoardProfileRequest,
+  UpsertDeveloperAnalyticsSavedViewRequest,
   UserNotificationListResponse,
   UserNotificationResponse,
   TitleMediaAssetListResponse,
@@ -176,6 +181,34 @@ export interface BeWebsitePresenceResponse {
     activeTtlSeconds: number;
   };
   metrics: BeHomeMetrics;
+}
+
+export interface DeveloperAnalyticsQuery {
+  from?: string | null;
+  to?: string | null;
+  descriptors?: string[];
+}
+
+function buildDeveloperAnalyticsQueryString(query?: DeveloperAnalyticsQuery): string {
+  if (!query) {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  if (query.from) {
+    params.set("from", query.from);
+  }
+  if (query.to) {
+    params.set("to", query.to);
+  }
+  for (const descriptor of query.descriptors ?? []) {
+    if (descriptor.trim()) {
+      params.append("descriptor", descriptor.trim());
+    }
+  }
+
+  const suffix = params.toString();
+  return suffix ? `?${suffix}` : "";
 }
 
 export interface BePresenceEndResponse {
@@ -709,6 +742,70 @@ export function listManagedStudios(apiBaseUrl: string, accessToken: string, sign
   return apiFetch<DeveloperStudioListResponse>(apiBaseUrl, "/developer/studios", { signal }, accessToken);
 }
 
+export function listDeveloperAnalyticsSavedViews(
+  apiBaseUrl: string,
+  accessToken: string,
+  subjectScope: DeveloperAnalyticsSubjectScope,
+): Promise<DeveloperAnalyticsSavedViewListResponse> {
+  return apiFetch<DeveloperAnalyticsSavedViewListResponse>(
+    apiBaseUrl,
+    `/developer/analytics/views?subjectScope=${encodeURIComponent(subjectScope)}`,
+    {},
+    accessToken,
+  );
+}
+
+export function createDeveloperAnalyticsSavedView(
+  apiBaseUrl: string,
+  accessToken: string,
+  request: UpsertDeveloperAnalyticsSavedViewRequest,
+): Promise<DeveloperAnalyticsSavedViewResponse> {
+  return apiFetch<DeveloperAnalyticsSavedViewResponse>(
+    apiBaseUrl,
+    "/developer/analytics/views",
+    {
+      method: "POST",
+      body: JSON.stringify(request),
+    },
+    accessToken,
+  );
+}
+
+export function updateDeveloperAnalyticsSavedView(
+  apiBaseUrl: string,
+  accessToken: string,
+  viewId: string,
+  request: UpsertDeveloperAnalyticsSavedViewRequest,
+): Promise<DeveloperAnalyticsSavedViewResponse> {
+  return apiFetch<DeveloperAnalyticsSavedViewResponse>(
+    apiBaseUrl,
+    `/developer/analytics/views/${viewId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request),
+    },
+    accessToken,
+  );
+}
+
+export function deleteDeveloperAnalyticsSavedView(apiBaseUrl: string, accessToken: string, viewId: string): Promise<void> {
+  return apiFetch<void>(apiBaseUrl, `/developer/analytics/views/${viewId}`, { method: "DELETE" }, accessToken);
+}
+
+export function getDeveloperStudioAnalytics(
+  apiBaseUrl: string,
+  accessToken: string,
+  studioId: string,
+  query?: DeveloperAnalyticsQuery,
+): Promise<DeveloperAnalyticsResponse> {
+  return apiFetch<DeveloperAnalyticsResponse>(
+    apiBaseUrl,
+    `/developer/studios/${studioId}/analytics${buildDeveloperAnalyticsQueryString(query)}`,
+    {},
+    accessToken,
+  );
+}
+
 export function listCatalogMediaTypes(apiBaseUrl: string, accessToken: string): Promise<CatalogMediaTypeListResponse> {
   return apiFetch<CatalogMediaTypeListResponse>(apiBaseUrl, "/developer/media-types", {}, accessToken);
 }
@@ -890,6 +987,20 @@ export function createTitle(apiBaseUrl: string, accessToken: string, studioId: s
 
 export function getDeveloperTitle(apiBaseUrl: string, accessToken: string, titleId: string): Promise<DeveloperTitleResponse> {
   return apiFetch<DeveloperTitleResponse>(apiBaseUrl, `/developer/titles/${titleId}`, {}, accessToken);
+}
+
+export function getDeveloperTitleAnalytics(
+  apiBaseUrl: string,
+  accessToken: string,
+  titleId: string,
+  query?: DeveloperAnalyticsQuery,
+): Promise<DeveloperAnalyticsResponse> {
+  return apiFetch<DeveloperAnalyticsResponse>(
+    apiBaseUrl,
+    `/developer/titles/${titleId}/analytics${buildDeveloperAnalyticsQueryString(query)}`,
+    {},
+    accessToken,
+  );
 }
 
 export function updateTitle(apiBaseUrl: string, accessToken: string, titleId: string, request: UpdateDeveloperTitleRequest): Promise<DeveloperTitleResponse> {

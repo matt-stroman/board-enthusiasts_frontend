@@ -4,13 +4,19 @@ import {
   clearBeWebsitePresenceSession,
   createMarketingSignup,
   createSupportIssueReport,
+  createDeveloperAnalyticsSavedView,
+  deleteDeveloperAnalyticsSavedView,
   endBeWebsitePresence,
   getBeHomeMetrics,
   getCatalogTitle,
+  getDeveloperStudioAnalytics,
+  getDeveloperTitleAnalytics,
+  listDeveloperAnalyticsSavedViews,
   listAgeRatingAuthorities,
   listCatalogTitles,
   listGenres,
   subscribeToBeCommunityMetrics,
+  updateDeveloperAnalyticsSavedView,
   upsertBeWebsitePresence,
   verifyCurrentUserPassword,
 } from "./api";
@@ -596,6 +602,142 @@ describe("catalog API helpers", () => {
         errors: {
           currentPassword: ["Current password is incorrect."],
         },
+      }),
+    );
+  });
+
+  it("builds developer studio analytics requests with repeated descriptor filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ range: { from: "2026-04-10T00:00:00Z", to: "2026-04-14T00:00:00Z" }, metrics: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getDeveloperStudioAnalytics("http://127.0.0.1:8787", "developer-token", "studio-1", {
+      from: "2026-04-10T00:00:00Z",
+      to: "2026-04-14T00:00:00Z",
+      descriptors: ["studio_followed", "studio_unfollowed"],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/developer/studios/studio-1/analytics?from=2026-04-10T00%3A00%3A00Z&to=2026-04-14T00%3A00%3A00Z&descriptor=studio_followed&descriptor=studio_unfollowed",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+  });
+
+  it("builds developer title analytics requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ range: { from: "2026-04-10T00:00:00Z", to: "2026-04-14T00:00:00Z" }, metrics: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getDeveloperTitleAnalytics("http://127.0.0.1:8787", "developer-token", "title-1", {
+      descriptors: ["title_detail_viewed"],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787/developer/titles/title-1/analytics?descriptor=title_detail_viewed",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+  });
+
+  it("builds developer analytics saved view requests", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ views: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ view: { id: "view-1" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ view: { id: "view-1" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+        json: async () => ({}),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listDeveloperAnalyticsSavedViews("http://127.0.0.1:8787", "developer-token", "title");
+    await createDeveloperAnalyticsSavedView("http://127.0.0.1:8787", "developer-token", {
+      subjectScope: "title",
+      name: "Launch watch",
+      panels: [
+        {
+          descriptor: "title_detail_viewed",
+          rangePresetId: "last-24-hours",
+          customFrom: null,
+          customTo: null,
+        },
+      ],
+    });
+    await updateDeveloperAnalyticsSavedView("http://127.0.0.1:8787", "developer-token", "view-1", {
+      subjectScope: "title",
+      name: "Launch watch",
+      panels: [
+        {
+          descriptor: "title_get_clicked",
+          rangePresetId: "today",
+          customFrom: null,
+          customTo: null,
+        },
+      ],
+    });
+    await deleteDeveloperAnalyticsSavedView("http://127.0.0.1:8787", "developer-token", "view-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:8787/developer/analytics/views?subjectScope=title",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8787/developer/analytics/views",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          subjectScope: "title",
+          name: "Launch watch",
+          panels: [
+            {
+              descriptor: "title_detail_viewed",
+              rangePresetId: "last-24-hours",
+              customFrom: null,
+              customTo: null,
+            },
+          ],
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://127.0.0.1:8787/developer/analytics/views/view-1",
+      expect.objectContaining({
+        method: "PUT",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "http://127.0.0.1:8787/developer/analytics/views/view-1",
+      expect.objectContaining({
+        method: "DELETE",
       }),
     );
   });

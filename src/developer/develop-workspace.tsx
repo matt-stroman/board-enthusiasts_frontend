@@ -7,6 +7,9 @@ import {
   CatalogMediaTypeDefinition,
   CatalogMediaTypeKey,
   CatalogTitleSummary,
+  DeveloperAnalyticsMetric,
+  DeveloperAnalyticsSavedView,
+  DeveloperAnalyticsSavedViewPanel,
   DeveloperStudioSummary,
   DeveloperTitle,
   GenreDefinition,
@@ -22,6 +25,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getWorkspaceWorkflowButtonClass } from "../app-core";
+import addCardGlyph from "../assets/title-action-icons/add_card_24dp.svg?raw";
 import {
   addDeveloperTitleReportMessage,
   activateTitle,
@@ -31,21 +35,26 @@ import {
   createStudio,
   createStudioCatalogMedia,
   createStudioLink,
+  createDeveloperAnalyticsSavedView,
   createTitle,
   createTitleCatalogMedia,
   createTitleRelease,
   deleteStudioCatalogMedia,
   deleteStudio,
   deleteStudioLink,
+  deleteDeveloperAnalyticsSavedView,
   deleteTitleCatalogMedia,
   createTitleShowcaseMedia,
   enrollAsDeveloper,
   getDeveloperEnrollment,
+  getDeveloperStudioAnalytics,
   getDeveloperTitle,
+  getDeveloperTitleAnalytics,
   getDeveloperTitleReport,
   getDeveloperTitleReports,
   listCatalogMediaTypes,
   listAgeRatingAuthorities,
+  listDeveloperAnalyticsSavedViews,
   listGenres,
   getTitleMetadataVersions,
   getTitleReleases,
@@ -64,6 +73,7 @@ import {
   updateStudio,
   updateStudioCatalogMedia,
   updateStudioLink,
+  updateDeveloperAnalyticsSavedView,
   uploadStudioCatalogMediaImage,
   uploadTitleCatalogMediaImage,
   uploadTitleShowcaseMediaImage,
@@ -71,6 +81,9 @@ import {
 } from "../api";
 import { useAuth } from "../auth";
 import { readAppConfig } from "../config";
+import deleteGlyph from "../assets/title-action-icons/delete_24dp.svg?raw";
+import resetSettingsGlyph from "../assets/title-action-icons/reset_settings_24dp.svg?raw";
+import saveGlyph from "../assets/title-action-icons/save_24dp.svg?raw";
 import {
   STUDIO_DESCRIPTION_MAX_LENGTH,
   TITLE_DESCRIPTION_MAX_LENGTH,
@@ -89,6 +102,8 @@ import {
 
 const appConfig = readAppConfig();
 const WORKSPACE_STORAGE_KEY = "develop-workspace-state";
+const RECENT_ANALYTICS_VIEW_STORAGE_KEY = "developer-analytics-recent-view";
+const CREATE_NEW_ANALYTICS_VIEW_OPTION = "";
 
 function buildUploadPolicy(
   definition: Pick<CatalogMediaTypeDefinition, "bucket" | "maxUploadBytes" | "acceptedMimeTypes" | "recommendedWidth" | "recommendedHeight">,
@@ -300,6 +315,8 @@ type PersistedState = {
   selectedReportId: string | null;
   reportReply: string;
 };
+
+type AnalyticsSubjectScope = "studio" | "title";
 
 function studioDraftsMatch(left: StudioDraft, right: StudioDraft): boolean {
   return JSON.stringify(toPersistedStudioDraft(left)) === JSON.stringify(toPersistedStudioDraft(right));
@@ -701,6 +718,39 @@ function savePersistedState(state: PersistedState): void {
   }
 }
 
+function loadRecentAnalyticsViewIds(): Partial<Record<AnalyticsSubjectScope, string>> {
+  try {
+    const raw = localStorage.getItem(RECENT_ANALYTICS_VIEW_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Partial<Record<AnalyticsSubjectScope, string>>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getRecentAnalyticsViewId(scope: AnalyticsSubjectScope): string {
+  return loadRecentAnalyticsViewIds()[scope] ?? "";
+}
+
+function setRecentAnalyticsViewId(scope: AnalyticsSubjectScope, viewId: string): void {
+  try {
+    const current = loadRecentAnalyticsViewIds();
+    if (viewId) {
+      current[scope] = viewId;
+    } else {
+      delete current[scope];
+    }
+
+    if (Object.keys(current).length === 0) {
+      localStorage.removeItem(RECENT_ANALYTICS_VIEW_STORAGE_KEY);
+      return;
+    }
+
+    localStorage.setItem(RECENT_ANALYTICS_VIEW_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // Best effort only.
+  }
+}
+
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "Not available";
@@ -786,6 +836,586 @@ function DateTimeLocalField({
         </svg>
       </button>
     </div>
+  );
+}
+
+type AnalyticsDateRange = {
+  from: string;
+  to: string;
+};
+
+type AnalyticsDateRangePreset = {
+  id: string;
+  label: string;
+  getRange: (now: Date) => AnalyticsDateRange;
+};
+
+function toIsoRange(from: Date, to: Date): AnalyticsDateRange {
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+  };
+}
+
+function startOfDay(date: Date): Date {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function startOfWeek(date: Date): Date {
+  const start = startOfDay(date);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+}
+
+function startOfMonth(date: Date): Date {
+  const start = startOfDay(date);
+  start.setDate(1);
+  return start;
+}
+
+function startOfYear(date: Date): Date {
+  const start = startOfDay(date);
+  start.setMonth(0, 1);
+  return start;
+}
+
+const analyticsRollingDateRangePresets: readonly AnalyticsDateRangePreset[] = [
+  {
+    id: "last-24-hours",
+    label: "Last 24 hours",
+    getRange: (now) => toIsoRange(new Date(now.getTime() - 24 * 60 * 60 * 1000), now),
+  },
+  {
+    id: "last-7-days",
+    label: "Last 7 days",
+    getRange: (now) => toIsoRange(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), now),
+  },
+  {
+    id: "last-30-days",
+    label: "Last 30 days",
+    getRange: (now) => toIsoRange(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), now),
+  },
+  {
+    id: "last-90-days",
+    label: "Last 90 days",
+    getRange: (now) => toIsoRange(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000), now),
+  },
+  {
+    id: "last-6-months",
+    label: "Last 6 months",
+    getRange: (now) => {
+      const from = new Date(now);
+      from.setMonth(from.getMonth() - 6);
+      return toIsoRange(from, now);
+    },
+  },
+  {
+    id: "last-year",
+    label: "Last Year",
+    getRange: (now) => {
+      const from = new Date(now);
+      from.setFullYear(from.getFullYear() - 1);
+      return toIsoRange(from, now);
+    },
+  },
+] as const;
+
+const analyticsCalendarDateRangePresets: readonly AnalyticsDateRangePreset[] = [
+  {
+    id: "today",
+    label: "Today",
+    getRange: (now) => toIsoRange(startOfDay(now), now),
+  },
+  {
+    id: "yesterday",
+    label: "Yesterday",
+    getRange: (now) => {
+      const from = startOfDay(now);
+      from.setDate(from.getDate() - 1);
+      return toIsoRange(from, now);
+    },
+  },
+  {
+    id: "this-week",
+    label: "This Week",
+    getRange: (now) => toIsoRange(startOfWeek(now), now),
+  },
+  {
+    id: "this-month",
+    label: "This Month",
+    getRange: (now) => toIsoRange(startOfMonth(now), now),
+  },
+  {
+    id: "this-year",
+    label: "This Year",
+    getRange: (now) => toIsoRange(startOfYear(now), now),
+  },
+] as const;
+
+const analyticsDateRangePresets = [...analyticsRollingDateRangePresets, ...analyticsCalendarDateRangePresets] as const;
+const defaultAnalyticsDateRangePreset = analyticsRollingDateRangePresets[0];
+
+function parseLocalDateTimeInput(value: string): string | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function createDefaultAnalyticsDateRange(): AnalyticsDateRange {
+  return defaultAnalyticsDateRangePreset.getRange(new Date());
+}
+
+type AnalyticsDateRangeSelection = {
+  presetId: string | null;
+  appliedLabel: string;
+  range: AnalyticsDateRange;
+  customFrom: string;
+  customTo: string;
+};
+
+function getAnalyticsDateRangePresetById(presetId: string | null | undefined): AnalyticsDateRangePreset | null {
+  return analyticsDateRangePresets.find((preset) => preset.id === presetId) ?? null;
+}
+
+function createAnalyticsDateRangeSelection(
+  range: AnalyticsDateRange,
+  appliedLabel: string,
+  presetId: string | null,
+): AnalyticsDateRangeSelection {
+  return {
+    presetId,
+    appliedLabel,
+    range,
+    customFrom: formatDateTimeLocalInput(range.from),
+    customTo: formatDateTimeLocalInput(range.to),
+  };
+}
+
+function createDefaultAnalyticsDateRangeSelection(): AnalyticsDateRangeSelection {
+  const range = createDefaultAnalyticsDateRange();
+  return createAnalyticsDateRangeSelection(range, defaultAnalyticsDateRangePreset.label, defaultAnalyticsDateRangePreset.id);
+}
+
+function createAnalyticsDateRangeSelectionFromPreset(preset: AnalyticsDateRangePreset): AnalyticsDateRangeSelection {
+  return createAnalyticsDateRangeSelection(preset.getRange(new Date()), preset.label, preset.id);
+}
+
+function createAnalyticsDateRangeSelectionFromSavedPanel(panel: DeveloperAnalyticsSavedViewPanel): AnalyticsDateRangeSelection {
+  const preset = getAnalyticsDateRangePresetById(panel.rangePresetId);
+  if (preset) {
+    return createAnalyticsDateRangeSelectionFromPreset(preset);
+  }
+
+  const from = parseLocalDateTimeInput(panel.customFrom ?? "");
+  const to = parseLocalDateTimeInput(panel.customTo ?? "");
+  if (from && to && new Date(from).getTime() <= new Date(to).getTime()) {
+    return createAnalyticsDateRangeSelection({ from, to }, "Custom range", null);
+  }
+
+  return createDefaultAnalyticsDateRangeSelection();
+}
+
+type AnalyticsPanelState = {
+  id: string;
+  metric: DeveloperAnalyticsMetric;
+  rangeSelection: AnalyticsDateRangeSelection;
+  loading: boolean;
+  error: string | null;
+};
+
+function createAnalyticsPanelState(
+  id: string,
+  metric: DeveloperAnalyticsMetric,
+  rangeSelection: AnalyticsDateRangeSelection = createDefaultAnalyticsDateRangeSelection(),
+): AnalyticsPanelState {
+  return {
+    id,
+    metric,
+    rangeSelection,
+    loading: false,
+    error: null,
+  };
+}
+
+function syncAnalyticsPanels(
+  panels: readonly AnalyticsPanelState[],
+  metrics: readonly DeveloperAnalyticsMetric[],
+  createPanel: (metric: DeveloperAnalyticsMetric) => AnalyticsPanelState,
+): AnalyticsPanelState[] {
+  if (metrics.length === 0) {
+    return [];
+  }
+
+  const metricByDescriptor = new Map(metrics.map((metric) => [metric.descriptor, metric]));
+  const nextPanels = panels
+    .map((panel) => {
+      const availableMetric = metricByDescriptor.get(panel.metric.descriptor);
+      if (!availableMetric) {
+        return null;
+      }
+
+      return {
+        ...panel,
+        metric: {
+          ...availableMetric,
+          value: panel.metric.value,
+          lastOccurredAt: panel.metric.lastOccurredAt,
+        },
+      };
+    })
+    .filter((panel): panel is AnalyticsPanelState => Boolean(panel));
+
+  return nextPanels.length > 0 ? nextPanels : [createPanel(metrics[0]!)];
+}
+
+function resetAnalyticsPanelsToDefault(
+  panels: readonly AnalyticsPanelState[],
+  metrics: readonly DeveloperAnalyticsMetric[],
+  createPanel: (metric: DeveloperAnalyticsMetric) => AnalyticsPanelState,
+): AnalyticsPanelState[] {
+  if (metrics.length === 0) {
+    return [];
+  }
+
+  const defaultMetric = metrics[0]!;
+  const firstPanel = panels[0];
+  if (!firstPanel) {
+    return [createPanel(defaultMetric)];
+  }
+
+  return [
+    {
+      ...firstPanel,
+      metric: defaultMetric,
+      rangeSelection: createDefaultAnalyticsDateRangeSelection(),
+      loading: false,
+      error: null,
+    },
+  ];
+}
+
+function getNextAnalyticsPanelDescriptor(
+  panels: readonly AnalyticsPanelState[],
+  metrics: readonly DeveloperAnalyticsMetric[],
+): string | null {
+  const selectedDescriptors = new Set(panels.map((panel) => panel.metric.descriptor));
+  return metrics.find((metric) => !selectedDescriptors.has(metric.descriptor))?.descriptor ?? null;
+}
+
+function resolvePreferredAnalyticsSavedView(
+  views: readonly DeveloperAnalyticsSavedView[],
+  activeViewId: string,
+  recentViewId: string,
+): DeveloperAnalyticsSavedView | null {
+  return views.find((view) => view.id === activeViewId)
+    ?? views.find((view) => view.id === recentViewId)
+    ?? views[0]
+    ?? null;
+}
+
+function CloseIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 7L17 17" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" />
+      <path d="M17 7L7 17" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DeveloperAnalyticsMetricPanel({
+  panel,
+  metrics,
+  selectedDescriptors,
+  onMetricChange,
+  onApplyPreset,
+  onApplyCustomRange,
+  canRemove,
+  onRemove,
+}: {
+  panel: AnalyticsPanelState;
+  metrics: readonly DeveloperAnalyticsMetric[];
+  selectedDescriptors: readonly string[];
+  onMetricChange: (panel: AnalyticsPanelState, descriptor: string) => void;
+  onApplyPreset: (panel: AnalyticsPanelState, preset: AnalyticsDateRangePreset) => Promise<boolean>;
+  onApplyCustomRange: (panel: AnalyticsPanelState, customFrom: string, customTo: string) => Promise<boolean>;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
+  const metricListboxId = useId();
+  const [metricSelectorOpen, setMetricSelectorOpen] = useState(false);
+  const [hoveredMetricDescriptor, setHoveredMetricDescriptor] = useState(panel.metric.descriptor);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [customFromDraft, setCustomFromDraft] = useState(panel.rangeSelection.customFrom);
+  const [customToDraft, setCustomToDraft] = useState(panel.rangeSelection.customTo);
+  const metricSelectorRef = useRef<HTMLDivElement | null>(null);
+  const filterShellRef = useRef<HTMLDivElement | null>(null);
+  const availableMetricOptions = metrics.filter(
+    (metricOption) => metricOption.descriptor === panel.metric.descriptor || !selectedDescriptors.includes(metricOption.descriptor),
+  );
+  const hoveredMetric = availableMetricOptions.find((metricOption) => metricOption.descriptor === hoveredMetricDescriptor) ?? panel.metric;
+
+  useEffect(() => {
+    setMetricSelectorOpen(false);
+    setHoveredMetricDescriptor(panel.metric.descriptor);
+    setFilterOpen(false);
+    setCustomFromDraft(panel.rangeSelection.customFrom);
+    setCustomToDraft(panel.rangeSelection.customTo);
+  }, [panel.metric, panel.rangeSelection]);
+
+  useEffect(() => {
+    if (!metricSelectorOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent): void {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!metricSelectorRef.current?.contains(target)) {
+        setMetricSelectorOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [metricSelectorOpen]);
+
+  useEffect(() => {
+    if (!filterOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent): void {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!filterShellRef.current?.contains(target)) {
+        setFilterOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [filterOpen]);
+
+  return (
+    <article className="develop-stat-card relative p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor={`analytics-metric-trigger-${panel.id}`}>
+            Select analytics metric
+          </label>
+          <div ref={metricSelectorRef} className="relative">
+            <button
+              id={`analytics-metric-trigger-${panel.id}`}
+              type="button"
+              role="combobox"
+              aria-label="Select analytics metric"
+              aria-controls={metricListboxId}
+              aria-expanded={metricSelectorOpen}
+              aria-haspopup="listbox"
+              className="flex w-full min-w-0 items-center justify-between gap-3 rounded-[1rem] border border-white/12 bg-[#111017] px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70 outline-none transition focus:border-cyan-300/50 disabled:cursor-not-allowed disabled:opacity-70"
+              title={panel.metric.publicTooltip ?? panel.metric.publicDescription ?? undefined}
+              disabled={panel.loading}
+              onClick={() => setMetricSelectorOpen((current) => !current)}
+            >
+              <span className="min-w-0 truncate">{panel.metric.displayName}</span>
+              <ChevronDownIcon className={`h-4 w-4 shrink-0 transition ${metricSelectorOpen ? "rotate-180" : ""}`} />
+            </button>
+            {metricSelectorOpen ? (
+              <div className="surface-panel-strong absolute left-0 top-full z-20 mt-3 w-full min-w-[20rem] max-w-[calc(100vw-3rem)] rounded-[1rem] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                  <div
+                    id={metricListboxId}
+                    role="listbox"
+                    aria-label="Available analytics metrics"
+                    className="max-h-[18rem] overflow-y-auto rounded-[0.9rem] border border-white/10 bg-slate-950/35 p-1"
+                  >
+                    {availableMetricOptions.map((metricOption) => {
+                      const isSelected = metricOption.descriptor === panel.metric.descriptor;
+                      const isHovered = metricOption.descriptor === hoveredMetric.descriptor;
+                      return (
+                        <button
+                          key={metricOption.descriptor}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={`flex w-full items-center rounded-[0.8rem] px-3 py-3 text-left text-sm transition ${
+                            isSelected
+                              ? "bg-emerald-500/30 text-white"
+                              : isHovered
+                                ? "bg-cyan-200/20 text-white"
+                                : "text-slate-100 hover:bg-white/8"
+                          }`}
+                          title={metricOption.publicTooltip ?? metricOption.publicDescription ?? undefined}
+                          onMouseEnter={() => setHoveredMetricDescriptor(metricOption.descriptor)}
+                          onFocus={() => setHoveredMetricDescriptor(metricOption.descriptor)}
+                          onClick={() => {
+                            onMetricChange(panel, metricOption.descriptor);
+                            setMetricSelectorOpen(false);
+                          }}
+                        >
+                          <span>{metricOption.displayName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    role="tooltip"
+                    className="rounded-[0.9rem] border border-cyan-300/20 bg-slate-950/45 p-4 text-left"
+                  >
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100/70">
+                      {hoveredMetric.displayName}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-200">
+                      {hoveredMetric.publicDescription ?? hoveredMetric.publicTooltip ?? "Details for this metric will appear here."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-2 text-3xl font-semibold text-white">{panel.metric.valueDisplay}</div>
+          {panel.metric.secondaryValue ? (
+            <div className="mt-2 text-sm font-medium text-cyan-100/80">{panel.metric.secondaryValue}</div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-start gap-2">
+          {panel.metric.supportsDateRange ? (
+            <div ref={filterShellRef} className="relative shrink-0">
+              <button
+                type="button"
+                className="secondary-button !px-4 !py-2 text-sm"
+                aria-expanded={filterOpen}
+                aria-haspopup="dialog"
+                onClick={() => setFilterOpen((current) => !current)}
+                disabled={panel.loading}
+              >
+                {panel.loading ? "Updating..." : panel.rangeSelection.appliedLabel}
+              </button>
+              {filterOpen ? (
+                <div className="surface-panel-strong absolute right-0 top-full z-20 mt-3 w-[28rem] max-w-[calc(100vw-3rem)] rounded-[1rem] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]" role="dialog" aria-label={`Filter ${panel.metric.displayName}`}>
+                  <div className="max-h-[17rem] overflow-y-auto pr-1">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        {analyticsRollingDateRangePresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-[0.9rem] border border-white/10 bg-slate-950/35 px-3 py-3 text-left text-sm text-slate-100 transition hover:border-cyan-300/40 hover:bg-slate-950/50"
+                            onClick={() => {
+                              void onApplyPreset(panel, preset).then((applied) => {
+                                if (applied) {
+                                  setFilterOpen(false);
+                                }
+                              });
+                            }}
+                            disabled={panel.loading}
+                          >
+                            <span>{preset.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        {analyticsCalendarDateRangePresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-[0.9rem] border border-white/10 bg-slate-950/35 px-3 py-3 text-left text-sm text-slate-100 transition hover:border-cyan-300/40 hover:bg-slate-950/50"
+                            onClick={() => {
+                              void onApplyPreset(panel, preset).then((applied) => {
+                                if (applied) {
+                                  setFilterOpen(false);
+                                }
+                              });
+                            }}
+                            disabled={panel.loading}
+                          >
+                            <span>{preset.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Custom range</div>
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.16em] text-slate-400">From</div>
+                        <DateTimeLocalField
+                          value={customFromDraft}
+                          disabled={panel.loading}
+                          onChange={setCustomFromDraft}
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.16em] text-slate-400">To</div>
+                        <DateTimeLocalField
+                          value={customToDraft}
+                          disabled={panel.loading}
+                          onChange={setCustomToDraft}
+                        />
+                      </div>
+                      <button
+                        className="primary-button w-full justify-center"
+                        type="button"
+                        onClick={() => {
+                          void onApplyCustomRange(panel, customFromDraft, customToDraft).then((applied) => {
+                            if (applied) {
+                              setFilterOpen(false);
+                            }
+                          });
+                        }}
+                        disabled={panel.loading}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {canRemove ? (
+            <button
+              type="button"
+              className="secondary-button !min-h-0 !h-11 !w-11 !rounded-full !px-0 !py-0"
+              onClick={onRemove}
+              aria-label={`Remove ${panel.metric.displayName} panel`}
+              title={`Remove ${panel.metric.displayName} panel`}
+            >
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <p className="mt-3 text-sm leading-7 text-slate-300">{panel.metric.publicDescription ?? "No public description is available for this metric yet."}</p>
+      <div className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">
+        {panel.metric.statusMessage ?? (panel.metric.lastOccurredAt ? `Last activity ${formatDateTime(panel.metric.lastOccurredAt)}` : "No activity recorded in this range yet")}
+      </div>
+      {panel.error ? <p className="error-text mt-3">{panel.error}</p> : null}
+    </article>
   );
 }
 
@@ -1484,6 +2114,86 @@ function DeleteTitleConfirmationModal({
   );
 }
 
+function SaveAnalyticsViewModal({
+  subjectLabel,
+  initialName,
+  saving,
+  error,
+  onSave,
+  onClose,
+}: {
+  subjectLabel: string;
+  initialName: string;
+  saving: boolean;
+  error: string | null;
+  onSave: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(initialName);
+
+  useEffect(() => {
+    setName(initialName);
+  }, [initialName]);
+
+  return (
+    <WorkspaceModal title={`Save ${subjectLabel} view`} onClose={onClose}>
+      <form
+        className="space-y-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave(name);
+        }}
+      >
+        <p className="text-sm leading-7 text-slate-300">Choose a name so you can reopen this analytics setup whenever you need it.</p>
+        <Field label="View name" error={error ?? undefined}>
+          <input value={name} onChange={(event) => setName(event.currentTarget.value)} placeholder={`${subjectLabel} overview`} autoFocus />
+        </Field>
+        <div className="flex flex-wrap gap-3">
+          <button className="primary-button" type="submit" disabled={saving || !name.trim()}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </WorkspaceModal>
+  );
+}
+
+function DeleteAnalyticsViewModal({
+  subjectLabel,
+  viewName,
+  saving,
+  error,
+  onDelete,
+  onClose,
+}: {
+  subjectLabel: string;
+  viewName: string;
+  saving: boolean;
+  error: string | null;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <WorkspaceModal title={`Delete ${subjectLabel} view`} onClose={onClose}>
+      <div className="space-y-6">
+        <p className="text-sm leading-7 text-slate-300">Delete <span className="font-semibold text-white">{viewName}</span>? You can always save another analytics view later.</p>
+        {error ? <p className="error-text">{error}</p> : null}
+        <div className="flex flex-wrap gap-3">
+          <button className="danger-button" type="button" onClick={onDelete} disabled={saving}>
+            {saving ? "Deleting..." : "Delete"}
+          </button>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </WorkspaceModal>
+  );
+}
+
 export function DevelopWorkspacePage() {
   const { session, currentUser } = useAuth();
   const accessToken = session?.access_token ?? "";
@@ -1500,6 +2210,37 @@ export function DevelopWorkspacePage() {
   const [linksStudioId, setLinksStudioId] = useState<string | null>(null);
   const [titles, setTitles] = useState<CatalogTitleSummary[]>([]);
   const [developerTitle, setDeveloperTitle] = useState<DeveloperTitle | null>(null);
+  const [studioAnalyticsMetrics, setStudioAnalyticsMetrics] = useState<DeveloperAnalyticsMetric[]>([]);
+  const [studioAnalyticsLoading, setStudioAnalyticsLoading] = useState(false);
+  const [studioAnalyticsError, setStudioAnalyticsError] = useState<string | null>(null);
+  const analyticsPanelIdRef = useRef(0);
+  const createAnalyticsPanel = (
+    metric: DeveloperAnalyticsMetric,
+    rangeSelection: AnalyticsDateRangeSelection = createDefaultAnalyticsDateRangeSelection(),
+  ): AnalyticsPanelState => {
+    analyticsPanelIdRef.current += 1;
+    return createAnalyticsPanelState(`analytics-panel-${analyticsPanelIdRef.current}`, metric, rangeSelection);
+  };
+  const [studioAnalyticsPanels, setStudioAnalyticsPanels] = useState<AnalyticsPanelState[]>([]);
+  const [studioAnalyticsSavedViews, setStudioAnalyticsSavedViews] = useState<DeveloperAnalyticsSavedView[]>([]);
+  const [selectedStudioAnalyticsViewId, setSelectedStudioAnalyticsViewId] = useState(() => getRecentAnalyticsViewId("studio"));
+  const [titleAnalyticsMetrics, setTitleAnalyticsMetrics] = useState<DeveloperAnalyticsMetric[]>([]);
+  const [titleAnalyticsLoading, setTitleAnalyticsLoading] = useState(false);
+  const [titleAnalyticsError, setTitleAnalyticsError] = useState<string | null>(null);
+  const [titleAnalyticsPanels, setTitleAnalyticsPanels] = useState<AnalyticsPanelState[]>([]);
+  const [titleAnalyticsSavedViews, setTitleAnalyticsSavedViews] = useState<DeveloperAnalyticsSavedView[]>([]);
+  const [selectedTitleAnalyticsViewId, setSelectedTitleAnalyticsViewId] = useState(() => getRecentAnalyticsViewId("title"));
+  const [analyticsViewActionError, setAnalyticsViewActionError] = useState<string | null>(null);
+  const [analyticsViewSaving, setAnalyticsViewSaving] = useState(false);
+  const [saveAnalyticsViewModalState, setSaveAnalyticsViewModalState] = useState<{
+    subjectScope: "studio" | "title";
+    initialName: string;
+  } | null>(null);
+  const [deleteAnalyticsViewModalState, setDeleteAnalyticsViewModalState] = useState<{
+    subjectScope: "studio" | "title";
+    viewId: string;
+    viewName: string;
+  } | null>(null);
   const [metadataVersions, setMetadataVersions] = useState<TitleMetadataVersion[]>([]);
   const [showcaseMediaDrafts, setShowcaseMediaDrafts] = useState<TitleShowcaseMediaDraft[]>([]);
   const [reports, setReports] = useState<TitleReportSummary[]>([]);
@@ -1723,6 +2464,20 @@ export function DevelopWorkspacePage() {
   useEffect(() => {
     setReleaseOverviewError(null);
   }, [workspace.workflow, workspace.releaseId]);
+
+  useEffect(() => {
+    if (workspace.workflow !== "studios-analytics") {
+      setStudioAnalyticsError(null);
+      setSelectedStudioAnalyticsViewId("");
+    }
+    if (workspace.workflow !== "titles-analytics") {
+      setTitleAnalyticsError(null);
+      setSelectedTitleAnalyticsViewId("");
+    }
+    setAnalyticsViewActionError(null);
+    setSaveAnalyticsViewModalState(null);
+    setDeleteAnalyticsViewModalState(null);
+  }, [workspace.workflow]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1959,6 +2714,126 @@ export function DevelopWorkspacePage() {
       cancelled = true;
     };
   }, [accessToken, developerAccessEnabled, workspace.titleId, workspace.workflow]);
+
+  useEffect(() => {
+    if (!accessToken || !developerAccessEnabled || workspace.workflow !== "studios-analytics" || !workspace.studioId) {
+      setStudioAnalyticsMetrics([]);
+      setStudioAnalyticsLoading(false);
+      setStudioAnalyticsPanels([]);
+      setStudioAnalyticsSavedViews([]);
+      setSelectedStudioAnalyticsViewId("");
+      return;
+    }
+
+    let cancelled = false;
+    const defaultRange = createDefaultAnalyticsDateRange();
+
+    async function loadStudioAnalytics(): Promise<void> {
+      setStudioAnalyticsLoading(true);
+      setStudioAnalyticsError(null);
+      try {
+        const [response, savedViewResponse] = await Promise.all([
+          getDeveloperStudioAnalytics(appConfig.apiBaseUrl, accessToken, workspace.studioId, defaultRange),
+          listDeveloperAnalyticsSavedViews(appConfig.apiBaseUrl, accessToken, "studio"),
+        ]);
+        if (!cancelled) {
+          const preferredSavedView = resolvePreferredAnalyticsSavedView(
+            savedViewResponse.views,
+            selectedStudioAnalyticsViewId,
+            getRecentAnalyticsViewId("studio"),
+          );
+          setStudioAnalyticsMetrics(response.metrics);
+          setStudioAnalyticsSavedViews(savedViewResponse.views);
+          if (preferredSavedView) {
+            setSelectedStudioAnalyticsViewId(preferredSavedView.id);
+            setRecentAnalyticsViewId("studio", preferredSavedView.id);
+            setStudioAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(preferredSavedView, loadStudioAnalyticsMetric));
+          } else {
+            setSelectedStudioAnalyticsViewId("");
+            setRecentAnalyticsViewId("studio", "");
+            setStudioAnalyticsPanels(syncAnalyticsPanels([], response.metrics, createAnalyticsPanel));
+          }
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setStudioAnalyticsError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      } finally {
+        if (!cancelled) {
+          setStudioAnalyticsLoading(false);
+        }
+      }
+    }
+
+    void loadStudioAnalytics();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, developerAccessEnabled, workspace.studioId, workspace.workflow]);
+
+  useEffect(() => {
+    if (!accessToken || !developerAccessEnabled || workspace.workflow !== "titles-analytics" || !workspace.titleId) {
+      setTitleAnalyticsMetrics([]);
+      setTitleAnalyticsLoading(false);
+      setTitleAnalyticsPanels([]);
+      setTitleAnalyticsSavedViews([]);
+      setSelectedTitleAnalyticsViewId("");
+      return;
+    }
+
+    let cancelled = false;
+    const defaultRange = createDefaultAnalyticsDateRange();
+
+    async function loadTitleAnalytics(): Promise<void> {
+      setTitleAnalyticsLoading(true);
+      setTitleAnalyticsError(null);
+      try {
+        const [response, savedViewResponse] = await Promise.all([
+          getDeveloperTitleAnalytics(appConfig.apiBaseUrl, accessToken, workspace.titleId, defaultRange),
+          listDeveloperAnalyticsSavedViews(appConfig.apiBaseUrl, accessToken, "title"),
+        ]);
+        if (!cancelled) {
+          const preferredSavedView = resolvePreferredAnalyticsSavedView(
+            savedViewResponse.views,
+            selectedTitleAnalyticsViewId,
+            getRecentAnalyticsViewId("title"),
+          );
+          setTitleAnalyticsMetrics(response.metrics);
+          setTitleAnalyticsSavedViews(savedViewResponse.views);
+          if (preferredSavedView) {
+            setSelectedTitleAnalyticsViewId(preferredSavedView.id);
+            setRecentAnalyticsViewId("title", preferredSavedView.id);
+            setTitleAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(preferredSavedView, loadTitleAnalyticsMetric));
+          } else {
+            setSelectedTitleAnalyticsViewId("");
+            setRecentAnalyticsViewId("title", "");
+            setTitleAnalyticsPanels(syncAnalyticsPanels([], response.metrics, createAnalyticsPanel));
+          }
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setTitleAnalyticsError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      } finally {
+        if (!cancelled) {
+          setTitleAnalyticsLoading(false);
+        }
+      }
+    }
+
+    void loadTitleAnalytics();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, developerAccessEnabled, workspace.titleId, workspace.workflow]);
+
+  useEffect(() => {
+    setStudioAnalyticsPanels((current) => syncAnalyticsPanels(current, studioAnalyticsMetrics, createAnalyticsPanel));
+  }, [studioAnalyticsMetrics]);
+
+  useEffect(() => {
+    setTitleAnalyticsPanels((current) => syncAnalyticsPanels(current, titleAnalyticsMetrics, createAnalyticsPanel));
+  }, [titleAnalyticsMetrics]);
 
   useEffect(() => {
     if (!workspace.titleId || !selectedReportId) {
@@ -2427,6 +3302,414 @@ export function DevelopWorkspacePage() {
       releaseId: orderedReleases.find((release) => release.id === preferredReleaseId)?.id ?? orderedReleases.find((release) => release.id === workspace.releaseId)?.id ?? orderedReleases[0]?.id ?? "",
     });
     return titleResponse.title;
+  }
+
+  async function loadStudioAnalyticsMetric(descriptor: string, range: AnalyticsDateRange): Promise<DeveloperAnalyticsMetric> {
+    if (!workspace.studioId) {
+      throw new Error("Select a studio to review analytics.");
+    }
+
+    const response = await getDeveloperStudioAnalytics(appConfig.apiBaseUrl, accessToken, workspace.studioId, {
+      ...range,
+      descriptors: [descriptor],
+    });
+    const resolvedMetric = response.metrics.find((candidate) => candidate.descriptor === descriptor);
+    if (!resolvedMetric) {
+      throw new Error("This analytics metric is not available right now.");
+    }
+
+    return resolvedMetric;
+  }
+
+  async function loadTitleAnalyticsMetric(descriptor: string, range: AnalyticsDateRange): Promise<DeveloperAnalyticsMetric> {
+    if (!workspace.titleId) {
+      throw new Error("Select a title to review analytics.");
+    }
+
+    const response = await getDeveloperTitleAnalytics(appConfig.apiBaseUrl, accessToken, workspace.titleId, {
+      ...range,
+      descriptors: [descriptor],
+    });
+    const resolvedMetric = response.metrics.find((candidate) => candidate.descriptor === descriptor);
+    if (!resolvedMetric) {
+      throw new Error("This analytics metric is not available right now.");
+    }
+
+    return resolvedMetric;
+  }
+
+  function serializeAnalyticsPanels(panels: readonly AnalyticsPanelState[]): DeveloperAnalyticsSavedViewPanel[] {
+    return panels.map((panel) => ({
+      descriptor: panel.metric.descriptor,
+      rangePresetId: panel.rangeSelection.presetId,
+      customFrom: panel.rangeSelection.presetId ? null : panel.rangeSelection.range.from,
+      customTo: panel.rangeSelection.presetId ? null : panel.rangeSelection.range.to,
+    }));
+  }
+
+  function removeAnalyticsPanel(panels: readonly AnalyticsPanelState[], panelId: string): AnalyticsPanelState[] {
+    return panels.filter((panel) => panel.id !== panelId);
+  }
+
+  function analyticsPanelsUseDefaultRange(panels: readonly AnalyticsPanelState[]): boolean {
+    return panels.every((panel) => panel.rangeSelection.presetId === defaultAnalyticsDateRangePreset.id);
+  }
+
+  function getSavedAnalyticsViewById(
+    views: readonly DeveloperAnalyticsSavedView[],
+    viewId: string,
+  ): DeveloperAnalyticsSavedView | null {
+    return views.find((view) => view.id === viewId) ?? null;
+  }
+
+  function analyticsPanelsMatchSavedView(view: DeveloperAnalyticsSavedView | null, panels: readonly AnalyticsPanelState[]): boolean {
+    if (!view) {
+      return false;
+    }
+
+    return JSON.stringify(view.panels) === JSON.stringify(serializeAnalyticsPanels(panels));
+  }
+
+  async function loadAnalyticsPanelsFromSavedView(
+    view: DeveloperAnalyticsSavedView,
+    loadMetric: (descriptor: string, range: AnalyticsDateRange) => Promise<DeveloperAnalyticsMetric>,
+  ): Promise<AnalyticsPanelState[]> {
+    return Promise.all(
+      view.panels.map(async (savedPanel) => {
+        const rangeSelection = createAnalyticsDateRangeSelectionFromSavedPanel(savedPanel);
+        const metric = await loadMetric(savedPanel.descriptor, rangeSelection.range);
+        return createAnalyticsPanel(metric, rangeSelection);
+      }),
+    );
+  }
+
+  async function handleAnalyticsMetricChange(
+    panel: AnalyticsPanelState,
+    descriptor: string,
+    setPanels: Dispatch<SetStateAction<AnalyticsPanelState[]>>,
+    loadMetric: (descriptor: string, range: AnalyticsDateRange) => Promise<DeveloperAnalyticsMetric>,
+  ): Promise<void> {
+    setPanels((current) => current.map((candidate) => (candidate.id === panel.id ? { ...candidate, loading: true, error: null } : candidate)));
+
+    try {
+      const nextMetric = await loadMetric(descriptor, panel.rangeSelection.range);
+      setPanels((current) =>
+        current.map((candidate) => (candidate.id === panel.id ? { ...candidate, metric: nextMetric, loading: false, error: null } : candidate)),
+      );
+    } catch (nextError) {
+      setPanels((current) =>
+        current.map((candidate) => (
+          candidate.id === panel.id
+            ? { ...candidate, loading: false, error: nextError instanceof Error ? nextError.message : String(nextError) }
+            : candidate
+        )),
+      );
+    }
+  }
+
+  async function handleAnalyticsPresetRangeChange(
+    panel: AnalyticsPanelState,
+    preset: AnalyticsDateRangePreset,
+    setPanels: Dispatch<SetStateAction<AnalyticsPanelState[]>>,
+    loadMetric: (descriptor: string, range: AnalyticsDateRange) => Promise<DeveloperAnalyticsMetric>,
+  ): Promise<boolean> {
+    setPanels((current) => current.map((candidate) => (candidate.id === panel.id ? { ...candidate, loading: true, error: null } : candidate)));
+
+    const nextRangeSelection = createAnalyticsDateRangeSelectionFromPreset(preset);
+
+    try {
+      const nextMetric = await loadMetric(panel.metric.descriptor, nextRangeSelection.range);
+      setPanels((current) =>
+        current.map((candidate) => (
+          candidate.id === panel.id
+            ? { ...candidate, metric: nextMetric, rangeSelection: nextRangeSelection, loading: false, error: null }
+            : candidate
+        )),
+      );
+      return true;
+    } catch (nextError) {
+      setPanels((current) =>
+        current.map((candidate) => (
+          candidate.id === panel.id
+            ? { ...candidate, loading: false, error: nextError instanceof Error ? nextError.message : String(nextError) }
+            : candidate
+        )),
+      );
+      return false;
+    }
+  }
+
+  async function handleAnalyticsCustomRangeChange(
+    panel: AnalyticsPanelState,
+    customFrom: string,
+    customTo: string,
+    setPanels: Dispatch<SetStateAction<AnalyticsPanelState[]>>,
+    loadMetric: (descriptor: string, range: AnalyticsDateRange) => Promise<DeveloperAnalyticsMetric>,
+  ): Promise<boolean> {
+    const from = parseLocalDateTimeInput(customFrom);
+    const to = parseLocalDateTimeInput(customTo);
+    if (!from || !to) {
+      setPanels((current) =>
+        current.map((candidate) => (candidate.id === panel.id ? { ...candidate, error: "Choose both a valid start and end date." } : candidate)),
+      );
+      return false;
+    }
+    if (new Date(from).getTime() > new Date(to).getTime()) {
+      setPanels((current) =>
+        current.map((candidate) => (candidate.id === panel.id ? { ...candidate, error: "Choose a start date that comes before the end date." } : candidate)),
+      );
+      return false;
+    }
+
+    const nextRangeSelection = createAnalyticsDateRangeSelection({ from, to }, "Custom range", null);
+    setPanels((current) => current.map((candidate) => (candidate.id === panel.id ? { ...candidate, loading: true, error: null } : candidate)));
+
+    try {
+      const nextMetric = await loadMetric(panel.metric.descriptor, nextRangeSelection.range);
+      setPanels((current) =>
+        current.map((candidate) => (
+          candidate.id === panel.id
+            ? { ...candidate, metric: nextMetric, rangeSelection: nextRangeSelection, loading: false, error: null }
+            : candidate
+        )),
+      );
+      return true;
+    } catch (nextError) {
+      setPanels((current) =>
+        current.map((candidate) => (
+          candidate.id === panel.id
+            ? { ...candidate, loading: false, error: nextError instanceof Error ? nextError.message : String(nextError) }
+            : candidate
+        )),
+      );
+      return false;
+    }
+  }
+
+  function addStudioAnalyticsPanel(): void {
+    const nextDescriptor = getNextAnalyticsPanelDescriptor(studioAnalyticsPanels, studioAnalyticsMetrics);
+    if (!nextDescriptor) {
+      return;
+    }
+
+    const nextMetric = studioAnalyticsMetrics.find((metric) => metric.descriptor === nextDescriptor);
+    if (!nextMetric) {
+      return;
+    }
+
+    setStudioAnalyticsPanels((current) => [...current, createAnalyticsPanel(nextMetric)]);
+  }
+
+  function addTitleAnalyticsPanel(): void {
+    const nextDescriptor = getNextAnalyticsPanelDescriptor(titleAnalyticsPanels, titleAnalyticsMetrics);
+    if (!nextDescriptor) {
+      return;
+    }
+
+    const nextMetric = titleAnalyticsMetrics.find((metric) => metric.descriptor === nextDescriptor);
+    if (!nextMetric) {
+      return;
+    }
+
+    setTitleAnalyticsPanels((current) => [...current, createAnalyticsPanel(nextMetric)]);
+  }
+
+  async function handleSelectStudioAnalyticsView(viewId: string): Promise<void> {
+    setAnalyticsViewActionError(null);
+    setSelectedStudioAnalyticsViewId(viewId);
+    if (!viewId) {
+      setStudioAnalyticsPanels((current) => resetAnalyticsPanelsToDefault(current, studioAnalyticsMetrics, createAnalyticsPanel));
+      return;
+    }
+
+    setRecentAnalyticsViewId("studio", viewId);
+
+    const selectedView = getSavedAnalyticsViewById(studioAnalyticsSavedViews, viewId);
+    if (!selectedView) {
+      setAnalyticsViewActionError("That saved studio analytics view is not available right now.");
+      return;
+    }
+
+    setStudioAnalyticsLoading(true);
+    try {
+      setStudioAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(selectedView, loadStudioAnalyticsMetric));
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setStudioAnalyticsLoading(false);
+    }
+  }
+
+  async function handleSelectTitleAnalyticsView(viewId: string): Promise<void> {
+    setAnalyticsViewActionError(null);
+    setSelectedTitleAnalyticsViewId(viewId);
+    if (!viewId) {
+      setTitleAnalyticsPanels((current) => resetAnalyticsPanelsToDefault(current, titleAnalyticsMetrics, createAnalyticsPanel));
+      return;
+    }
+
+    setRecentAnalyticsViewId("title", viewId);
+
+    const selectedView = getSavedAnalyticsViewById(titleAnalyticsSavedViews, viewId);
+    if (!selectedView) {
+      setAnalyticsViewActionError("That saved title analytics view is not available right now.");
+      return;
+    }
+
+    setTitleAnalyticsLoading(true);
+    try {
+      setTitleAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(selectedView, loadTitleAnalyticsMetric));
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setTitleAnalyticsLoading(false);
+    }
+  }
+
+  async function handleResetStudioAnalyticsDateRanges(): Promise<void> {
+    setAnalyticsViewActionError(null);
+    const panels = studioAnalyticsPanels;
+    setStudioAnalyticsLoading(true);
+    try {
+      const nextPanels = await Promise.all(
+        panels.map(async (panel) => {
+          const rangeSelection = createDefaultAnalyticsDateRangeSelection();
+          const metric = await loadStudioAnalyticsMetric(panel.metric.descriptor, rangeSelection.range);
+          return {
+            ...panel,
+            metric,
+            rangeSelection,
+            loading: false,
+            error: null,
+          };
+        }),
+      );
+      setStudioAnalyticsPanels(nextPanels);
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setStudioAnalyticsLoading(false);
+    }
+  }
+
+  async function handleResetTitleAnalyticsDateRanges(): Promise<void> {
+    setAnalyticsViewActionError(null);
+    const panels = titleAnalyticsPanels;
+    setTitleAnalyticsLoading(true);
+    try {
+      const nextPanels = await Promise.all(
+        panels.map(async (panel) => {
+          const rangeSelection = createDefaultAnalyticsDateRangeSelection();
+          const metric = await loadTitleAnalyticsMetric(panel.metric.descriptor, rangeSelection.range);
+          return {
+            ...panel,
+            metric,
+            rangeSelection,
+            loading: false,
+            error: null,
+          };
+        }),
+      );
+      setTitleAnalyticsPanels(nextPanels);
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setTitleAnalyticsLoading(false);
+    }
+  }
+
+  async function handleConfirmSaveAnalyticsView(viewName: string): Promise<void> {
+    if (!saveAnalyticsViewModalState) {
+      return;
+    }
+
+    const isStudio = saveAnalyticsViewModalState.subjectScope === "studio";
+    const selectedViewId = isStudio ? selectedStudioAnalyticsViewId : selectedTitleAnalyticsViewId;
+    const panels = isStudio ? studioAnalyticsPanels : titleAnalyticsPanels;
+
+    setAnalyticsViewSaving(true);
+    setAnalyticsViewActionError(null);
+    try {
+      const request = {
+        subjectScope: saveAnalyticsViewModalState.subjectScope,
+        name: viewName,
+        panels: serializeAnalyticsPanels(panels),
+      } as const;
+      const response = selectedViewId
+        ? await updateDeveloperAnalyticsSavedView(appConfig.apiBaseUrl, accessToken, selectedViewId, request)
+        : await createDeveloperAnalyticsSavedView(appConfig.apiBaseUrl, accessToken, request);
+      if (isStudio) {
+        setStudioAnalyticsSavedViews((current) => {
+          const existing = current.filter((view) => view.id !== response.view.id);
+          return [response.view, ...existing];
+        });
+        setSelectedStudioAnalyticsViewId(response.view.id);
+        setRecentAnalyticsViewId("studio", response.view.id);
+      } else {
+        setTitleAnalyticsSavedViews((current) => {
+          const existing = current.filter((view) => view.id !== response.view.id);
+          return [response.view, ...existing];
+        });
+        setSelectedTitleAnalyticsViewId(response.view.id);
+        setRecentAnalyticsViewId("title", response.view.id);
+      }
+      setSaveAnalyticsViewModalState(null);
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAnalyticsViewSaving(false);
+    }
+  }
+
+  async function handleConfirmDeleteAnalyticsView(): Promise<void> {
+    if (!deleteAnalyticsViewModalState) {
+      return;
+    }
+
+    const isStudio = deleteAnalyticsViewModalState.subjectScope === "studio";
+    setAnalyticsViewSaving(true);
+    setAnalyticsViewActionError(null);
+    try {
+      await deleteDeveloperAnalyticsSavedView(appConfig.apiBaseUrl, accessToken, deleteAnalyticsViewModalState.viewId);
+      if (isStudio) {
+        const remainingViews = studioAnalyticsSavedViews.filter((view) => view.id !== deleteAnalyticsViewModalState.viewId);
+        setStudioAnalyticsSavedViews(remainingViews);
+        if (selectedStudioAnalyticsViewId === deleteAnalyticsViewModalState.viewId) {
+          const fallbackView = remainingViews[0] ?? null;
+          setSelectedStudioAnalyticsViewId(fallbackView?.id ?? "");
+          setRecentAnalyticsViewId("studio", fallbackView?.id ?? "");
+          if (fallbackView) {
+            setStudioAnalyticsLoading(true);
+            try {
+              setStudioAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(fallbackView, loadStudioAnalyticsMetric));
+            } finally {
+              setStudioAnalyticsLoading(false);
+            }
+          }
+        }
+      } else {
+        const remainingViews = titleAnalyticsSavedViews.filter((view) => view.id !== deleteAnalyticsViewModalState.viewId);
+        setTitleAnalyticsSavedViews(remainingViews);
+        if (selectedTitleAnalyticsViewId === deleteAnalyticsViewModalState.viewId) {
+          const fallbackView = remainingViews[0] ?? null;
+          setSelectedTitleAnalyticsViewId(fallbackView?.id ?? "");
+          setRecentAnalyticsViewId("title", fallbackView?.id ?? "");
+          if (fallbackView) {
+            setTitleAnalyticsLoading(true);
+            try {
+              setTitleAnalyticsPanels(await loadAnalyticsPanelsFromSavedView(fallbackView, loadTitleAnalyticsMetric));
+            } finally {
+              setTitleAnalyticsLoading(false);
+            }
+          }
+        }
+      }
+      setDeleteAnalyticsViewModalState(null);
+    } catch (nextError) {
+      setAnalyticsViewActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAnalyticsViewSaving(false);
+    }
   }
 
   async function applyTitleMedia(titleId: string, draft: TitleDraft): Promise<void> {
@@ -4139,21 +5422,128 @@ export function DevelopWorkspacePage() {
       return <EmptyState title="No studio selected" detail="Select a studio to review follower activity." />;
     }
 
+    const selectedDescriptors = studioAnalyticsPanels.map((panel) => panel.metric.descriptor);
+    const canAddPanel = Boolean(getNextAnalyticsPanelDescriptor(studioAnalyticsPanels, studioAnalyticsMetrics));
+    const selectedSavedView = getSavedAnalyticsViewById(studioAnalyticsSavedViews, selectedStudioAnalyticsViewId);
+    const selectedSavedViewMatchesCurrent = analyticsPanelsMatchSavedView(selectedSavedView, studioAnalyticsPanels);
+    const showSaveButton = studioAnalyticsPanels.length > 0 && (!selectedSavedView || !selectedSavedViewMatchesCurrent);
+    const showDeleteButton = Boolean(selectedSavedView);
+    const showResetButton = studioAnalyticsPanels.length > 0 && !analyticsPanelsUseDefaultRange(studioAnalyticsPanels);
+
     return (
       <div className="space-y-6">
         <header className="surface-panel-strong rounded-[1.25rem] p-5">
           <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio.displayName}</div>
           <h2 className="mt-2 text-2xl font-semibold text-white">Studio analytics</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">See how many players are following this studio across Board Enthusiasts right now.</p>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Track how players are interacting with this studio over time.</p>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-3">
-          <div className="develop-stat-card p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Follower count</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{activeStudio.followerCount ?? 0}</div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">Players following this studio will see it more easily from their personal library area.</p>
-          </div>
-        </section>
+        {studioAnalyticsError ? <p className="error-text">{studioAnalyticsError}</p> : null}
+        {analyticsViewActionError ? <p className="error-text">{analyticsViewActionError}</p> : null}
+        {studioAnalyticsLoading && studioAnalyticsMetrics.length === 0 ? (
+          <section className="grid gap-4 xl:grid-cols-2">
+            <div className="develop-stat-card p-5">
+              <div className="h-12 w-full animate-pulse rounded-[1rem] bg-white/10" />
+              <div className="mt-4 h-10 w-20 animate-pulse rounded-full bg-white/10" />
+            </div>
+          </section>
+        ) : studioAnalyticsPanels.length > 0 ? (
+          <>
+            <section className="grid gap-4 xl:grid-cols-2">
+              {studioAnalyticsPanels.map((panel) => (
+                <DeveloperAnalyticsMetricPanel
+                  key={`${activeStudio.id}-${panel.id}`}
+                  panel={panel}
+                  metrics={studioAnalyticsMetrics}
+                  selectedDescriptors={selectedDescriptors}
+                  onMetricChange={(currentPanel, descriptor) => {
+                    void handleAnalyticsMetricChange(currentPanel, descriptor, setStudioAnalyticsPanels, loadStudioAnalyticsMetric);
+                  }}
+                  onApplyPreset={(currentPanel, preset) => handleAnalyticsPresetRangeChange(currentPanel, preset, setStudioAnalyticsPanels, loadStudioAnalyticsMetric)}
+                  onApplyCustomRange={(currentPanel, customFrom, customTo) =>
+                    handleAnalyticsCustomRangeChange(currentPanel, customFrom, customTo, setStudioAnalyticsPanels, loadStudioAnalyticsMetric)
+                  }
+                  canRemove={studioAnalyticsPanels.length > 1}
+                  onRemove={() => setStudioAnalyticsPanels((current) => removeAnalyticsPanel(current, panel.id))}
+                />
+              ))}
+            </section>
+            <div className="flex flex-wrap items-center gap-3">
+              {studioAnalyticsSavedViews.length > 0 ? (
+                <>
+                  <label className="sr-only" htmlFor="saved-studio-analytics-view">
+                    Select saved studio analytics view
+                  </label>
+                  <select
+                    id="saved-studio-analytics-view"
+                    aria-label="Select saved studio analytics view"
+                    className="min-w-[15rem] rounded-[1rem] border border-white/12 bg-[#111017] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+                    value={selectedStudioAnalyticsViewId}
+                    onChange={(event) => {
+                      void handleSelectStudioAnalyticsView(event.currentTarget.value);
+                    }}
+                    disabled={studioAnalyticsLoading || analyticsViewSaving}
+                  >
+                    <option value={CREATE_NEW_ANALYTICS_VIEW_OPTION}>Create new...</option>
+                    {studioAnalyticsSavedViews.map((view) => (
+                      <option key={view.id} value={view.id}>
+                        {view.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="secondary-button !min-h-0 !h-14 !w-14 !rounded-full !px-0 !py-0"
+                onClick={addStudioAnalyticsPanel}
+                disabled={!canAddPanel}
+                aria-label="Add studio analytics panel"
+                title={canAddPanel ? "Add another analytics panel" : "All studio analytics metrics are already shown"}
+              >
+                <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: addCardGlyph }} />
+              </button>
+              {showResetButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => void handleResetStudioAnalyticsDateRanges()}
+                  disabled={studioAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Reset studio analytics date ranges"
+                  title="Reset date ranges"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: resetSettingsGlyph }} />
+                </button>
+              ) : null}
+              {showSaveButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => setSaveAnalyticsViewModalState({ subjectScope: "studio", initialName: selectedSavedView?.name ?? "" })}
+                  disabled={studioAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Save studio analytics view"
+                  title="Save"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: saveGlyph }} />
+                </button>
+              ) : null}
+              {showDeleteButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => setDeleteAnalyticsViewModalState({ subjectScope: "studio", viewId: selectedSavedView!.id, viewName: selectedSavedView!.name })}
+                  disabled={studioAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Delete studio analytics view"
+                  title="Delete"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteGlyph }} />
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <EmptyState title="No analytics yet" detail="Analytics will appear here after players start interacting with this studio." />
+        )}
       </div>
     );
   }
@@ -4163,43 +5553,148 @@ export function DevelopWorkspacePage() {
       return <EmptyState title="No title selected" detail="Select a title to review wishlist and library interest." />;
     }
 
+    const selectedDescriptors = titleAnalyticsPanels.map((panel) => panel.metric.descriptor);
+    const canAddPanel = Boolean(getNextAnalyticsPanelDescriptor(titleAnalyticsPanels, titleAnalyticsMetrics));
+    const selectedSavedView = getSavedAnalyticsViewById(titleAnalyticsSavedViews, selectedTitleAnalyticsViewId);
+    const selectedSavedViewMatchesCurrent = analyticsPanelsMatchSavedView(selectedSavedView, titleAnalyticsPanels);
+    const showSaveButton = titleAnalyticsPanels.length > 0 && (!selectedSavedView || !selectedSavedViewMatchesCurrent);
+    const showDeleteButton = Boolean(selectedSavedView);
+    const showResetButton = titleAnalyticsPanels.length > 0 && !analyticsPanelsUseDefaultRange(titleAnalyticsPanels);
+
     return (
       <div className="space-y-6">
         <header className="surface-panel-strong rounded-[1.25rem] p-5">
           <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">{activeStudio?.displayName ?? activeTitle.studioSlug}</div>
           <h2 className="mt-2 text-2xl font-semibold text-white">Title analytics</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Track early player interest for this title before and after release.</p>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">Track how players discover are interacting with this title over time.</p>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-4">
-          <div className="develop-stat-card p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Title detail views</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.viewCount ?? 0}</div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">How many unique Boards or website visitors have opened the full title details page.</p>
-          </div>
-          <div className="develop-stat-card p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Get Title clicks</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.getTitleClickCount ?? 0}</div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">How many unique visitors clicked <code>Get Title</code> from quick view or full details.</p>
-            <p className="mt-3 text-xs uppercase tracking-[0.16em] text-slate-400">Last click {formatDateTime(activeTitle.lastGetTitleClickedAt)}</p>
-          </div>
-          <div className="develop-stat-card p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Wishlisted count</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.wishlistCount ?? 0}</div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">How many players have saved this title to revisit later.</p>
-          </div>
-          <div className="develop-stat-card p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/70">Added to library count</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{activeTitle.libraryCount ?? 0}</div>
-            <p className="mt-3 text-sm leading-7 text-slate-300">How many player libraries currently include this title.</p>
-          </div>
-        </section>
+        {titleAnalyticsError ? <p className="error-text">{titleAnalyticsError}</p> : null}
+        {analyticsViewActionError ? <p className="error-text">{analyticsViewActionError}</p> : null}
+        {titleAnalyticsLoading && titleAnalyticsMetrics.length === 0 ? (
+          <section className="grid gap-4 xl:grid-cols-2">
+            <div className="develop-stat-card p-5">
+              <div className="h-12 w-full animate-pulse rounded-[1rem] bg-white/10" />
+              <div className="mt-4 h-10 w-20 animate-pulse rounded-full bg-white/10" />
+            </div>
+          </section>
+        ) : titleAnalyticsPanels.length > 0 ? (
+          <>
+            <section className="grid gap-4 xl:grid-cols-2">
+              {titleAnalyticsPanels.map((panel) => (
+                <DeveloperAnalyticsMetricPanel
+                  key={`${activeTitle.id}-${panel.id}`}
+                  panel={panel}
+                  metrics={titleAnalyticsMetrics}
+                  selectedDescriptors={selectedDescriptors}
+                  onMetricChange={(currentPanel, descriptor) => {
+                    void handleAnalyticsMetricChange(currentPanel, descriptor, setTitleAnalyticsPanels, loadTitleAnalyticsMetric);
+                  }}
+                  onApplyPreset={(currentPanel, preset) => handleAnalyticsPresetRangeChange(currentPanel, preset, setTitleAnalyticsPanels, loadTitleAnalyticsMetric)}
+                  onApplyCustomRange={(currentPanel, customFrom, customTo) =>
+                    handleAnalyticsCustomRangeChange(currentPanel, customFrom, customTo, setTitleAnalyticsPanels, loadTitleAnalyticsMetric)
+                  }
+                  canRemove={titleAnalyticsPanels.length > 1}
+                  onRemove={() => setTitleAnalyticsPanels((current) => removeAnalyticsPanel(current, panel.id))}
+                />
+              ))}
+            </section>
+            <div className="flex flex-wrap items-center gap-3">
+              {titleAnalyticsSavedViews.length > 0 ? (
+                <>
+                  <label className="sr-only" htmlFor="saved-title-analytics-view">
+                    Select saved title analytics view
+                  </label>
+                  <select
+                    id="saved-title-analytics-view"
+                    aria-label="Select saved title analytics view"
+                    className="min-w-[15rem] rounded-[1rem] border border-white/12 bg-[#111017] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/50"
+                    value={selectedTitleAnalyticsViewId}
+                    onChange={(event) => {
+                      void handleSelectTitleAnalyticsView(event.currentTarget.value);
+                    }}
+                    disabled={titleAnalyticsLoading || analyticsViewSaving}
+                  >
+                    <option value={CREATE_NEW_ANALYTICS_VIEW_OPTION}>Create new...</option>
+                    {titleAnalyticsSavedViews.map((view) => (
+                      <option key={view.id} value={view.id}>
+                        {view.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="secondary-button !min-h-0 !h-14 !w-14 !rounded-full !px-0 !py-0"
+                onClick={addTitleAnalyticsPanel}
+                disabled={!canAddPanel}
+                aria-label="Add title analytics panel"
+                title={canAddPanel ? "Add another analytics panel" : "All title analytics metrics are already shown"}
+              >
+                <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: addCardGlyph }} />
+              </button>
+              {showResetButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => void handleResetTitleAnalyticsDateRanges()}
+                  disabled={titleAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Reset title analytics date ranges"
+                  title="Reset date ranges"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: resetSettingsGlyph }} />
+                </button>
+              ) : null}
+              {showSaveButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => setSaveAnalyticsViewModalState({ subjectScope: "title", initialName: selectedSavedView?.name ?? "" })}
+                  disabled={titleAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Save title analytics view"
+                  title="Save"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: saveGlyph }} />
+                </button>
+              ) : null}
+              {showDeleteButton ? (
+                <button
+                  type="button"
+                  className="secondary-button !min-h-0 !rounded-full !px-0 !py-0 h-14 w-14 justify-center"
+                  onClick={() => setDeleteAnalyticsViewModalState({ subjectScope: "title", viewId: selectedSavedView!.id, viewName: selectedSavedView!.name })}
+                  disabled={titleAnalyticsLoading || analyticsViewSaving}
+                  aria-label="Delete title analytics view"
+                  title="Delete"
+                >
+                  <span className="inline-svg-icon h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteGlyph }} />
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <EmptyState title="No analytics yet" detail="Analytics will appear here after players start interacting with this title." />
+        )}
       </div>
     );
   }
 
   function renderWorkspaceMain(): ReactNode {
-    if (workspaceLoading) {
+    const hasCurrentWorkspaceContext =
+      (workspace.workflow === "studios-overview" && Boolean(activeStudio))
+      || (workspace.workflow === "studios-analytics" && Boolean(activeStudio))
+      || (workspace.workflow === "titles-create" && Boolean(activeStudio))
+      || (
+        (workspace.workflow === "titles-overview"
+          || workspace.workflow === "titles-analytics"
+          || workspace.workflow === "titles-metadata"
+          || workspace.workflow === "titles-reports"
+          || workspace.workflow === "releases-create")
+        && Boolean(activeTitle)
+      )
+      || (workspace.workflow === "releases-overview" && Boolean(activeRelease));
+
+    if (workspaceLoading && !hasCurrentWorkspaceContext) {
       return (
         <section className="surface-panel-strong rounded-[1.25rem] p-5">
           <div className="h-8 w-48 animate-pulse rounded-full bg-white/10" />
@@ -4808,6 +6303,32 @@ export function DevelopWorkspacePage() {
           saving={saving}
           onActivate={() => void handleActivateCurrentTitleAndRelease()}
           onSkip={() => setActivationPromptReleaseId(null)}
+        />
+      ) : null}
+      {saveAnalyticsViewModalState ? (
+        <SaveAnalyticsViewModal
+          subjectLabel={saveAnalyticsViewModalState.subjectScope === "studio" ? "studio analytics" : "title analytics"}
+          initialName={saveAnalyticsViewModalState.initialName}
+          saving={analyticsViewSaving}
+          error={analyticsViewActionError}
+          onSave={(name) => void handleConfirmSaveAnalyticsView(name)}
+          onClose={() => {
+            setSaveAnalyticsViewModalState(null);
+            setAnalyticsViewActionError(null);
+          }}
+        />
+      ) : null}
+      {deleteAnalyticsViewModalState ? (
+        <DeleteAnalyticsViewModal
+          subjectLabel={deleteAnalyticsViewModalState.subjectScope === "studio" ? "studio analytics" : "title analytics"}
+          viewName={deleteAnalyticsViewModalState.viewName}
+          saving={analyticsViewSaving}
+          error={analyticsViewActionError}
+          onDelete={() => void handleConfirmDeleteAnalyticsView()}
+          onClose={() => {
+            setDeleteAnalyticsViewModalState(null);
+            setAnalyticsViewActionError(null);
+          }}
         />
       ) : null}
       {activeTitle && deletePasswordModalOpen ? (

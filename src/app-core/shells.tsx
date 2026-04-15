@@ -446,6 +446,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       ) : null}
       {!embeddedBoardShell ? (
         <header className={`app-header ${headerVisible ? "is-visible" : "is-hidden"}`}>
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
@@ -668,7 +669,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             Get Board
           </a>
         </div>
-        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
         </header>
       ) : null}
 
@@ -760,6 +760,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-root landing-root">
       <header className={`app-header landing-header ${headerVisible ? "is-visible" : "is-hidden"}`}>
+        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
         <div className="app-header-inner">
           <Link to="/" className="app-brand">
             <img className="app-brand-mark" src="/favicon_sm.png" alt="Board Enthusiasts logo" />
@@ -785,7 +786,6 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           <a href={landingBoardUrl} className="app-nav-link" target="_blank" rel="noreferrer">Get Board</a>
           <LandingUpdatesLink className="app-nav-link">Get Updates</LandingUpdatesLink>
         </nav>
-        <BeHomeCommunityBar metrics={beHomeCommunityPulse.metrics} />
       </header>
 
       <main className="app-main landing-main">
