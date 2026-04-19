@@ -308,7 +308,7 @@ export interface BoardProfile {
 }
 
 export interface BoardProfileResponse {
-  boardProfile: BoardProfile;
+  boardProfile: BoardProfile | null;
 }
 
 export interface UpsertBoardProfileRequest {
@@ -358,6 +358,71 @@ export interface DeveloperStudioSummary extends StudioSummary {
 
 export interface DeveloperStudioListResponse {
   studios: DeveloperStudioSummary[];
+}
+
+export type DeveloperAnalyticsSubjectScope = "studio" | "title";
+export type DeveloperAnalyticsAggregationKind = "event_count" | "unique_actor_count";
+export type DeveloperAnalyticsMetricKind = "tracked_event" | "conversion_rate" | "conversion_rate_comparison" | "net_change";
+export type DeveloperAnalyticsValueFormat = "number" | "percentage";
+
+export interface DeveloperAnalyticsMetric {
+  id: string;
+  descriptor: string;
+  displayName: string;
+  internalDescription: string | null;
+  publicDescription: string | null;
+  publicTooltip: string | null;
+  subjectScope: DeveloperAnalyticsSubjectScope;
+  aggregationKind: DeveloperAnalyticsAggregationKind;
+  metricKind: DeveloperAnalyticsMetricKind;
+  valueFormat: DeveloperAnalyticsValueFormat;
+  valueDisplay: string;
+  secondaryValue: string | null;
+  statusMessage: string | null;
+  supportsDateRange: boolean;
+  displayOrder: number;
+  value: number;
+  lastOccurredAt: string | null;
+}
+
+export interface DeveloperAnalyticsRange {
+  from: string;
+  to: string;
+}
+
+export interface DeveloperAnalyticsResponse {
+  range: DeveloperAnalyticsRange;
+  metrics: DeveloperAnalyticsMetric[];
+}
+
+export interface DeveloperAnalyticsSavedViewPanel {
+  descriptor: string;
+  rangePresetId: string | null;
+  customFrom: string | null;
+  customTo: string | null;
+}
+
+export interface DeveloperAnalyticsSavedView {
+  id: string;
+  subjectScope: DeveloperAnalyticsSubjectScope;
+  name: string;
+  panels: DeveloperAnalyticsSavedViewPanel[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeveloperAnalyticsSavedViewListResponse {
+  views: DeveloperAnalyticsSavedView[];
+}
+
+export interface DeveloperAnalyticsSavedViewResponse {
+  view: DeveloperAnalyticsSavedView;
+}
+
+export interface UpsertDeveloperAnalyticsSavedViewRequest {
+  subjectScope: DeveloperAnalyticsSubjectScope;
+  name: string;
+  panels: DeveloperAnalyticsSavedViewPanel[];
 }
 
 export interface StudioLinkListResponse {
@@ -1901,7 +1966,7 @@ export const localMigrationEnvironment: MigrationEnvironmentLayout = {
   frontendBaseUrl: "http://127.0.0.1:4173",
   apiBaseUrl: "http://127.0.0.1:8787",
   supabaseProjectRef: "local-dev",
-  supabaseUrl: "http://127.0.0.1:55421",
+  supabaseUrl: "http://127.0.0.1:54321",
   supabasePublishableKeyVariable: "SUPABASE_PUBLISHABLE_KEY",
   supabaseSecretKeyVariable: "SUPABASE_SECRET_KEY",
   supabaseMediaBucket: migrationMediaBucket
