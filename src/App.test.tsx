@@ -166,7 +166,7 @@ const configState = vi.hoisted(() => ({
   value: {
     appEnv: "production" as "local" | "staging" | "production",
     apiBaseUrl: "http://127.0.0.1:8787",
-    supabaseUrl: "http://127.0.0.1:55421",
+    supabaseUrl: "http://127.0.0.1:54321",
     supabasePublishableKey: "publishable-key",
     turnstileSiteKey: null as string | null,
     discordAuthEnabled: false,
@@ -332,7 +332,7 @@ describe("App", () => {
     configState.value = {
       appEnv: "production",
       apiBaseUrl: "http://127.0.0.1:8787",
-      supabaseUrl: "http://127.0.0.1:55421",
+      supabaseUrl: "http://127.0.0.1:54321",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
       discordAuthEnabled: false,
@@ -2961,6 +2961,49 @@ describe("App", () => {
     expect(screen.queryByText("Configured")).not.toBeInTheDocument();
   });
 
+  it("locks the title detail hero frame to the maintained showcase aspect ratio without cropping the selected media", async () => {
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://cdn.example.com/showcase-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+        ],
+        mediaAssets: [],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    const heroFrame = screen.getByTestId("title-detail-media-frame");
+    expect(heroFrame).toHaveStyle({
+      aspectRatio: `${catalogMediaTypeDefinitions.titleShowcase.recommendedWidth} / ${catalogMediaTypeDefinitions.titleShowcase.recommendedHeight}`,
+    });
+    const heroImage = await within(heroFrame).findByAltText("Lantern Drift preview 1");
+    expect(heroImage).toHaveClass("object-contain");
+    expect(heroImage).not.toHaveClass("object-cover");
+  });
+
   it("shows a friendly network error when title detail loading cannot reach the API", async () => {
     apiMocks.getCatalogTitle.mockRejectedValue(new Error("Could not reach the Board Enthusiasts API."));
 
@@ -3021,6 +3064,112 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show preview 4" }));
 
     expect(await screen.findAllByAltText("Lantern Drift preview 4")).toHaveLength(2);
+  });
+
+  it("embeds supported showcase videos in the title detail hero when selected from the carousel", async () => {
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://cdn.example.com/showcase-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+          {
+            id: "showcase-2",
+            kind: "external_video",
+            imageUrl: "https://cdn.example.com/showcase-video-poster.webp",
+            videoUrl: "https://www.youtube.com/watch?v=lantern123",
+            altText: "Lantern Drift trailer",
+            displayOrder: 1,
+          },
+        ],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show video preview 2" }));
+
+    expect(await screen.findByTitle("Lantern Drift trailer")).toHaveAttribute("src", "https://www.youtube.com/embed/lantern123?autoplay=1");
+  });
+
+  it("derives a YouTube thumbnail for title detail carousel videos when no preview image was uploaded", async () => {
+    apiMocks.getCatalogTitle.mockResolvedValue({
+      title: {
+        id: "title-1",
+        studioId: "studio-1",
+        studioSlug: "blue-harbor-games",
+        studioDisplayName: "Blue Harbor Games",
+        slug: "lantern-drift",
+        displayName: "Lantern Drift",
+        shortDescription: "Guide glowing paper boats through midnight canals.",
+        description: "Tilt waterways, spin lock-gates, and weave through fireworks across the river.",
+        genreDisplay: "Puzzle, Family",
+        contentKind: "game",
+        visibility: "listed",
+        lifecycleStatus: "active",
+        isReported: false,
+        currentMetadataRevision: 2,
+        playerCountDisplay: "1-4 players",
+        ageDisplay: "ESRB E",
+        acquisitionUrl: "https://example.com/lantern-drift",
+        logoImageUrl: null,
+        currentRelease: {
+          id: "release-1",
+          version: "1.0.0",
+          publishedAt: "2026-03-08T12:00:00Z",
+        },
+        mediaAssets: [],
+        showcaseMedia: [
+          { id: "showcase-1", kind: "image", imageUrl: "https://cdn.example.com/showcase-1.webp", videoUrl: null, altText: "Lantern Drift preview 1", displayOrder: 0 },
+          {
+            id: "showcase-2",
+            kind: "external_video",
+            imageUrl: null,
+            videoUrl: "https://www.youtube.com/watch?v=lantern123",
+            altText: "Lantern Drift trailer",
+            displayOrder: 1,
+          },
+        ],
+        updatedAt: "2026-03-08T12:00:00Z",
+        createdAt: "2026-03-08T12:00:00Z",
+      },
+    });
+
+    renderApp("/browse/blue-harbor-games/lantern-drift");
+
+    expect(await screen.findByRole("heading", { name: "Lantern Drift" })).toBeVisible();
+
+    const videoThumbnailButton = screen.getByRole("button", { name: "Show video preview 2" });
+    expect(within(videoThumbnailButton).getByAltText("Lantern Drift trailer")).toHaveAttribute(
+      "src",
+      "https://i.ytimg.com/vi/lantern123/hqdefault.jpg",
+    );
   });
 
   it("publishes embedded title detail diagnostics to the Unity host", async () => {
@@ -7896,7 +8045,7 @@ describe("App", () => {
 
     expect(within(createTitleForm as HTMLElement).getByRole("combobox", { name: "Add media item" })).toBeVisible();
     expect(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add screenshot" })).toBeVisible();
-    expect(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add video preview" })).toBeVisible();
+    expect(within(createTitleForm as HTMLElement).getByRole("button", { name: "Add video" })).toBeVisible();
   });
 
   it("keeps title and showcase add controls below existing media items in create and edit forms", async () => {
@@ -8124,6 +8273,41 @@ describe("App", () => {
     }
   });
 
+  it("derives YouTube thumbnails for showcase videos in the editor and lets uploaded images override them", async () => {
+    seedDeveloperWorkspace();
+    const mockedImageProcessing = mockRasterImageProcessing({ width: 1920, height: 1080, blobType: "image/webp" });
+
+    try {
+      renderApp("/developer?domain=titles&workflow=titles-metadata&studioId=studio-1&titleId=title-1");
+
+      await userEvent.click(await screen.findByRole("button", { name: "Edit metadata" }));
+      await userEvent.click(screen.getByRole("button", { name: "Add video" }));
+
+      const showcaseCard = screen.getByText("Gallery item 1").closest("article");
+      expect(showcaseCard).not.toBeNull();
+
+      await userEvent.type(within(showcaseCard as HTMLElement).getByRole("textbox", { name: "Video URL" }), "https://www.youtube.com/watch?v=c9ZvfGy1VQY");
+
+      await waitFor(() => {
+        expect(within(showcaseCard as HTMLElement).getByAltText("Showcase preview")).toHaveAttribute(
+          "src",
+          "https://i.ytimg.com/vi/c9ZvfGy1VQY/hqdefault.jpg",
+        );
+      });
+
+      const uploadInput = (showcaseCard as HTMLElement).querySelector('input[type="file"]') as HTMLInputElement | null;
+      expect(uploadInput).not.toBeNull();
+
+      await userEvent.upload(uploadInput!, new File(["showcase-bytes"], "showcase.png", { type: "image/png" }));
+
+      await waitFor(() => {
+        expect(within(showcaseCard as HTMLElement).getByAltText("Showcase preview")).toHaveAttribute("src", expect.stringMatching(/^data:image\/webp/));
+      });
+    } finally {
+      mockedImageProcessing.restore();
+    }
+  });
+
   it("renders compact title and showcase media summaries in metadata view", async () => {
     seedDeveloperWorkspace();
     apiMocks.getDeveloperTitle.mockResolvedValue({
@@ -8248,6 +8432,84 @@ describe("App", () => {
     const cardSummary = document.querySelector('[data-title-media-summary-preview="title_card"]');
     expect(avatarSummary).toHaveStyle({ aspectRatio: `${catalogMediaTypeDefinitions.titleAvatar.recommendedWidth} / ${catalogMediaTypeDefinitions.titleAvatar.recommendedHeight}` });
     expect(cardSummary).toHaveStyle({ aspectRatio: `${catalogMediaTypeDefinitions.titleCard.recommendedWidth} / ${catalogMediaTypeDefinitions.titleCard.recommendedHeight}` });
+  });
+
+  it("allows saving a showcase video with only a supported video URL", async () => {
+    seedDeveloperWorkspace();
+
+    let created = false;
+    const createdTitleId = "title-2";
+    const createdTitleSummary = {
+      id: createdTitleId,
+      studioId: "studio-1",
+      studioSlug: "blue-harbor-games",
+      studioDisplayName: "Blue Harbor Games",
+      slug: "compass-echo",
+      contentKind: "game",
+      lifecycleStatus: "draft",
+      visibility: "unlisted",
+      isReported: false,
+      currentMetadataRevision: 1,
+      displayName: "Compass Echo",
+      shortDescription: "Plot expedition routes and track secrets.",
+      description: "Plot expedition routes, track secrets, and sync clue boards.",
+      genreDisplay: "Adventure",
+      minPlayers: 1,
+      maxPlayers: 4,
+      ageRatingAuthority: null,
+      ageRatingValue: null,
+      minAgeYears: 10,
+      playerCountDisplay: "1-4 players",
+      ageDisplay: null,
+      cardImageUrl: null,
+      logoImageUrl: null,
+      acquisitionUrl: null,
+      catalogMediaEntries: [],
+    };
+
+    apiMocks.listStudioTitles.mockImplementation(async () => ({ titles: created ? [createdTitleSummary] : [] }));
+    apiMocks.createTitle.mockImplementation(async () => {
+      created = true;
+      return { title: { id: createdTitleId } };
+    });
+
+    renderApp("/developer?domain=titles&workflow=titles-create&studioId=studio-1");
+
+    const createTitleForm = (await screen.findByRole("heading", { name: "Create Title" })).closest("form");
+    expect(createTitleForm).not.toBeNull();
+
+    await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /display name/i }), "Compass Echo");
+    await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Adventure" }));
+    await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /short description/i }), "Plot expedition routes and track secrets.");
+    await userEvent.type(within(createTitleForm as HTMLElement).getByRole("textbox", { name: /^description/i }), "Plot expedition routes, track secrets, and sync clue boards.");
+
+    const showcaseHeading = within(createTitleForm as HTMLElement).getByRole("heading", { name: "Showcase media" });
+    const showcaseSection = showcaseHeading.closest("section");
+    expect(showcaseSection).not.toBeNull();
+    await userEvent.click(within(showcaseSection as HTMLElement).getByRole("button", { name: "Add video" }));
+
+    const showcaseCard = (showcaseSection as HTMLElement).querySelector("article");
+    expect(showcaseCard).not.toBeNull();
+    await userEvent.type(within(showcaseCard as HTMLElement).getByRole("textbox", { name: "Alt text" }), "Compass Echo trailer");
+    await userEvent.type(within(showcaseCard as HTMLElement).getByRole("textbox", { name: "Video URL" }), "https://www.youtube.com/watch?v=c9ZvfGy1VQY");
+
+    await userEvent.click(within(createTitleForm as HTMLElement).getByRole("button", { name: "Create title" }));
+
+    await waitFor(() => {
+      expect(apiMocks.createTitleShowcaseMedia).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        createdTitleId,
+        expect.objectContaining({
+          kind: "external_video",
+          imageUrl: null,
+          videoUrl: "https://www.youtube.com/watch?v=c9ZvfGy1VQY",
+          altText: "Compass Echo trailer",
+          displayOrder: 0,
+        }),
+      );
+    });
+    expect(apiMocks.uploadTitleShowcaseMediaImage).not.toHaveBeenCalled();
   });
 
   it("keeps uploaded title media when moving from create title into metadata", async () => {
@@ -9108,7 +9370,7 @@ describe("App", () => {
     configState.value = {
       appEnv: "production",
       apiBaseUrl: "http://127.0.0.1:8787",
-      supabaseUrl: "http://127.0.0.1:55421",
+      supabaseUrl: "http://127.0.0.1:54321",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
       discordAuthEnabled: false,
@@ -9302,3 +9564,4 @@ describe("App", () => {
     expect(within(editBannerPanel as HTMLElement).getByLabelText("URL")).toHaveValue("/seed-catalog/studios/blue-harbor-games/banner.svg");
   });
 });
+

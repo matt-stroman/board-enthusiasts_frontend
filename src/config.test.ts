@@ -7,13 +7,13 @@ describe("readAppConfigFromEnv", () => {
     expect(
       readAppConfigFromEnv({
         VITE_API_BASE_URL: "http://127.0.0.1:8787",
-        VITE_SUPABASE_URL: "http://127.0.0.1:55421",
+        VITE_SUPABASE_URL: "http://127.0.0.1:54321",
         VITE_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
       }),
     ).toEqual({
       appEnv: "local",
       apiBaseUrl: "http://127.0.0.1:8787",
-      supabaseUrl: "http://127.0.0.1:55421",
+      supabaseUrl: "http://127.0.0.1:54321",
       supabasePublishableKey: "publishable-key",
       turnstileSiteKey: null,
       discordAuthEnabled: false,
@@ -77,3 +77,4 @@ describe("readAppConfigFromEnv", () => {
     ).toThrow("VITE_APP_ENV must be one of local, staging, or production.");
   });
 });
+

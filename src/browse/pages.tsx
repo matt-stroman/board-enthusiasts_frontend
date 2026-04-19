@@ -68,6 +68,7 @@ import {
   useCatalogMediaLoadState,
   useDocumentMetadata,
 } from "../app-core";
+import { getShowcasePreviewImageUrl, resolveEmbeddedVideoPreview } from "../showcase-video";
 import { useBeHomeTimedDiagnostics } from "../use-be-home-timed-diagnostics";
 
 type TitleShowcaseSelection =
@@ -1520,6 +1521,8 @@ export function TitleDetailPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const autoOpenedShareRef = useRef(false);
   const [selectedShowcase, setSelectedShowcase] = useState<TitleShowcaseSelection>({ kind: "hero" });
+  const [autoplayShowcaseMediaId, setAutoplayShowcaseMediaId] = useState<string | null>(null);
+  const [autoplayRequestKey, setAutoplayRequestKey] = useState(0);
   const [managedStudioIds, setManagedStudioIds] = useState<Set<string>>(new Set());
   const [failedPreviewImageUrls, setFailedPreviewImageUrls] = useState<Set<string>>(new Set());
   const thumbnailRailRef = useRef<HTMLDivElement | null>(null);
@@ -1658,6 +1661,8 @@ export function TitleDetailPage() {
     }
 
     setSelectedShowcase(resolveInitialShowcaseSelection(title));
+    setAutoplayShowcaseMediaId(null);
+    setAutoplayRequestKey(0);
     setFailedPreviewImageUrls(new Set());
   }, [title]);
 
@@ -1851,8 +1856,9 @@ export function TitleDetailPage() {
   const selectedShowcaseMedia = title && selectedShowcase.kind === "showcase"
     ? showcaseMedia.find((candidate) => candidate.id === selectedShowcase.showcaseMediaId) ?? null
     : null;
+  const selectedShowcasePreviewImageUrl = getShowcasePreviewImageUrl(selectedShowcaseMedia);
   const selectedPreviewImageUrl =
-    selectedShowcaseMedia?.imageUrl ??
+    selectedShowcasePreviewImageUrl ??
     (selectedShowcase.kind === "hero" ? heroImageUrl : null) ??
     title?.cardImageUrl ??
     null;
@@ -1904,7 +1910,8 @@ export function TitleDetailPage() {
     return <ErrorPanel title="Title not found" detail="The requested title could not be loaded." />;
   }
 
-  const showcaseThumbnailAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_showcase");
+  const showcaseHeroAspectRatio = getCatalogMediaAspectRatioValue(undefined, "title_showcase");
+  const showcaseThumbnailAspectRatio = showcaseHeroAspectRatio;
   const canViewMetadata = moderatorAccessEnabled || managedStudioIds.has(title.studioId);
   const canViewCurrentReleasePanel = managedStudioIds.has(title.studioId);
   const metadataMediaAssets = title.mediaAssets.map((asset) => formatMembershipRole(asset.mediaRole)).join(", ");
@@ -1927,6 +1934,10 @@ export function TitleDetailPage() {
   const showOwnedAndReportActions = !isComingSoon;
   const showReportingSurface = !isComingSoon;
   const selectedPreviewIsVideo = selectedShowcaseMedia?.kind === "external_video" && Boolean(selectedShowcaseMedia?.videoUrl);
+  const shouldAutoplaySelectedVideo = Boolean(selectedShowcaseMedia && autoplayShowcaseMediaId === selectedShowcaseMedia.id);
+  const selectedEmbeddedVideo = selectedPreviewIsVideo
+    ? resolveEmbeddedVideoPreview(selectedShowcaseMedia?.videoUrl, { autoplay: shouldAutoplaySelectedVideo })
+    : null;
   const spotlightThumbnails = showcaseMedia;
   const showPrimaryFallbackThumbnail = showcaseMedia.length === 0 && Boolean(heroImageUrl);
   const galleryThumbnailCount = (showPrimaryFallbackThumbnail ? 1 : 0) + spotlightThumbnails.length;
@@ -1964,18 +1975,59 @@ export function TitleDetailPage() {
     });
   }
 
+  function selectHeroPreview(): void {
+    setSelectedShowcase({ kind: "hero" });
+    setAutoplayShowcaseMediaId(null);
+  }
+
+  function selectShowcasePreview(mediaItem: CatalogTitleResponse["title"]["showcaseMedia"][number]): void {
+    setSelectedShowcase({ kind: "showcase", showcaseMediaId: mediaItem.id });
+    if (mediaItem.kind === "external_video" && mediaItem.videoUrl) {
+      setAutoplayShowcaseMediaId(mediaItem.id);
+      setAutoplayRequestKey((current) => current + 1);
+      return;
+    }
+
+    setAutoplayShowcaseMediaId(null);
+  }
+
   return (
     <section className="space-y-8">
       <section className="app-panel overflow-hidden p-0">
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1.28fr)_minmax(22rem,0.72fr)]">
           <div className="min-w-0 bg-[linear-gradient(160deg,rgba(14,25,45,0.96),rgba(7,11,19,0.98))] p-4 md:p-5">
             <div
-              className="relative h-[18rem] overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/80 sm:h-[20rem] md:h-[23rem] lg:h-[26rem] xl:h-[32rem]"
-              style={safeSelectedPreviewImageUrl ? undefined : { backgroundImage: getFallbackGradient(title.genreDisplay) }}
+              className="relative w-full overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/80"
+              data-testid="title-detail-media-frame"
+              style={{
+                aspectRatio: showcaseHeroAspectRatio,
+                ...(safeSelectedPreviewImageUrl || selectedEmbeddedVideo ? {} : { backgroundImage: getFallbackGradient(title.genreDisplay) }),
+              }}
             >
-              {safeSelectedPreviewImageUrl ? (
+              {selectedEmbeddedVideo?.kind === "iframe" ? (
+                <iframe
+                  key={`${selectedShowcaseMedia?.id ?? "video"}-${autoplayRequestKey}`}
+                  className="h-full w-full border-0 bg-slate-950/45"
+                  src={selectedEmbeddedVideo.src}
+                  title={selectedShowcaseMedia?.altText ?? `${title.displayName} video preview`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              ) : selectedEmbeddedVideo?.kind === "direct" ? (
+                <video
+                  key={`${selectedShowcaseMedia?.id ?? "video"}-${autoplayRequestKey}`}
+                  className="h-full w-full bg-slate-950/45 object-contain"
+                  src={selectedEmbeddedVideo.src}
+                  poster={safeSelectedPreviewImageUrl ?? undefined}
+                  controls
+                  autoPlay={selectedEmbeddedVideo.autoplay}
+                  playsInline
+                  preload="metadata"
+                />
+              ) : safeSelectedPreviewImageUrl ? (
                 <img
-                  className="h-full w-full bg-slate-950/45 object-contain xl:object-cover"
+                  className="h-full w-full bg-slate-950/45 object-contain"
                   src={safeSelectedPreviewImageUrl}
                   alt={selectedShowcaseMedia?.altText ?? `${title.displayName} preview`}
                   decoding="async"
@@ -1993,7 +2045,7 @@ export function TitleDetailPage() {
                   Coming Soon
                 </span>
               ) : null}
-              {selectedPreviewIsVideo && selectedShowcaseMedia?.videoUrl ? (
+              {selectedPreviewIsVideo && selectedShowcaseMedia?.videoUrl && !selectedEmbeddedVideo ? (
                 <a
                   className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-cyan-300/35 bg-slate-950/82 px-4 py-2 text-xs font-semibold text-cyan-50 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-sm transition hover:border-cyan-200/55 hover:text-white"
                   href={selectedShowcaseMedia.videoUrl}
@@ -2038,7 +2090,7 @@ export function TitleDetailPage() {
                       aria-label="Show hero preview"
                       data-showcase-selected={selectedShowcase.kind === "hero"}
                       style={{ aspectRatio: showcaseThumbnailAspectRatio }}
-                      onClick={() => setSelectedShowcase({ kind: "hero" })}
+                      onClick={selectHeroPreview}
                     >
                       <img
                         className="h-full w-full object-cover"
@@ -2053,8 +2105,9 @@ export function TitleDetailPage() {
                   ) : null}
                   {spotlightThumbnails.map((mediaItem, index) => {
                     const selected = selectedShowcase.kind === "showcase" && selectedShowcase.showcaseMediaId === mediaItem.id;
-                    const shouldRenderThumbnailImage = Boolean(mediaItem.imageUrl)
-                      && !failedPreviewImageUrls.has(mediaItem.imageUrl ?? "");
+                    const previewImageUrl = getShowcasePreviewImageUrl(mediaItem);
+                    const shouldRenderThumbnailImage = Boolean(previewImageUrl)
+                      && !failedPreviewImageUrls.has(previewImageUrl ?? "");
 
                     return (
                       <button
@@ -2064,19 +2117,19 @@ export function TitleDetailPage() {
                         aria-label={mediaItem.kind === "external_video" ? `Show video preview ${index + 1}` : `Show preview ${index + 1}`}
                         data-showcase-selected={selected}
                         style={{ aspectRatio: showcaseThumbnailAspectRatio }}
-                        onClick={() => setSelectedShowcase({ kind: "showcase", showcaseMediaId: mediaItem.id })}
+                        onClick={() => selectShowcasePreview(mediaItem)}
                       >
                         {shouldRenderThumbnailImage ? (
                           <img
                             className="h-full w-full object-cover"
-                            src={mediaItem.imageUrl ?? undefined}
+                            src={previewImageUrl ?? undefined}
                             alt={mediaItem.altText ?? `${title.displayName} preview`}
                             loading="lazy"
                             decoding="async"
-                            onLoad={() => rememberCatalogMediaLoadSuccess(mediaItem.imageUrl)}
+                            onLoad={() => rememberCatalogMediaLoadSuccess(previewImageUrl)}
                             onError={() => {
-                              rememberCatalogMediaLoadFailure(mediaItem.imageUrl);
-                              rememberFailedPreviewImage(mediaItem.imageUrl);
+                              rememberCatalogMediaLoadFailure(previewImageUrl);
+                              rememberFailedPreviewImage(previewImageUrl);
                             }}
                           />
                         ) : (

@@ -25,7 +25,7 @@ vi.mock("./config", () => ({
   readAppConfig: () => ({
     appEnv: "production",
     apiBaseUrl: "http://127.0.0.1:8787",
-    supabaseUrl: "http://127.0.0.1:55421",
+    supabaseUrl: "http://127.0.0.1:54321",
     supabasePublishableKey: "publishable-key",
     turnstileSiteKey: null,
     discordAuthEnabled: false,
@@ -704,3 +704,4 @@ describe("AuthProvider", () => {
     });
   });
 });
+

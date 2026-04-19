@@ -26,6 +26,7 @@ import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type FormEv
 import { Link, useSearchParams } from "react-router-dom";
 import { getWorkspaceWorkflowButtonClass } from "../app-core";
 import addCardGlyph from "../assets/title-action-icons/add_card_24dp.svg?raw";
+import { getShowcasePreviewImageUrl } from "../showcase-video";
 import {
   addDeveloperTitleReportMessage,
   activateTitle,
@@ -3913,17 +3914,11 @@ export function DevelopWorkspacePage() {
     }
 
     for (const [index, item] of showcaseMediaDrafts.entries()) {
-      if (
-        !item.id &&
-        (
-          (item.kind === "image" && !item.file && !item.imageUrl.trim())
-          || (item.kind === "external_video" && !item.file)
-        )
-      ) {
+      if ((item.kind === "image" && !item.file && !item.imageUrl.trim()) || (item.kind === "external_video" && !item.videoUrl.trim())) {
         throw new Error(
           item.kind === "image"
             ? "Each new screenshot needs either an image URL or an uploaded preview image before you save."
-            : "Each new video preview needs an uploaded preview image before you save."
+            : "Each new video needs a video URL before you save."
         );
       }
 
@@ -4616,7 +4611,7 @@ export function DevelopWorkspacePage() {
       .map((item, index) => ({
         id: "id" in item && item.id ? item.id : `showcase-summary-${index}`,
         kind: item.kind,
-        imageUrl: item.imageUrl ?? "",
+        imageUrl: getShowcasePreviewImageUrl(item) ?? "",
         videoUrl: item.videoUrl ?? "",
         altText: item.altText ?? "",
         displayOrder: "displayOrder" in item ? item.displayOrder : index,
@@ -4779,11 +4774,14 @@ export function DevelopWorkspacePage() {
           <p className="mt-4 text-sm text-slate-400">No gallery media added yet.</p>
         ) : (
           <div className="mt-4 space-y-6">
-            {showcaseMediaDrafts.map((item, index) => (
-              <article
-                key={item.id ?? `showcase-${index}`}
-                className="surface-panel-soft overflow-hidden rounded-[1.1rem] p-0"
-              >
+            {showcaseMediaDrafts.map((item, index) => {
+              const previewImageUrl = getShowcasePreviewImageUrl(item);
+
+              return (
+                <article
+                  key={item.id ?? `showcase-${index}`}
+                  className="surface-panel-soft overflow-hidden rounded-[1.1rem] p-0"
+                >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 bg-[linear-gradient(90deg,rgba(96,255,164,0.1),rgba(96,255,164,0.03)_22%,rgba(17,16,24,0.22)_60%,rgba(17,16,24,0.12))] px-4 py-3">
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-50">Gallery item {index + 1}</p>
@@ -4810,8 +4808,8 @@ export function DevelopWorkspacePage() {
                         className="overflow-hidden rounded-[0.8rem] border border-white/10 bg-slate-950/70"
                         style={{ aspectRatio: buildAspectRatioValue(showcaseMediaDefinition.recommendedWidth, showcaseMediaDefinition.recommendedHeight) }}
                       >
-                        {item.previewUrl || item.imageUrl ? (
-                          <img className="h-full w-full object-cover" src={item.previewUrl || item.imageUrl} alt={item.altText || "Showcase preview"} />
+                        {previewImageUrl ? (
+                          <img className="h-full w-full object-cover" src={previewImageUrl} alt={item.altText || "Showcase preview"} />
                         ) : (
                           <div className="grid h-full place-items-center text-xs uppercase tracking-[0.18em] text-slate-500">No image</div>
                         )}
@@ -4900,8 +4898,9 @@ export function DevelopWorkspacePage() {
                     </div>
                   </div>
                 </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
 
@@ -4910,7 +4909,7 @@ export function DevelopWorkspacePage() {
             Add screenshot
           </button>
           <button className="secondary-button" type="button" onClick={() => addShowcaseMediaDraft("external_video")} disabled={!editable}>
-            Add video preview
+            Add video
           </button>
         </div>
 
